@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.coupleapp.ui.screens.HomeScreen
 import com.example.coupleapp.ui.screens.PhoneLoginScreen
 import com.example.coupleapp.ui.screens.RegisterScreen
 import com.example.coupleapp.ui.screens.WelcomeScreen
@@ -144,19 +145,16 @@ fun NavGraph(navController: NavHostController) {
                 fadeIn(animationSpec = tween(600))
             }
         ) {
-            // Placeholder home screen
-            androidx.compose.foundation.layout.Box(
-                modifier = androidx.compose.ui.Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color(0xFFFFFBF5)),
-                contentAlignment = androidx.compose.ui.Alignment.Center
-            ) {
-                androidx.compose.material3.Text(
-                    text = "Welcome Home! 💕",
-                    style = androidx.compose.material3.MaterialTheme.typography.displaySmall,
-                    color = androidx.compose.ui.graphics.Color(0xFFFF9ECE)
-                )
-            }
+            HomeScreen(
+                onNavigateToFeature = { featureName ->
+                    // Handle feature navigation
+                    // TODO: Navigate to specific features
+                },
+                onNavigateToWidget = { widgetName ->
+                    // Handle widget navigation
+                    // TODO: Navigate to specific widgets
+                }
+            )
         }
     }
 }
