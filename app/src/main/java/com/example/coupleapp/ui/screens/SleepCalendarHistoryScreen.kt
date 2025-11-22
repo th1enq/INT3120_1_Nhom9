@@ -245,7 +245,7 @@ private fun CalendarGrid(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Grid ngày
+        // Date grid
         var dayCounter = 1
         for (week in 0..5) {
             if (dayCounter > daysInMonth) break

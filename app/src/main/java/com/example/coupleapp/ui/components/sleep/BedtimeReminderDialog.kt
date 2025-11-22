@@ -68,7 +68,7 @@ fun BedtimeReminderDialog(
                 
                 // Title
                 Text(
-                    text = "Đến giờ đi ngủ rồi!",
+                    text = "Time to sleep!",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 28.sp
@@ -79,7 +79,7 @@ fun BedtimeReminderDialog(
                 
                 // Bedtime info
                 Text(
-                    text = "Mục tiêu giấc ngủ: ${bedTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                    text = "Sleep goal: ${bedTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = 16.sp
                     ),
@@ -102,7 +102,7 @@ fun BedtimeReminderDialog(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
-                        text = "Ngủ ngay",
+                        text = "Sleep now",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -116,7 +116,7 @@ fun BedtimeReminderDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Để sau",
+                        text = "Later",
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = 16.sp
                         ),

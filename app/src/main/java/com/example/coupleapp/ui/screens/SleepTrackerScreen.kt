@@ -1,7 +1,5 @@
 package com.example.coupleapp.ui.screens
 
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -40,7 +38,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 
-@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTrackerScreen(
@@ -241,7 +238,7 @@ fun SleepTrackerScreen(
                             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    // Delay nhẹ cho list items
+                                    // Slight delay for list items
                                     enter = fadeIn(animationSpec = tween(500, delayMillis = 500))
                                 ) {
                                     SleepHistoryItem(record = record)

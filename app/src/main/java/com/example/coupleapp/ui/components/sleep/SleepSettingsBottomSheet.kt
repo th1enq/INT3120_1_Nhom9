@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -72,7 +74,7 @@ fun SleepSettingsBottomSheet(
             onClick = onUtilitiesClick
         )
         
-        Divider(
+        HorizontalDivider(
             modifier = Modifier.padding(horizontal = 24.dp),
             color = Color(0xFFF5F5F5)
         )
@@ -84,7 +86,7 @@ fun SleepSettingsBottomSheet(
             onClick = onWhenToSleepClick
         )
         
-        Divider(
+        HorizontalDivider(
             modifier = Modifier.padding(horizontal = 24.dp),
             color = Color(0xFFF5F5F5)
         )
@@ -96,13 +98,13 @@ fun SleepSettingsBottomSheet(
             onClick = onSleepGoalClick
         )
         
-        Divider(
+        HorizontalDivider(
             modifier = Modifier.padding(horizontal = 24.dp),
             color = Color(0xFFF5F5F5)
         )
         
         SettingsItem(
-            icon = Icons.Default.List,
+            icon = Icons.AutoMirrored.Filled.List,
             title = "My History",
             currentValue = "",
             onClick = onMyHistoryClick
@@ -180,7 +182,7 @@ private fun SettingsItem(
             
             // Arrow icon
             Icon(
-                imageVector = Icons.Default.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "Navigate",
                 modifier = Modifier.size(24.dp),
                 tint = Color(0xFFB0B0B0)

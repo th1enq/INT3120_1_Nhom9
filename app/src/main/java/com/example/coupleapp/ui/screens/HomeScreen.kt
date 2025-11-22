@@ -32,7 +32,7 @@ fun HomeScreen(
 
     val scrollState = rememberLazyListState()
 
-    // --- TỐI ƯU LOGIC TIMING ---
+    // --- OPTIMIZE TIMING LOGIC ---
     LaunchedEffect(Unit) {
         delay(800)
         isLoading = false

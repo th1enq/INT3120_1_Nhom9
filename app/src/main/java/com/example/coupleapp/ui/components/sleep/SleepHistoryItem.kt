@@ -36,12 +36,11 @@ fun SleepHistoryItem(
     modifier: Modifier = Modifier
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    val dateFormatter = DateTimeFormatter.ofPattern("'Tháng' MM dd, HH:mm")
-    
-    val (qualityColor, qualityText, imageRes) = when (record.quality) {
-        SleepQuality.EXCELLENT -> Triple(Color(0xFF4CAF50), "Xuất sắc", R.drawable.excellent)
-        SleepQuality.GOOD -> Triple(Color(0xFFFF9800), "Tốt", R.drawable.good)
-        SleepQuality.POOR -> Triple(Color(0xFFF44336), "Kém", R.drawable.bad)
+
+    val (qualityColor, qualityLabel, qualityIcon) = when (record.quality) {
+        SleepQuality.EXCELLENT -> Triple(Color(0xFF4CAF50), "Excellent", R.drawable.excellent)
+        SleepQuality.GOOD -> Triple(Color(0xFFFF9800), "Good", R.drawable.good)
+        SleepQuality.POOR -> Triple(Color(0xFFF44336), "Poor", R.drawable.bad)
     }
     
     Box(
@@ -91,8 +90,8 @@ fun SleepHistoryItem(
                 
                 // Center image (circular)
                 Image(
-                    painter = painterResource(id = imageRes),
-                    contentDescription = qualityText,
+                    painter = painterResource(id = qualityIcon),
+                    contentDescription = qualityLabel,
                     modifier = Modifier
                         .size(70.dp)
                         .clip(CircleShape),
@@ -100,8 +99,6 @@ fun SleepHistoryItem(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            
             // Right side - Information
             Column(
                 modifier = Modifier.weight(1f),
@@ -109,7 +106,7 @@ fun SleepHistoryItem(
             ) {
                 // Quality text with color
                 Text(
-                    text = qualityText,
+                    text = qualityLabel,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp

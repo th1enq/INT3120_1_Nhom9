@@ -21,34 +21,28 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.ui.components.CustomTextField
 import com.example.coupleapp.ui.components.GradientButton
+import com.example.coupleapp.ui.components.CustomSnackbar
+import com.example.coupleapp.ui.components.SnackbarType
+import com.example.coupleapp.viewmodel.RegisterViewModel
 import kotlinx.coroutines.delay
 
 @Composable
 fun RegisterScreen(
     onRegisterClick: (String, String, String, String, String) -> Unit,
     onBackClick: () -> Unit,
-    onLoginClick: () -> Unit
+    onLoginClick: () -> Unit,
+    viewModel: RegisterViewModel = viewModel()
 ) {
-    var fullName by remember { mutableStateOf("") }
-    var dateOfBirth by remember { mutableStateOf("") }
-    var phoneNumber by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         delay(100)
         visible = true
     }
-    
-    val isFormValid = fullName.isNotEmpty() && 
-                     dateOfBirth.isNotEmpty() && 
-                     phoneNumber.isNotEmpty() && 
-                     password.isNotEmpty() && 
-                     confirmPassword.isNotEmpty() &&
-                     password == confirmPassword
     
     Box(
         modifier = Modifier
@@ -78,7 +72,7 @@ fun RegisterScreen(
                 horizontalArrangement = Arrangement.Start
             ) {
                 Text(
-                    text = "← Quay lại",
+                    text = "← Back",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF757575),
                     modifier = Modifier.clickable { onBackClick() }
@@ -122,7 +116,7 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Tạo tài khoản",
+                        text = "Create Account",
                         style = MaterialTheme.typography.displaySmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 32.sp
@@ -133,7 +127,7 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "Điền thông tin để bắt đầu hành trình",
+                        text = "Fill in the information to start your journey",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF757575),
                         textAlign = TextAlign.Center
@@ -155,74 +149,71 @@ fun RegisterScreen(
                 ) {
                     // Full Name Field
                     CustomTextField(
-                        value = fullName,
-                        onValueChange = { fullName = it },
-                        placeholder = "Họ và tên",
+                        value = uiState.fullName,
+                        onValueChange = { viewModel.updateFullName(it) },
+                        placeholder = "Full name",
                         keyboardType = KeyboardType.Text,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        errorMessage = uiState.fullNameError
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Date of Birth Field
                     CustomTextField(
-                        value = dateOfBirth,
-                        onValueChange = { 
-                            // Simple date formatting helper
-                            val cleaned = it.filter { char -> char.isDigit() }
-                            dateOfBirth = when {
-                                cleaned.length <= 2 -> cleaned
-                                cleaned.length <= 4 -> "${cleaned.substring(0, 2)}/${cleaned.substring(2)}"
-                                else -> "${cleaned.substring(0, 2)}/${cleaned.substring(2, 4)}/${cleaned.substring(4, minOf(8, cleaned.length))}"
-                            }
-                        },
-                        placeholder = "Ngày sinh (DD/MM/YYYY)",
+                        value = uiState.dateOfBirth,
+                        onValueChange = { viewModel.updateDateOfBirth(it) },
+                        placeholder = "Date of birth (DD/MM/YYYY)",
                         keyboardType = KeyboardType.Number,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        errorMessage = uiState.dateOfBirthError
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Phone Number Field
                     CustomTextField(
-                        value = phoneNumber,
-                        onValueChange = { phoneNumber = it },
-                        placeholder = "Số điện thoại",
+                        value = uiState.phoneNumber,
+                        onValueChange = { viewModel.updatePhone(it) },
+                        placeholder = "Phone number",
                         keyboardType = KeyboardType.Phone,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        errorMessage = uiState.phoneError
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Password Field
                     CustomTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        placeholder = "Mật khẩu",
+                        value = uiState.password,
+                        onValueChange = { viewModel.updatePassword(it) },
+                        placeholder = "Password",
                         isPassword = true,
                         keyboardType = KeyboardType.Password,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        errorMessage = uiState.passwordError
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     // Confirm Password Field
                     CustomTextField(
-                        value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
-                        placeholder = "Xác nhận mật khẩu",
+                        value = uiState.confirmPassword,
+                        onValueChange = { viewModel.updateConfirmPassword(it) },
+                        placeholder = "Confirm password",
                         isPassword = true,
                         keyboardType = KeyboardType.Password,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        errorMessage = uiState.confirmPasswordError
                     )
                     
                     // Password match indicator
-                    if (confirmPassword.isNotEmpty()) {
+                    if (uiState.confirmPassword.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (password == confirmPassword) "✓ Mật khẩu khớp" else "✗ Mật khẩu không khớp",
+                            text = if (uiState.password == uiState.confirmPassword) "✓ Passwords match" else "✗ Passwords do not match",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (password == confirmPassword) Color(0xFF4CAF50) else Color(0xFFFF6B6B),
+                            color = if (uiState.password == uiState.confirmPassword) Color(0xFF4CAF50) else Color(0xFFFF6B6B),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -231,10 +222,16 @@ fun RegisterScreen(
                     
                     // Register Button
                     GradientButton(
-                        text = "Đăng ký",
+                        text = "Sign Up",
                         onClick = { 
-                            if (isFormValid) {
-                                onRegisterClick(fullName, dateOfBirth, phoneNumber, password, confirmPassword)
+                            viewModel.register {
+                                onRegisterClick(
+                                    uiState.fullName,
+                                    uiState.dateOfBirth,
+                                    uiState.phoneNumber,
+                                    uiState.password,
+                                    uiState.confirmPassword
+                                )
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -244,7 +241,8 @@ fun RegisterScreen(
                                 Color(0xFFFFD6E8)
                             )
                         ),
-                        enabled = isFormValid
+                        enabled = viewModel.isFormValid() && !uiState.isLoading,
+                        isLoading = uiState.isLoading
                     )
                     
                     Spacer(modifier = Modifier.height(24.dp))
@@ -255,12 +253,12 @@ fun RegisterScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Đã có tài khoản? ",
+                            text = "Already have an account? ",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF757575)
                         )
                         Text(
-                            text = "Đăng nhập",
+                            text = "Login",
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),
@@ -271,6 +269,21 @@ fun RegisterScreen(
                     
                     Spacer(modifier = Modifier.height(32.dp))
                 }
+            }
+        }
+        
+        // Error Snackbar
+        uiState.errorMessage?.let { error ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+            ) {
+                CustomSnackbar(
+                    message = error,
+                    type = SnackbarType.ERROR,
+                    onDismiss = { viewModel.clearError() }
+                )
             }
         }
     }

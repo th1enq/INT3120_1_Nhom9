@@ -1,6 +1,6 @@
 package com.example.coupleapp.ui.components
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -34,19 +34,29 @@ fun CustomTextField(
     modifier: Modifier = Modifier,
     isPassword: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
-    leadingIcon: @Composable (() -> Unit)? = null
+    leadingIcon: @Composable (() -> Unit)? = null,
+    errorMessage: String? = null,
+    isError: Boolean = errorMessage != null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) Color(0xFFFFB8D6) else Color(0xFFE8E8E8),
+        targetValue = when {
+            isError -> Color(0xFFFF5252)
+            isFocused -> Color(0xFFFFB8D6)
+            else -> Color(0xFFE8E8E8)
+        },
         animationSpec = tween(300),
         label = "borderColor"
     )
     
     val backgroundColor by animateColorAsState(
-        targetValue = if (isFocused) Color(0xFFFFF5F8) else Color.White,
+        targetValue = when {
+            isError -> Color(0xFFFFF5F5)
+            isFocused -> Color(0xFFFFF5F8)
+            else -> Color.White
+        },
         animationSpec = tween(300),
         label = "backgroundColor"
     )
@@ -57,21 +67,22 @@ fun CustomTextField(
         label = "scale"
     )
     
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(backgroundColor)
-            .border(
-                width = 2.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(16.dp)
-            )
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
+    Column(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .scale(scale)
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(backgroundColor)
+                .border(
+                    width = if (isError) 2.dp else 2.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(16.dp)
+                )
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
@@ -103,9 +114,27 @@ fun CustomTextField(
                     keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                     interactionSource = interactionSource,
                     singleLine = true,
-                    cursorBrush = SolidColor(Color(0xFFFFB8D6))
+                    cursorBrush = SolidColor(Color(0xFFFF9ECE))
                 )
             }
         }
     }
+    
+    // Error message
+    errorMessage?.let { error ->
+        AnimatedVisibility(
+            visible = true,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFFFF5252),
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+            )
+        }
+    }
+  }
 }

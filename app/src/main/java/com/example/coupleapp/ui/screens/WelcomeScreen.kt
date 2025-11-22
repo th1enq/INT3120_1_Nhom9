@@ -92,7 +92,7 @@ fun WelcomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "Kết nối trái tim, gần nhau mỗi ngày",
+                        text = "Connect hearts, closer every day",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF757575),
                         textAlign = TextAlign.Center,
@@ -113,7 +113,7 @@ fun WelcomeScreen(
                 ) {
                     // Google Login Button
                     OutlinedCustomButton(
-                        text = "Tiếp tục với Google",
+                        text = "Continue with Google",
                         onClick = onGoogleLoginClick,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -142,7 +142,7 @@ fun WelcomeScreen(
                     
                     // Phone Login Button
                     GradientButton(
-                        text = "Đăng nhập với số điện thoại",
+                        text = "Login with phone number",
                         onClick = onPhoneLoginClick,
                         modifier = Modifier.fillMaxWidth(),
                         gradient = Brush.horizontalGradient(
@@ -161,14 +161,14 @@ fun WelcomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Chưa có tài khoản? ",
+                            text = "Don't have an account? ",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF757575)
                         )
                         Text(
-                            text = "Đăng ký ngay",
+                            text = "Sign up now",
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Medium
                             ),
                             color = Color(0xFFFF9ECE),
                             modifier = Modifier.clickable { onSignUpClick() }
