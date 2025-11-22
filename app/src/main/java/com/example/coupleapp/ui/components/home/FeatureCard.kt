@@ -93,7 +93,7 @@ fun FeaturesRow(
                 iconTint = Color(0xFFFF6B9D)
             ),
             FeatureItem(
-                imageRes = com.example.coupleapp.R.drawable.calendar,
+                imageRes = com.example.coupleapp.R.drawable.calendar_button,
                 title = "Calendar",
                 iconTint = Color(0xFFFFB74D)
             ),

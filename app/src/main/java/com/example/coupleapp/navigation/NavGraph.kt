@@ -12,6 +12,8 @@ import com.example.coupleapp.ui.screens.HomeScreen
 import com.example.coupleapp.ui.screens.PhoneLoginScreen
 import com.example.coupleapp.ui.screens.RegisterScreen
 import com.example.coupleapp.ui.screens.WelcomeScreen
+import com.example.coupleapp.ui.screens.SleepTrackerScreen
+import com.example.coupleapp.ui.screens.SleepCalendarHistoryScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -151,8 +153,169 @@ fun NavGraph(navController: NavHostController) {
                     // TODO: Navigate to specific features
                 },
                 onNavigateToWidget = { widgetName ->
-                    // Handle widget navigation
-                    // TODO: Navigate to specific widgets
+                    when (widgetName) {
+                        "Sleep" -> navController.navigate(Screen.SleepTracker.route) {
+                            launchSingleTop = true
+                        }
+                        // TODO: Add other widgets
+                    }
+                }
+            )
+        }
+        
+        composable(
+            route = Screen.SleepTracker.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            SleepTrackerScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToHistory = { userId ->
+                    navController.navigate(Screen.SleepHistory.createRoute(userId)) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        composable(
+            route = Screen.SleepHistory.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId") ?: ""
+            SleepCalendarHistoryScreen(
+                userId = userId,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(
+            route = Screen.WhenToSleep.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(400)
+                ) + fadeIn(animationSpec = tween(400))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(400)
+                ) + fadeOut(animationSpec = tween(400))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(400)
+                ) + fadeIn(animationSpec = tween(400))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(400)
+                ) + fadeOut(animationSpec = tween(400))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.sleep.WhenToSleepScreen(
+                currentBedTime = java.time.LocalTime.of(22, 0),
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onSave = { newTime ->
+                    // TODO: Save to repository
+                }
+            )
+        }
+        
+        composable(
+            route = Screen.SleepGoal.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(400)
+                ) + fadeIn(animationSpec = tween(400))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(400)
+                ) + fadeOut(animationSpec = tween(400))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(400)
+                ) + fadeIn(animationSpec = tween(400))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(400)
+                ) + fadeOut(animationSpec = tween(400))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.sleep.SleepGoalScreen(
+                currentGoalMinutes = 480,
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onSave = { newGoal ->
+                    // TODO: Save to repository
                 }
             )
         }

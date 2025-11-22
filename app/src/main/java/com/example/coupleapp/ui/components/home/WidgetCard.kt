@@ -118,7 +118,7 @@ fun WidgetsGrid(
             WidgetItem(
                 title = "Sleep",
                 description = "Track your sleep together",
-                imageRes = R.drawable.img2,
+                imageRes = R.drawable.sleep_widget,
                 gradient = Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFFE8D6FF),
@@ -129,7 +129,7 @@ fun WidgetsGrid(
             WidgetItem(
                 title = "Locket",
                 description = "Share fun moments instantly",
-                imageRes = R.drawable.img1,
+                imageRes = R.drawable.locket,
                 gradient = Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFFFFF5E8),
@@ -140,7 +140,7 @@ fun WidgetsGrid(
             WidgetItem(
                 title = "Missing",
                 description = "See how much you miss each other",
-                imageRes = R.drawable.img4,
+                imageRes = R.drawable.missing,
                 gradient = Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFFFFE8F0),
@@ -151,7 +151,7 @@ fun WidgetsGrid(
             WidgetItem(
                 title = "Location",
                 description = "Know where your love is",
-                imageRes = R.drawable.img5,
+                imageRes = R.drawable.distance,
                 gradient = Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFFE8F5FF),
