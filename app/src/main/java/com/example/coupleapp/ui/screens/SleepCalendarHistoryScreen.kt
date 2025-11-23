@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,12 +29,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.SleepQuality
-import com.example.coupleapp.data.repository.SleepRepository
 import com.example.coupleapp.ui.components.LoadingScreen
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.viewmodel.SleepCalendarViewModel
+import com.example.coupleapp.viewmodel.SleepCalendarViewModelFactory
+
 
 @Composable
 fun SleepCalendarHistoryScreen(
@@ -42,29 +45,31 @@ fun SleepCalendarHistoryScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val viewModel: SleepCalendarViewModel = viewModel(
+        factory = SleepCalendarViewModelFactory(userId)
+    )
+    val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
-    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-
     val scrollState = rememberLazyListState()
-
-    val user = if (userId == SleepRepository.getCurrentUser().id) {
-        SleepRepository.getCurrentUser()
-    } else {
-        SleepRepository.getPartnerUser()
+    LaunchedEffect(uiState.isLoading) {
+        if (uiState.isLoading) {
+            visible = false
+        } else {
+            if (!visible) {
+                delay(400)
+                visible = true
+            }
+        }
     }
-    val sleepHistory = SleepRepository.getSleepHistory(userId)
-    val currentMonth = YearMonth.now()
 
     LaunchedEffect(Unit) {
-        delay(800)
-        isLoading = false
-        delay(400)
-        visible = true
+        if (!uiState.isLoading) {
+            visible = true
+        }
     }
 
     Crossfade(
-        targetState = isLoading,
+        targetState = uiState.isLoading,
         animationSpec = tween(durationMillis = 600),
         label = "LoadingCrossfade",
         modifier = modifier
@@ -91,7 +96,8 @@ fun SleepCalendarHistoryScreen(
                     contentPadding = PaddingValues(bottom = 32.dp)
                 ) {
 
-                    item {
+                    // 1. Top Bar
+                    item(key = "TopBar") {
                         AnimatedVisibility(
                             visible = visible,
                             enter = fadeIn(animationSpec = tween(600)) +
@@ -110,7 +116,7 @@ fun SleepCalendarHistoryScreen(
                                     modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowBack,
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
                                         tint = Color(0xFF2D2D2D),
                                         modifier = Modifier.size(22.dp)
@@ -131,7 +137,8 @@ fun SleepCalendarHistoryScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Person,
-                                            contentDescription = user.name,
+                                            // Dùng data từ ViewModel
+                                            contentDescription = uiState.userName,
                                             modifier = Modifier.size(20.dp),
                                             tint = Color(0xFFFF9ECE)
                                         )
@@ -139,7 +146,8 @@ fun SleepCalendarHistoryScreen(
 
                                     Column {
                                         Text(
-                                            text = user.name,
+                                            // Dùng data từ ViewModel
+                                            text = uiState.userName,
                                             style = MaterialTheme.typography.titleMedium.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 16.sp
@@ -159,19 +167,22 @@ fun SleepCalendarHistoryScreen(
                         }
                     }
 
-                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                    item(key = "Spacer16") { Spacer(modifier = Modifier.height(16.dp)) }
 
-                    item {
+                    // 2. Calendar Content
+                    item(key = "CalendarContent") {
                         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
 
-                            // Title
+                            // Title Month
                             AnimatedVisibility(
                                 visible = visible,
-                                enter = fadeIn(animationSpec = tween(700, delayMillis = 100)) +
-                                        slideInVertically(animationSpec = tween(700, delayMillis = 100)) { it / 8 }
+                                // Hiện tiêu đề nhanh hơn một chút
+                                enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 100 else 0)) +
+                                        slideInVertically(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 100 else 0)) { it / 8 }
                             ) {
                                 Text(
-                                    text = currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                                    // Dùng data từ ViewModel
+                                    text = uiState.currentMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 24.sp
@@ -181,18 +192,18 @@ fun SleepCalendarHistoryScreen(
                                 )
                             }
 
-                            key(currentMonth, selectedDate) {
+                            key(uiState.currentMonth, uiState.selectedDate) {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    enter = fadeIn(animationSpec = tween(700, delayMillis = 250)) +
-                                            slideInVertically(animationSpec = tween(700, delayMillis = 250)) { it / 8 }
+                                    enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 250 else 0)) +
+                                            slideInVertically(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 250 else 0)) { it / 8 }
                                 ) {
                                     CalendarGrid(
-                                        currentMonth = currentMonth,
-                                        sleepRecords = sleepHistory,
-                                        selectedDate = selectedDate,
+                                        currentMonth = uiState.currentMonth,
+                                        sleepRecords = uiState.sleepHistory,
+                                        selectedDate = uiState.selectedDate,
                                         onDateSelected = { date ->
-                                            selectedDate = if (selectedDate == date) null else date
+                                            viewModel.selectDate(date)
                                         }
                                     )
                                 }
@@ -270,15 +281,17 @@ private fun CalendarGrid(
 
                         val currentDayForClick = currentDate
 
-                        CalendarDayCell(
-                            day = dayCounter,
-                            sleepRecord = sleepRecord,
-                            isSelected = isSelected,
-                            onClick = {
-                                if (sleepRecord != null) onDateSelected(currentDayForClick)
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
+                        key(currentDate) {
+                            CalendarDayCell(
+                                day = dayCounter,
+                                sleepRecord = sleepRecord,
+                                isSelected = isSelected,
+                                onClick = {
+                                    if (sleepRecord != null) onDateSelected(currentDayForClick)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                         dayCounter++
                     } else {
                         Spacer(modifier = Modifier.weight(1f))

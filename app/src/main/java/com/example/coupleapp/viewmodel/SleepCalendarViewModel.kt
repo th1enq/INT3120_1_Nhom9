@@ -1,6 +1,7 @@
 package com.example.coupleapp.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.SleepRecord
 import com.example.coupleapp.data.repository.SleepRepository
@@ -34,7 +35,7 @@ class SleepCalendarViewModel(private val userId: String) : ViewModel() {
         
         viewModelScope.launch {
             try {
-                delay(800)
+                delay(600)
                 
                 // Get user and sleep history
                 val user = if (userId == SleepRepository.getCurrentUser().id) {
@@ -160,3 +161,14 @@ data class SleepCalendarUiState(
     val selectedDate: LocalDate? = null,
     val errorMessage: String? = null
 )
+
+// Thêm class này vào file ViewModel hoặc file riêng
+class SleepCalendarViewModelFactory(private val userId: String) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(SleepCalendarViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return SleepCalendarViewModel(userId) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}

@@ -31,7 +31,7 @@ class HomeViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 // Simulate loading delay
-                delay(800)
+                delay(1500)
                 
                 // Mock data loading (Backend will provide actual data)
                 _uiState.update { 

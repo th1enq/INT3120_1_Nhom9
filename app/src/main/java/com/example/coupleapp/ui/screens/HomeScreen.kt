@@ -17,6 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+// Import ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.viewmodel.HomeViewModel
 import com.example.coupleapp.ui.components.home.*
 import com.example.coupleapp.ui.components.LoadingScreen
 import kotlinx.coroutines.delay
@@ -24,20 +27,45 @@ import kotlinx.coroutines.delay
 @Composable
 fun HomeScreen(
     onNavigateToFeature: (String) -> Unit = {},
-    onNavigateToWidget: (String) -> Unit = {}
+    onNavigateToWidget: (String) -> Unit = {},
+    // Inject ViewModel vào đây
+    viewModel: HomeViewModel = viewModel()
 ) {
+    // 1. Lấy UI State từ ViewModel
+    val uiState by viewModel.uiState.collectAsState()
+
+    // State cục bộ chỉ để quản lý animation hiển thị (bay vào)
     var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
     var visible by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(true) }
 
     val scrollState = rememberLazyListState()
 
-    // --- OPTIMIZE TIMING LOGIC ---
+    // --- CẢI TIẾN LOGIC TIMING THÔNG MINH ---
+    LaunchedEffect(uiState.isLoading) {
+        if (uiState.isLoading) {
+            // Nếu đang loading thì ẩn content
+            visible = false
+        } else {
+            // Nếu loading xong (isLoading = false)
+            // Kiểm tra xem đây là lần đầu hay là quay lại?
+
+            if (!visible) {
+                // Nếu content chưa hiện -> Đây là lần chuyển từ Loading sang Content
+                // Delay nhẹ để Crossfade chạy được một chút rồi mới cho Content bay lên
+                delay(400)
+                visible = true
+            }
+            // Nếu visible đã là true (do quay lại từ màn hình khác mà VM vẫn giữ state),
+            // thì không làm gì cả, content sẽ giữ nguyên -> Không bị chớp.
+        }
+    }
+
+    // Xử lý trường hợp quay lại màn hình (Hot Reload):
+    // Nếu vào màn hình mà VM báo đã load xong rồi, cho hiện content ngay
     LaunchedEffect(Unit) {
-        delay(800)
-        isLoading = false
-        delay(400)
-        visible = true
+        if (!uiState.isLoading) {
+            visible = true
+        }
     }
 
     Scaffold(
@@ -50,8 +78,9 @@ fun HomeScreen(
         containerColor = Color.Transparent
     ) { paddingValues ->
 
+        // Dùng uiState.isLoading của ViewModel
         Crossfade(
-            targetState = isLoading,
+            targetState = uiState.isLoading,
             animationSpec = tween(durationMillis = 600),
             label = "LoadingCrossfade"
         ) { loading ->
@@ -79,6 +108,8 @@ fun HomeScreen(
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         item { Spacer(modifier = Modifier.height(16.dp)) }
+
+                        // Slider Section
                         item {
                             key("slider_section") {
                                 AnimatedVisibility(
@@ -102,12 +133,15 @@ fun HomeScreen(
                         }
 
                         item { Spacer(modifier = Modifier.height(32.dp)) }
+
+                        // Features Section
                         item {
                             key("features_section") {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    enter = fadeIn(animationSpec = tween(700, delayMillis = 150)) +
-                                            slideInVertically(animationSpec = tween(700, delayMillis = 150)) { it / 8 }
+                                    // Logic: Nếu vừa loading xong thì delay, còn nếu hiện sẵn thì hiện luôn
+                                    enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 150 else 0)) +
+                                            slideInVertically(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 150 else 0)) { it / 8 }
                                 ) {
                                     FeaturesRow(onFeatureClick = onNavigateToFeature)
                                 }
@@ -115,10 +149,12 @@ fun HomeScreen(
                         }
 
                         item { Spacer(modifier = Modifier.height(32.dp)) }
+
+                        // Widgets Header
                         item {
                             AnimatedVisibility(
                                 visible = visible,
-                                enter = fadeIn(animationSpec = tween(700, delayMillis = 300))
+                                enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 300 else 0))
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -155,8 +191,8 @@ fun HomeScreen(
                             key("widgets_section") {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    enter = fadeIn(animationSpec = tween(700, delayMillis = 450)) +
-                                            slideInVertically(animationSpec = tween(700, delayMillis = 450)) { it / 8 }
+                                    enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 450 else 0)) +
+                                            slideInVertically(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 450 else 0)) { it / 8 }
                                 ) {
                                     WidgetsGrid(onWidgetClick = onNavigateToWidget)
                                 }

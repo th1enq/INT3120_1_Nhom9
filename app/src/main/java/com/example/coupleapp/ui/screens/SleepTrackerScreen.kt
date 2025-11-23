@@ -5,9 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +36,9 @@ import com.example.coupleapp.viewmodel.TimeEditorType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,19 +54,25 @@ fun SleepTrackerScreen(
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
 
-    // State cho LazyColumn
     val scrollState = rememberLazyListState()
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(uiState.isLoading) {
+        if (uiState.isLoading) {
+            visible = false
+        } else {
+            if (!visible) {
+                delay(400)
+                visible = true
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        if (uiState.isLoading) {
-            delay(800)
+        if (!uiState.isLoading) {
+            visible = true
         }
-        delay(400)
-        visible = true
     }
 
     Scaffold(
@@ -74,7 +82,7 @@ fun SleepTrackerScreen(
                 onItemSelected = { item ->
                     selectedBottomNavItem = item
                     if (item == BottomNavItem.HOME) {
-                        onNavigateToHome()
+                        onBackClick()
                     }
                 }
             )
@@ -112,6 +120,7 @@ fun SleepTrackerScreen(
                         contentPadding = PaddingValues(bottom = 100.dp)
                     ) {
 
+                        // Top Bar
                         item {
                             AnimatedVisibility(
                                 visible = visible,
@@ -130,13 +139,15 @@ fun SleepTrackerScreen(
 
                         item { Spacer(modifier = Modifier.height(24.dp)) }
 
+                        // Sleep Quality Circle
                         item {
                             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    enter = fadeIn(animationSpec = tween(600, delayMillis = 100)) +
+                                    // Delay nhẹ nếu là lần đầu load
+                                    enter = fadeIn(animationSpec = tween(600, delayMillis = if(uiState.isLoading) 100 else 0)) +
                                             scaleIn(
-                                                animationSpec = tween(600, delayMillis = 100),
+                                                animationSpec = tween(600, delayMillis = if(uiState.isLoading) 100 else 0),
                                                 initialScale = 0.8f
                                             )
                                 ) {
@@ -167,12 +178,13 @@ fun SleepTrackerScreen(
 
                         item { Spacer(modifier = Modifier.height(40.dp)) }
 
+                        // Sleep Times
                         item {
                             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    enter = fadeIn(animationSpec = tween(600, delayMillis = 250)) +
-                                            slideInVertically(animationSpec = tween(600, delayMillis = 250)) { it / 4 }
+                                    enter = fadeIn(animationSpec = tween(600, delayMillis = if(uiState.isLoading) 250 else 0)) +
+                                            slideInVertically(animationSpec = tween(600, delayMillis = if(uiState.isLoading) 250 else 0)) { it / 4 }
                                 ) {
                                     Column {
                                         uiState.sleepRecord?.let { record ->
@@ -199,11 +211,12 @@ fun SleepTrackerScreen(
 
                         item { Spacer(modifier = Modifier.height(40.dp)) }
 
+                        // Recent Sleep Header
                         item {
                             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    enter = fadeIn(animationSpec = tween(600, delayMillis = 400))
+                                    enter = fadeIn(animationSpec = tween(600, delayMillis = if(uiState.isLoading) 400 else 0))
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -234,12 +247,13 @@ fun SleepTrackerScreen(
                             }
                         }
 
+                        // Sleep History Items
                         items(uiState.sleepHistory) { record ->
                             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                                 AnimatedVisibility(
                                     visible = visible,
-                                    // Slight delay for list items
-                                    enter = fadeIn(animationSpec = tween(500, delayMillis = 500))
+                                    // Delay nối tiếp nhau nếu muốn, hoặc hiện cùng lúc
+                                    enter = fadeIn(animationSpec = tween(500, delayMillis = if(uiState.isLoading) 500 else 0))
                                 ) {
                                     SleepHistoryItem(record = record)
                                 }
@@ -247,11 +261,13 @@ fun SleepTrackerScreen(
                             }
                         }
                     }
+
+                    // User Toggle Button
                     AnimatedVisibility(
                         visible = visible,
-                        enter = fadeIn(animationSpec = tween(600, delayMillis = 600)) +
+                        enter = fadeIn(animationSpec = tween(600, delayMillis = if(uiState.isLoading) 600 else 0)) +
                                 slideInVertically(
-                                    animationSpec = tween(600, delayMillis = 600),
+                                    animationSpec = tween(600, delayMillis = if(uiState.isLoading) 600 else 0),
                                     initialOffsetY = { it }
                                 ),
                         modifier = Modifier
@@ -269,6 +285,7 @@ fun SleepTrackerScreen(
             }
         }
 
+        // --- Bottom Sheet & Dialogs giữ nguyên ---
         if (uiState.showBottomSheet) {
             ModalBottomSheet(
                 onDismissRequest = { viewModel.showBottomSheet(false) },
@@ -361,7 +378,6 @@ fun SleepTrackerScreen(
         }
     }
 }
-
 @Composable
 private fun TopBar(
     userName: String,
