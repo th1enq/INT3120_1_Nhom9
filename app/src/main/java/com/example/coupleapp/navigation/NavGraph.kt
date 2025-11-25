@@ -157,6 +157,9 @@ fun NavGraph(navController: NavHostController) {
                         "Sleep" -> navController.navigate(Screen.SleepTracker.route) {
                             launchSingleTop = true
                         }
+                        "Locket" -> navController.navigate(Screen.Locket.route) {
+                            launchSingleTop = true
+                        }
                         // TODO: Add other widgets
                     }
                 }
@@ -316,6 +319,122 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onSave = { newGoal ->
                     // TODO: Save to repository
+                }
+            )
+        }
+        
+        // Locket Screen
+        composable(
+            route = Screen.Locket.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.locket.LocketScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToHistory = {
+                    navController.navigate(Screen.LocketHistory.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToDrawing = {
+                    navController.navigate(Screen.LocketDrawing.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Locket History Screen
+        composable(
+            route = Screen.LocketHistory.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.locket.LocketHistoryScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Locket Drawing Screen
+        composable(
+            route = Screen.LocketDrawing.route,
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.locket.LocketDrawingScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onSaveDrawing = { paths ->
+                    // TODO: Save drawing and go back
+                    navController.popBackStack()
                 }
             )
         }

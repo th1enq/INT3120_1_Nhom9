@@ -53,6 +53,9 @@ fun SleepTrackerScreen(
 
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
+    
+    // TODO: Remove after testing - Temporary state to show BedtimeReminderDialog for testing
+    var showTestBedtimeDialog by remember { mutableStateOf(true) }
 
     val scrollState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -374,6 +377,15 @@ fun SleepTrackerScreen(
                 bedTime = uiState.settings.idealBedTime,
                 onDismiss = { viewModel.dismissBedtimeReminder() },
                 onGoToSleep = { viewModel.dismissBedtimeReminder() }
+            )
+        }
+        
+        // TODO: Remove after testing - Temporary dialog for testing BedtimeReminderDialog
+        if (showTestBedtimeDialog) {
+            BedtimeReminderDialog(
+                bedTime = LocalTime.of(22, 30), // Test với thời gian cố định
+                onDismiss = { showTestBedtimeDialog = false },
+                onGoToSleep = { showTestBedtimeDialog = false }
             )
         }
     }

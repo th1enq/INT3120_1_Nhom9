@@ -55,8 +55,20 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.accompanist.systemuicontroller)
     
+    // Lifecycle runtime compose for LocalLifecycleOwner
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    
     // Lottie for animations
     implementation("com.airbnb.android:lottie-compose:6.1.0")
+    
+    // CameraX for Locket feature
+    implementation("androidx.camera:camera-core:1.3.0")
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-view:1.3.0")
+    
+    // Accompanist permissions for camera permission handling
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     
     // Core library desugaring for Java 8 Time API support on older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
