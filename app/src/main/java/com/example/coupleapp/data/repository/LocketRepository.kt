@@ -86,14 +86,14 @@ object LocketRepository {
                 LocketType.EMOJI -> mockEmojis.random().emoji
                 LocketType.DRAWING -> "drawing_${index}.png"
                 LocketType.TEXT -> listOf(
-                    "Anh/Em nhớ em/anh! 💕",
-                    "Chúc ngủ ngon nha! 😴",
-                    "Hôm nay thế nào rồi? 🤗",
-                    "Yêu em/anh nhiều lắm! ❤️",
-                    "Đang nghĩ về em/anh... 🥰",
-                    "Mong được gặp em/anh sớm! 💖",
-                    "Ăn cơm chưa? 🍚",
-                    "Nhớ uống nước nha! 💧"
+                    "Missing you so much! 💕",
+                    "Good night! Sleep well! 😴",
+                    "How was your day? 🤗",
+                    "Love you so much! ❤️",
+                    "Thinking about you... 🥰",
+                    "Can't wait to see you! 💖",
+                    "Have you eaten yet? 🍚",
+                    "Remember to drink water! 💧"
                 ).random()
             }
             

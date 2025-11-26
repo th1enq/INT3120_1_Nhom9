@@ -16,4 +16,7 @@ sealed class Screen(val route: String) {
     object Locket : Screen("locket")
     object LocketHistory : Screen("locket_history")
     object LocketDrawing : Screen("locket_drawing")
+    
+    // Missing screen
+    object Missing : Screen("missing")
 }

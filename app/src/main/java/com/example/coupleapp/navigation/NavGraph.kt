@@ -14,6 +14,7 @@ import com.example.coupleapp.ui.screens.RegisterScreen
 import com.example.coupleapp.ui.screens.WelcomeScreen
 import com.example.coupleapp.ui.screens.SleepTrackerScreen
 import com.example.coupleapp.ui.screens.SleepCalendarHistoryScreen
+import com.example.coupleapp.ui.screens.MissingScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -160,7 +161,9 @@ fun NavGraph(navController: NavHostController) {
                         "Locket" -> navController.navigate(Screen.Locket.route) {
                             launchSingleTop = true
                         }
-                        // TODO: Add other widgets
+                        "Missing" -> navController.navigate(Screen.Missing.route) {
+                            launchSingleTop = true
+                        }
                     }
                 }
             )
@@ -434,6 +437,41 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onSaveDrawing = { paths ->
                     // TODO: Save drawing and go back
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Missing Screen
+        composable(
+            route = Screen.Missing.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            MissingScreen(
+                onBackClick = {
                     navController.popBackStack()
                 }
             )
