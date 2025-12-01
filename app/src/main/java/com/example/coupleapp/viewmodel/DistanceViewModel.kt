@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import kotlin.math.*
+import kotlin.math.*    
 
 class DistanceViewModel : ViewModel() {
     
@@ -30,7 +30,7 @@ class DistanceViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true) }
             
             // Simulate API call delay
-            delay(1200)
+            delay(1500)
             
             val myLocation = getMockMyLocation()
             val partnerLocation = getMockPartnerLocation()

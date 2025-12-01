@@ -20,6 +20,7 @@ import com.example.coupleapp.ui.screens.MissingScreen
 import com.example.coupleapp.ui.screens.distance.DistanceScreen
 import com.example.coupleapp.ui.screens.distance.SharedPlacesScreen
 import com.example.coupleapp.ui.screens.distance.PlacePhotosScreen
+import com.example.coupleapp.ui.screens.store.StoreScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -156,7 +157,12 @@ fun NavGraph(navController: NavHostController) {
             HomeScreen(
                 onNavigateToFeature = { featureName ->
                     // Handle feature navigation
-                    // TODO: Navigate to specific features
+                    when (featureName) {
+                        "Store" -> navController.navigate(Screen.Store.route) {
+                            launchSingleTop = true
+                        }
+                        // TODO: Navigate to other specific features
+                    }
                 },
                 onNavigateToWidget = { widgetName ->
                     when (widgetName) {
@@ -170,6 +176,9 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                         "Location" -> navController.navigate(Screen.Distance.createRoute()) {
+                            launchSingleTop = true
+                        }
+                        "Store" -> navController.navigate(Screen.Store.route) {
                             launchSingleTop = true
                         }
                     }
@@ -614,6 +623,41 @@ fun NavGraph(navController: NavHostController) {
             val placeId = backStackEntry.arguments?.getString("placeId") ?: ""
             PlacePhotosScreen(
                 placeId = placeId,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Store Screen
+        composable(
+            route = Screen.Store.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            StoreScreen(
                 onBackClick = {
                     navController.popBackStack()
                 }

@@ -34,4 +34,7 @@ sealed class Screen(val route: String) {
     object PlacePhotos : Screen("place_photos/{placeId}") {
         fun createRoute(placeId: String) = "place_photos/$placeId"
     }
+    
+    // Store screen
+    object Store : Screen("store")
 }

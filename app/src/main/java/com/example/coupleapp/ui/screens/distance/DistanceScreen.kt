@@ -69,7 +69,7 @@ fun DistanceScreen(
     
     LaunchedEffect(uiState.isLoading) {
         if (!uiState.isLoading && !visible) {
-            kotlinx.coroutines.delay(100)
+            kotlinx.coroutines.delay(200)
             visible = true
         }
     }
@@ -79,7 +79,7 @@ fun DistanceScreen(
         if (targetPlaceId != null && uiState.sharedPlaces.isNotEmpty()) {
             val targetPlace = uiState.sharedPlaces.find { it.id == targetPlaceId }
             targetPlace?.let { place ->
-                kotlinx.coroutines.delay(500) // Wait for map to be ready
+                kotlinx.coroutines.delay(800) // Wait for map to be ready
                 cameraState.animateToSharedPlace?.invoke(place)
                 selectedSharedPlace = place
             }
