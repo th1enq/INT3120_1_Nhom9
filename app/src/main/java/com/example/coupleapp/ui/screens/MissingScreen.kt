@@ -52,7 +52,7 @@ fun MissingScreen(
             visible = false
         } else {
             if (!visible) {
-                delay(400)
+                delay(200)
                 visible = true
             }
         }

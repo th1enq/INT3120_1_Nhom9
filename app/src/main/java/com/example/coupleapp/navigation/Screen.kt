@@ -19,4 +19,19 @@ sealed class Screen(val route: String) {
     
     // Missing screen
     object Missing : Screen("missing")
+    
+    // Distance screens
+    object Distance : Screen("distance?targetPlaceId={targetPlaceId}") {
+        fun createRoute(targetPlaceId: String? = null): String {
+            return if (targetPlaceId != null) {
+                "distance?targetPlaceId=$targetPlaceId"
+            } else {
+                "distance"
+            }
+        }
+    }
+    object SharedPlaces : Screen("shared_places")
+    object PlacePhotos : Screen("place_photos/{placeId}") {
+        fun createRoute(placeId: String) = "place_photos/$placeId"
+    }
 }

@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.coupleapp.ui.screens.HomeScreen
 import com.example.coupleapp.ui.screens.PhoneLoginScreen
 import com.example.coupleapp.ui.screens.RegisterScreen
@@ -15,6 +17,9 @@ import com.example.coupleapp.ui.screens.WelcomeScreen
 import com.example.coupleapp.ui.screens.SleepTrackerScreen
 import com.example.coupleapp.ui.screens.SleepCalendarHistoryScreen
 import com.example.coupleapp.ui.screens.MissingScreen
+import com.example.coupleapp.ui.screens.distance.DistanceScreen
+import com.example.coupleapp.ui.screens.distance.SharedPlacesScreen
+import com.example.coupleapp.ui.screens.distance.PlacePhotosScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -162,6 +167,9 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                         "Missing" -> navController.navigate(Screen.Missing.route) {
+                            launchSingleTop = true
+                        }
+                        "Location" -> navController.navigate(Screen.Distance.createRoute()) {
                             launchSingleTop = true
                         }
                     }
@@ -471,6 +479,141 @@ fun NavGraph(navController: NavHostController) {
             }
         ) {
             MissingScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Distance Screen
+        composable(
+            route = Screen.Distance.route,
+            arguments = listOf(
+                navArgument("targetPlaceId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) { backStackEntry ->
+            val targetPlaceId = backStackEntry.arguments?.getString("targetPlaceId")
+            DistanceScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToSharedPlaces = {
+                    navController.navigate(Screen.SharedPlaces.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPlacePhotos = { placeId ->
+                    navController.navigate(Screen.PlacePhotos.createRoute(placeId)) {
+                        launchSingleTop = true
+                    }
+                },
+                targetPlaceId = targetPlaceId
+            )
+        }
+        
+        // Shared Places Screen
+        composable(
+            route = Screen.SharedPlaces.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            SharedPlacesScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onPlaceClick = { placeId ->
+                    navController.navigate(Screen.PlacePhotos.createRoute(placeId)) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMapWithPlace = { placeId ->
+                    // Pop back to Distance screen and pass the place ID to animate to
+                    navController.navigate(Screen.Distance.createRoute(placeId)) {
+                        popUpTo(Screen.Distance.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Place Photos Screen
+        composable(
+            route = Screen.PlacePhotos.route,
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
+        ) { backStackEntry ->
+            val placeId = backStackEntry.arguments?.getString("placeId") ?: ""
+            PlacePhotosScreen(
+                placeId = placeId,
                 onBackClick = {
                     navController.popBackStack()
                 }
