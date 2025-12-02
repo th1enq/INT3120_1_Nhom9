@@ -40,4 +40,7 @@ sealed class Screen(val route: String) {
     
     // Calendar screen
     object Calendar : Screen("calendar")
+    
+    // Quest screen
+    object Quest : Screen("quest")
 }

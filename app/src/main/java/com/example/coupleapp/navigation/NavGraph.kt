@@ -165,7 +165,9 @@ fun NavGraph(navController: NavHostController) {
                         "Calendar" -> navController.navigate(Screen.Calendar.route) {
                             launchSingleTop = true
                         }
-                        // TODO: Navigate to other specific features
+                        "Quest" -> navController.navigate(Screen.Quest.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToWidget = { widgetName ->
@@ -186,6 +188,9 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                         "Calendar" -> navController.navigate(Screen.Calendar.route) {
+                            launchSingleTop = true
+                        }
+                        "Quest" -> navController.navigate(Screen.Quest.route) {
                             launchSingleTop = true
                         }
                     }
@@ -702,6 +707,73 @@ fun NavGraph(navController: NavHostController) {
             CalendarScreen(
                 onBackClick = {
                     navController.popBackStack()
+                }
+            )
+        }
+        
+        // Quest Screen
+        composable(
+            route = Screen.Quest.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.quest.QuestScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToLocket = {
+                    navController.navigate(Screen.Locket.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMissing = {
+                    navController.navigate(Screen.Missing.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToStore = {
+                    navController.navigate(Screen.Store.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToCalendar = {
+                    navController.navigate(Screen.Calendar.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToSleep = {
+                    navController.navigate(Screen.SleepTracker.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerLink = {
+                    // TODO: Navigate to partner link screen when implemented
+                    // For now, navigate back to Home or show a dialog
+                    navController.navigate(Screen.Home.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
