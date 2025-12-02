@@ -163,17 +163,21 @@ private fun DailyUserMissItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar with emoji face
+            // Avatar icon (Person icon instead of emoji)
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFFFF9C4)),
+                    .background(
+                        if (isCurrentUser) Color(0xFFFFE8F5) else Color(0xFFE8F5FF)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "😊",
-                    fontSize = 20.sp
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = if (isCurrentUser) Color(0xFFFF6B9D) else Color(0xFF6B9DFF),
+                    modifier = Modifier.size(24.dp)
                 )
             }
             

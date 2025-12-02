@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.coupleapp.ui.screens.HomeScreen
 import com.example.coupleapp.ui.screens.PhoneLoginScreen
 import com.example.coupleapp.ui.screens.RegisterScreen
@@ -15,6 +17,11 @@ import com.example.coupleapp.ui.screens.WelcomeScreen
 import com.example.coupleapp.ui.screens.SleepTrackerScreen
 import com.example.coupleapp.ui.screens.SleepCalendarHistoryScreen
 import com.example.coupleapp.ui.screens.MissingScreen
+import com.example.coupleapp.ui.screens.distance.DistanceScreen
+import com.example.coupleapp.ui.screens.distance.SharedPlacesScreen
+import com.example.coupleapp.ui.screens.distance.PlacePhotosScreen
+import com.example.coupleapp.ui.screens.store.StoreScreen
+import com.example.coupleapp.ui.screens.calendar.CalendarScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -151,7 +158,17 @@ fun NavGraph(navController: NavHostController) {
             HomeScreen(
                 onNavigateToFeature = { featureName ->
                     // Handle feature navigation
-                    // TODO: Navigate to specific features
+                    when (featureName) {
+                        "Store" -> navController.navigate(Screen.Store.route) {
+                            launchSingleTop = true
+                        }
+                        "Calendar" -> navController.navigate(Screen.Calendar.route) {
+                            launchSingleTop = true
+                        }
+                        "Quest" -> navController.navigate(Screen.Quest.route) {
+                            launchSingleTop = true
+                        }
+                    }
                 },
                 onNavigateToWidget = { widgetName ->
                     when (widgetName) {
@@ -162,6 +179,18 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                         "Missing" -> navController.navigate(Screen.Missing.route) {
+                            launchSingleTop = true
+                        }
+                        "Location" -> navController.navigate(Screen.Distance.createRoute()) {
+                            launchSingleTop = true
+                        }
+                        "Store" -> navController.navigate(Screen.Store.route) {
+                            launchSingleTop = true
+                        }
+                        "Calendar" -> navController.navigate(Screen.Calendar.route) {
+                            launchSingleTop = true
+                        }
+                        "Quest" -> navController.navigate(Screen.Quest.route) {
                             launchSingleTop = true
                         }
                     }
@@ -473,6 +502,278 @@ fun NavGraph(navController: NavHostController) {
             MissingScreen(
                 onBackClick = {
                     navController.popBackStack()
+                }
+            )
+        }
+        
+        // Distance Screen
+        composable(
+            route = Screen.Distance.route,
+            arguments = listOf(
+                navArgument("targetPlaceId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) { backStackEntry ->
+            val targetPlaceId = backStackEntry.arguments?.getString("targetPlaceId")
+            DistanceScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToSharedPlaces = {
+                    navController.navigate(Screen.SharedPlaces.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPlacePhotos = { placeId ->
+                    navController.navigate(Screen.PlacePhotos.createRoute(placeId)) {
+                        launchSingleTop = true
+                    }
+                },
+                targetPlaceId = targetPlaceId
+            )
+        }
+        
+        // Shared Places Screen
+        composable(
+            route = Screen.SharedPlaces.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            SharedPlacesScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onPlaceClick = { placeId ->
+                    navController.navigate(Screen.PlacePhotos.createRoute(placeId)) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMapWithPlace = { placeId ->
+                    // Pop back to Distance screen and pass the place ID to animate to
+                    navController.navigate(Screen.Distance.createRoute(placeId)) {
+                        popUpTo(Screen.Distance.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Place Photos Screen
+        composable(
+            route = Screen.PlacePhotos.route,
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
+        ) { backStackEntry ->
+            val placeId = backStackEntry.arguments?.getString("placeId") ?: ""
+            PlacePhotosScreen(
+                placeId = placeId,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Store Screen
+        composable(
+            route = Screen.Store.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            StoreScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Calendar Screen
+        composable(
+            route = Screen.Calendar.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            CalendarScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Quest Screen
+        composable(
+            route = Screen.Quest.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.quest.QuestScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToLocket = {
+                    navController.navigate(Screen.Locket.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMissing = {
+                    navController.navigate(Screen.Missing.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToStore = {
+                    navController.navigate(Screen.Store.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToCalendar = {
+                    navController.navigate(Screen.Calendar.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToSleep = {
+                    navController.navigate(Screen.SleepTracker.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerLink = {
+                    // TODO: Navigate to partner link screen when implemented
+                    // For now, navigate back to Home or show a dialog
+                    navController.navigate(Screen.Home.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }

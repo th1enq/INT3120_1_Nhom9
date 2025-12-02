@@ -52,7 +52,7 @@ fun MissingScreen(
             visible = false
         } else {
             if (!visible) {
-                delay(100)
+                delay(200)
                 visible = true
             }
         }
@@ -135,7 +135,7 @@ fun MissingScreen(
                         
                         Spacer(modifier = Modifier.height(24.dp))
                         
-                        // Heart Animation with Lottie on background image
+                        // Heart Animation with Lottie on background image - full width
                         AnimatedVisibility(
                             visible = visible,
                             enter = fadeIn(animationSpec = tween(400, delayMillis = 100)) +
@@ -146,14 +146,17 @@ fun MissingScreen(
                         ) {
                             MissingHeartAnimation(
                                 isAnimating = uiState.isHeartAnimating,
+                                clickCount = uiState.clickCount,
                                 onHeartClick = { viewModel.sendMissing() },
-                                modifier = Modifier.size(280.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
                             )
                         }
                         
                         Spacer(modifier = Modifier.height(24.dp))
                         
-                        // Missing Button
+                        // Missing Button - always enabled for rapid clicking
                         AnimatedVisibility(
                             visible = visible,
                             enter = fadeIn(animationSpec = tween(400, delayMillis = 150)) +
@@ -164,7 +167,7 @@ fun MissingScreen(
                         ) {
                             MissingButton(
                                 onClick = { viewModel.sendMissing() },
-                                isAnimating = uiState.isHeartAnimating
+                                isAnimating = false // Always enabled
                             )
                         }
                         

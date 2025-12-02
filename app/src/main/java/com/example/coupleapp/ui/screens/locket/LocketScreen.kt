@@ -74,7 +74,7 @@ fun LocketScreen(
             visible = false
         } else {
             if (!visible) {
-                delay(100)
+                delay(300)
                 visible = true
             }
         }
@@ -140,7 +140,7 @@ fun LocketScreen(
         ) {
             Crossfade(
                 targetState = uiState.isLoading,
-                animationSpec = tween(durationMillis = 300),
+                animationSpec = tween(durationMillis = 400),
                 label = "LoadingCrossfade",
                 modifier = modifier.fillMaxSize()
             ) { loading ->

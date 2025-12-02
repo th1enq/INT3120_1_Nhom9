@@ -17,12 +17,7 @@ class MissingViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(MissingUiState())
     
-    val uiState: StateFlow<MissingUiState> = _uiState
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = MissingUiState()
-        )
+    val uiState: StateFlow<MissingUiState> = _uiState.asStateFlow()
 
     private var loadDataJob: Job? = null
 
@@ -86,14 +81,21 @@ class MissingViewModel : ViewModel() {
      * Send a missing signal to partner
      * Increments the miss count and triggers heart animation
      */
+    private var animationJob: Job? = null
+    
     fun sendMissing() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isHeartAnimating = true) }
-            
+        // Cancel previous animation job to allow rapid clicking
+        animationJob?.cancel()
+        
+        // Immediately update click count and start animation
+        _uiState.update { it.copy(
+            isHeartAnimating = true,
+            clickCount = it.clickCount + 1
+        ) }
+        
+        animationJob = viewModelScope.launch {
             try {
-                // Simulate sending
-                delay(300)
-                
+                // Update data immediately without blocking
                 val updatedSummary = MissingRepository.sendMissing()
                 val todayCounts = MissingRepository.getTodayCounts()
                 val dailyHistory = MissingRepository.getDailyMissingHistory()
@@ -109,12 +111,12 @@ class MissingViewModel : ViewModel() {
                     )
                 }
                 
-                // Reset animation state after animation completes
-                delay(1500)
+                // Short animation duration
+                delay(400)
                 _uiState.update { it.copy(isHeartAnimating = false) }
                 
                 // Reset success flag
-                delay(500)
+                delay(200)
                 _uiState.update { it.copy(sendSuccess = false) }
                 
             } catch (e: Exception) {
@@ -170,6 +172,7 @@ data class MissingUiState(
     val partnerTodayCount: UserMissCount = UserMissCount("", "", null, 0),
     val isLoading: Boolean = true,
     val isHeartAnimating: Boolean = false,
+    val clickCount: Int = 0,
     val lastSentTime: Long = 0L,
     val sendSuccess: Boolean = false,
     val error: String? = null

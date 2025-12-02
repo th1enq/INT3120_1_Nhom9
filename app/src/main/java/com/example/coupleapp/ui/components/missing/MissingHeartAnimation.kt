@@ -28,6 +28,7 @@ import com.example.coupleapp.R
 @Composable
 fun MissingHeartAnimation(
     isAnimating: Boolean,
+    clickCount: Int,
     onHeartClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -38,21 +39,22 @@ fun MissingHeartAnimation(
         LottieCompositionSpec.RawRes(R.raw.heart_beating)
     )
     
-    // Animation state - play when animating, otherwise show idle frame
+    // Use clickCount as key to restart animation on each click
     val progress by animateLottieCompositionAsState(
         composition = composition,
-        iterations = if (isAnimating) 1 else 0,
+        iterations = 1,
         isPlaying = isAnimating,
-        speed = 1.5f,
-        restartOnPlay = true
+        speed = 3f, // Faster animation
+        restartOnPlay = true,
+        cancellationBehavior = LottieCancellationBehavior.Immediately
     )
     
-    // Scale animation for bounce effect
+    // Quick bounce scale animation that resets on each click
     val scale by animateFloatAsState(
-        targetValue = if (isAnimating) 1.1f else 1f,
+        targetValue = if (isAnimating) 1.15f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessMedium // Faster spring
         ),
         label = "heartScale"
     )
@@ -61,7 +63,6 @@ fun MissingHeartAnimation(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .padding(horizontal = 24.dp)
             .clip(RoundedCornerShape(24.dp))
             .clickable(
                 interactionSource = interactionSource,
@@ -69,7 +70,7 @@ fun MissingHeartAnimation(
             ) { onHeartClick() },
         contentAlignment = Alignment.Center
     ) {
-        // Background image
+        // Background image - full width
         Image(
             painter = painterResource(id = R.drawable.background_missing),
             contentDescription = null,
@@ -77,12 +78,12 @@ fun MissingHeartAnimation(
             contentScale = ContentScale.Crop
         )
         
-        // Heart Lottie animation
+        // Heart Lottie animation - bigger size
         LottieAnimation(
             composition = composition,
             progress = { if (isAnimating) progress else 0f },
             modifier = Modifier
-                .size(200.dp)
+                .size(280.dp) // Bigger heart
                 .scale(scale)
         )
     }
