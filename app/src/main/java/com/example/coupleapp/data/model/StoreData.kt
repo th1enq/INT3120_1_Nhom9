@@ -99,6 +99,7 @@ data class StoreUiState(
     val errorMessage: String? = null,
     val showPurchaseDialog: Boolean = false,
     val selectedItem: StoreItem? = null,
+    val purchaseQuantity: Int = 1,
     val purchaseResult: PurchaseResult? = null,
     val canClaimFreeGift: Boolean = false,
     val canWatchAd: Boolean = true,

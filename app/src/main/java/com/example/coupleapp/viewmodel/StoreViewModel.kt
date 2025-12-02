@@ -264,8 +264,18 @@ class StoreViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 selectedItem = item,
-                showPurchaseDialog = true
+                showPurchaseDialog = true,
+                purchaseQuantity = 1
             )
+        }
+    }
+
+    /**
+     * Update purchase quantity
+     */
+    fun updatePurchaseQuantity(quantity: Int) {
+        _uiState.update {
+            it.copy(purchaseQuantity = quantity.coerceAtLeast(1))
         }
     }
 
@@ -277,7 +287,8 @@ class StoreViewModel : ViewModel() {
             it.copy(
                 showPurchaseDialog = false,
                 selectedItem = null,
-                purchaseResult = null
+                purchaseResult = null,
+                purchaseQuantity = 1
             )
         }
     }
@@ -285,13 +296,14 @@ class StoreViewModel : ViewModel() {
     /**
      * Purchase item with coins
      */
-    fun purchaseWithCoins(item: StoreItem) {
+    fun purchaseWithCoins(item: StoreItem, quantity: Int) {
         viewModelScope.launch {
             val currentCoins = _uiState.value.userWallet.coins
+            val totalCost = item.coinPrice * quantity
 
-            if (currentCoins >= item.coinPrice) {
+            if (currentCoins >= totalCost) {
                 // Successful purchase
-                val newBalance = currentCoins - item.coinPrice
+                val newBalance = currentCoins - totalCost
                 _uiState.update {
                     it.copy(
                         userWallet = it.userWallet.copy(coins = newBalance),
@@ -307,7 +319,7 @@ class StoreViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         purchaseResult = PurchaseResult.InsufficientFunds(
-                            required = item.coinPrice,
+                            required = totalCost,
                             current = currentCoins
                         )
                     )
