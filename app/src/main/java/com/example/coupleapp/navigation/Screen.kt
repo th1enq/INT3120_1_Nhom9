@@ -37,4 +37,7 @@ sealed class Screen(val route: String) {
     
     // Store screen
     object Store : Screen("store")
+    
+    // Calendar screen
+    object Calendar : Screen("calendar")
 }

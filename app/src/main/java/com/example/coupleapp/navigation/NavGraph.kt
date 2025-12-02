@@ -21,6 +21,7 @@ import com.example.coupleapp.ui.screens.distance.DistanceScreen
 import com.example.coupleapp.ui.screens.distance.SharedPlacesScreen
 import com.example.coupleapp.ui.screens.distance.PlacePhotosScreen
 import com.example.coupleapp.ui.screens.store.StoreScreen
+import com.example.coupleapp.ui.screens.calendar.CalendarScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -161,6 +162,9 @@ fun NavGraph(navController: NavHostController) {
                         "Store" -> navController.navigate(Screen.Store.route) {
                             launchSingleTop = true
                         }
+                        "Calendar" -> navController.navigate(Screen.Calendar.route) {
+                            launchSingleTop = true
+                        }
                         // TODO: Navigate to other specific features
                     }
                 },
@@ -179,6 +183,9 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                         "Store" -> navController.navigate(Screen.Store.route) {
+                            launchSingleTop = true
+                        }
+                        "Calendar" -> navController.navigate(Screen.Calendar.route) {
                             launchSingleTop = true
                         }
                     }
@@ -658,6 +665,41 @@ fun NavGraph(navController: NavHostController) {
             }
         ) {
             StoreScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Calendar Screen
+        composable(
+            route = Screen.Calendar.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            CalendarScreen(
                 onBackClick = {
                     navController.popBackStack()
                 }
