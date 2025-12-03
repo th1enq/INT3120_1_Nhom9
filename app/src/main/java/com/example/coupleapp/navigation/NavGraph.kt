@@ -22,6 +22,7 @@ import com.example.coupleapp.ui.screens.distance.SharedPlacesScreen
 import com.example.coupleapp.ui.screens.distance.PlacePhotosScreen
 import com.example.coupleapp.ui.screens.store.StoreScreen
 import com.example.coupleapp.ui.screens.calendar.CalendarScreen
+import com.example.coupleapp.ui.screens.garden.GardenScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -166,6 +167,9 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                         "Quest" -> navController.navigate(Screen.Quest.route) {
+                            launchSingleTop = true
+                        }
+                        "Garden" -> navController.navigate(Screen.Garden.route) {
                             launchSingleTop = true
                         }
                     }
@@ -772,6 +776,46 @@ fun NavGraph(navController: NavHostController) {
                     // TODO: Navigate to partner link screen when implemented
                     // For now, navigate back to Home or show a dialog
                     navController.navigate(Screen.Home.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Garden Screen
+        composable(
+            route = Screen.Garden.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            GardenScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onNavigateToStore = {
+                    navController.navigate(Screen.Store.route) {
                         launchSingleTop = true
                     }
                 }

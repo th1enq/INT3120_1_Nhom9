@@ -43,4 +43,8 @@ sealed class Screen(val route: String) {
     
     // Quest screen
     object Quest : Screen("quest")
+    
+    // Garden screen
+    object Garden : Screen("garden")
+    object GardenGallery : Screen("garden_gallery")
 }

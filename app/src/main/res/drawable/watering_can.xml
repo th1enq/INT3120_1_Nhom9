@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    
+    <!-- Watering can body -->
+    <path
+        android:fillColor="#64B5F6"
+        android:pathData="M16,28 L16,48 Q16,52 20,52 L44,52 Q48,52 48,48 L48,28 Q48,24 44,24 L20,24 Q16,24 16,28 Z"/>
+    
+    <!-- Watering can handle -->
+    <path
+        android:fillColor="#42A5F5"
+        android:pathData="M44,20 Q52,20 52,28 L52,36 Q52,40 48,40 L48,32 Q48,28 44,28 L44,20 Z"/>
+    
+    <!-- Watering can spout -->
+    <path
+        android:fillColor="#64B5F6"
+        android:pathData="M12,36 L4,32 Q0,30 2,26 L4,24 Q6,22 10,24 L16,28 L12,36 Z"/>
+    
+    <!-- Water drops -->
+    <path
+        android:fillColor="#90CAF9"
+        android:pathData="M6,34 Q5,38 6,40 Q7,42 8,40 Q9,38 8,34 Q7,32 6,34 Z"/>
+    
+    <path
+        android:fillColor="#90CAF9"
+        android:pathData="M2,38 Q1,42 2,44 Q3,46 4,44 Q5,42 4,38 Q3,36 2,38 Z"/>
+    
+    <path
+        android:fillColor="#90CAF9"
+        android:pathData="M10,36 Q9,40 10,42 Q11,44 12,42 Q13,40 12,36 Q11,34 10,36 Z"/>
+    
+</vector>
