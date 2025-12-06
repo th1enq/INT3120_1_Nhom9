@@ -23,6 +23,10 @@ import com.example.coupleapp.ui.screens.distance.PlacePhotosScreen
 import com.example.coupleapp.ui.screens.store.StoreScreen
 import com.example.coupleapp.ui.screens.calendar.CalendarScreen
 import com.example.coupleapp.ui.screens.garden.GardenScreen
+import com.example.coupleapp.ui.screens.partner.PartnerHubScreen
+import com.example.coupleapp.ui.screens.partner.LinkPartnerScreen
+import com.example.coupleapp.ui.screens.partner.ChatScreen
+import com.example.coupleapp.ui.screens.partner.QAScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -198,6 +202,156 @@ fun NavGraph(navController: NavHostController) {
                             launchSingleTop = true
                         }
                     }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Partner Hub Screen
+        composable(
+            route = Screen.PartnerHub.route,
+            enterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            }
+        ) {
+            PartnerHubScreen(
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToLinkPartner = {
+                    navController.navigate(Screen.LinkPartner.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToChat = {
+                    navController.navigate(Screen.Chat.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToQA = {
+                    navController.navigate(Screen.QA.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToShortcut = { route ->
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Link Partner Screen
+        composable(
+            route = Screen.LinkPartner.route,
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeIn(animationSpec = tween(350))
+            },
+            exitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeOut(animationSpec = tween(350))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(350)
+                ) + fadeOut(animationSpec = tween(350))
+            }
+        ) {
+            LinkPartnerScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onLinkSuccess = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Chat Screen
+        composable(
+            route = Screen.Chat.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
+        ) {
+            ChatScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // Q&A Screen
+        composable(
+            route = Screen.QA.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
+            }
+        ) {
+            QAScreen(
+                onBackClick = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -773,9 +927,7 @@ fun NavGraph(navController: NavHostController) {
                     }
                 },
                 onNavigateToPartnerLink = {
-                    // TODO: Navigate to partner link screen when implemented
-                    // For now, navigate back to Home or show a dialog
-                    navController.navigate(Screen.Home.route) {
+                    navController.navigate(Screen.LinkPartner.route) {
                         launchSingleTop = true
                     }
                 }

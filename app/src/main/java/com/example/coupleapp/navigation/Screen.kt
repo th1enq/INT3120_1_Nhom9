@@ -5,6 +5,13 @@ sealed class Screen(val route: String) {
     object PhoneLogin : Screen("phone_login")
     object Register : Screen("register")
     object Home : Screen("home")
+    
+    // Partner screens
+    object PartnerHub : Screen("partner_hub")
+    object LinkPartner : Screen("link_partner")
+    object Chat : Screen("chat")
+    object QA : Screen("qa")
+    
     object SleepTracker : Screen("sleep_tracker")
     object SleepHistory : Screen("sleep_history/{userId}") {
         fun createRoute(userId: String) = "sleep_history/$userId"

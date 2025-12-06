@@ -28,6 +28,7 @@ import kotlinx.coroutines.delay
 fun HomeScreen(
     onNavigateToFeature: (String) -> Unit = {},
     onNavigateToWidget: (String) -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
     // Inject ViewModel vào đây
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -39,6 +40,15 @@ fun HomeScreen(
     var visible by remember { mutableStateOf(false) }
 
     val scrollState = rememberLazyListState()
+    
+    // Xử lý navigation khi chọn tab Friends
+    LaunchedEffect(selectedBottomNavItem) {
+        if (selectedBottomNavItem == BottomNavItem.FRIENDS) {
+            onNavigateToPartnerHub()
+            // Reset về tab HOME để khi quay lại không bị stuck
+            selectedBottomNavItem = BottomNavItem.HOME
+        }
+    }
 
     // --- CẢI TIẾN LOGIC TIMING THÔNG MINH ---
     LaunchedEffect(uiState.isLoading) {
