@@ -54,4 +54,7 @@ sealed class Screen(val route: String) {
     // Garden screen
     object Garden : Screen("garden")
     object GardenGallery : Screen("garden_gallery")
+    
+    // Moments screen
+    object Moments : Screen("moments")
 }

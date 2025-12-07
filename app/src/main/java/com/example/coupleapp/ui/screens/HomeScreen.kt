@@ -29,6 +29,7 @@ fun HomeScreen(
     onNavigateToFeature: (String) -> Unit = {},
     onNavigateToWidget: (String) -> Unit = {},
     onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
     // Inject ViewModel vào đây
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -41,12 +42,18 @@ fun HomeScreen(
 
     val scrollState = rememberLazyListState()
     
-    // Xử lý navigation khi chọn tab Friends
+    // Xử lý navigation khi chọn tab Friends hoặc Activities
     LaunchedEffect(selectedBottomNavItem) {
-        if (selectedBottomNavItem == BottomNavItem.FRIENDS) {
-            onNavigateToPartnerHub()
-            // Reset về tab HOME để khi quay lại không bị stuck
-            selectedBottomNavItem = BottomNavItem.HOME
+        when (selectedBottomNavItem) {
+            BottomNavItem.FRIENDS -> {
+                onNavigateToPartnerHub()
+                selectedBottomNavItem = BottomNavItem.HOME
+            }
+            BottomNavItem.ACTIVITIES -> {
+                onNavigateToMoments()
+                selectedBottomNavItem = BottomNavItem.HOME
+            }
+            else -> {}
         }
     }
 

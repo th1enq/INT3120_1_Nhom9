@@ -207,6 +207,11 @@ fun NavGraph(navController: NavHostController) {
                     navController.navigate(Screen.PartnerHub.route) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -968,6 +973,36 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onNavigateToStore = {
                     navController.navigate(Screen.Store.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+        
+        // Moments Screen
+        composable(
+            route = Screen.Moments.route,
+            enterTransition = {
+                fadeIn(animationSpec = tween(600))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(600))
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(300))
+            }
+        ) {
+            com.example.coupleapp.ui.screens.moments.MomentsScreen(
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToFriends = {
+                    navController.navigate(Screen.PartnerHub.route) {
                         launchSingleTop = true
                     }
                 }
