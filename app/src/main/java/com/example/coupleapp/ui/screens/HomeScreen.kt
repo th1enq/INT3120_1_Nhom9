@@ -30,6 +30,7 @@ fun HomeScreen(
     onNavigateToWidget: (String) -> Unit = {},
     onNavigateToPartnerHub: () -> Unit = {},
     onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     // Inject ViewModel vào đây
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -49,6 +50,10 @@ fun HomeScreen(
             }
             BottomNavItem.ACTIVITIES -> {
                 onNavigateToMoments()
+                selectedBottomNavItem = BottomNavItem.HOME
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
                 selectedBottomNavItem = BottomNavItem.HOME
             }
             else -> {}
@@ -135,15 +140,6 @@ fun HomeScreen(
                                         fontSize = 22.sp
                                     ),
                                     color = Color(0xFF2D2D2D)
-                                )
-
-                                Text(
-                                    text = "See all →",
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    color = Color(0xFFFF9ECE),
-                                    fontSize = 14.sp
                                 )
                             }
                         }

@@ -27,6 +27,14 @@ import com.example.coupleapp.ui.screens.partner.PartnerHubScreen
 import com.example.coupleapp.ui.screens.partner.LinkPartnerScreen
 import com.example.coupleapp.ui.screens.partner.ChatScreen
 import com.example.coupleapp.ui.screens.partner.QAScreen
+import com.example.coupleapp.ui.screens.profile.ProfileScreen
+import com.example.coupleapp.ui.screens.profile.EditProfileScreen
+import com.example.coupleapp.ui.screens.profile.ChangePasswordScreen
+import com.example.coupleapp.ui.screens.profile.ManageLinkScreen
+import com.example.coupleapp.ui.screens.profile.NotificationSettingsScreen
+import com.example.coupleapp.ui.screens.profile.LanguageSettingsScreen
+import com.example.coupleapp.ui.screens.profile.HelpScreen
+import com.example.coupleapp.ui.screens.profile.AboutScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -212,6 +220,11 @@ fun NavGraph(navController: NavHostController) {
                     navController.navigate(Screen.Moments.route) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -251,6 +264,16 @@ fun NavGraph(navController: NavHostController) {
                 onNavigateToShortcut = { route ->
                     navController.navigate(route) {
                         launchSingleTop = true
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        popUpTo(Screen.PartnerHub.route) { inclusive = true }
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(Screen.PartnerHub.route) { inclusive = true }
                     }
                 }
             )
@@ -395,6 +418,21 @@ fun NavGraph(navController: NavHostController) {
                 onNavigateToHome = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
                         launchSingleTop = true
                     }
                 },
@@ -559,6 +597,21 @@ fun NavGraph(navController: NavHostController) {
                     navController.navigate(Screen.LocketDrawing.route) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        popUpTo(Screen.Locket.route) { inclusive = true }
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        popUpTo(Screen.Locket.route) { inclusive = true }
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(Screen.Locket.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -594,6 +647,21 @@ fun NavGraph(navController: NavHostController) {
             com.example.coupleapp.ui.screens.locket.LocketHistoryScreen(
                 onBackClick = {
                     navController.popBackStack()
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        popUpTo(Screen.LocketHistory.route) { inclusive = true }
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        popUpTo(Screen.LocketHistory.route) { inclusive = true }
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(Screen.LocketHistory.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -665,6 +733,21 @@ fun NavGraph(navController: NavHostController) {
             MissingScreen(
                 onBackClick = {
                     navController.popBackStack()
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        popUpTo(Screen.Missing.route) { inclusive = true }
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        popUpTo(Screen.Missing.route) { inclusive = true }
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(Screen.Missing.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -719,7 +802,22 @@ fun NavGraph(navController: NavHostController) {
                         launchSingleTop = true
                     }
                 },
-                targetPlaceId = targetPlaceId
+                targetPlaceId = targetPlaceId,
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        popUpTo(Screen.Distance.route) { inclusive = true }
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        popUpTo(Screen.Distance.route) { inclusive = true }
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(Screen.Distance.route) { inclusive = true }
+                    }
+                }
             )
         }
         
@@ -870,6 +968,27 @@ fun NavGraph(navController: NavHostController) {
             CalendarScreen(
                 onBackClick = {
                     navController.popBackStack()
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -905,6 +1024,27 @@ fun NavGraph(navController: NavHostController) {
             com.example.coupleapp.ui.screens.quest.QuestScreen(
                 onBackClick = {
                     navController.popBackStack()
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToLocket = {
                     navController.navigate(Screen.Locket.route) {
@@ -1005,7 +1145,322 @@ fun NavGraph(navController: NavHostController) {
                     navController.navigate(Screen.PartnerHub.route) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        launchSingleTop = true
+                    }
                 }
+            )
+        }
+        
+        // Profile Screen
+        composable(
+            route = Screen.Profile.route,
+            enterTransition = {
+                fadeIn(animationSpec = tween(400))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(400))
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(300))
+            }
+        ) {
+            ProfileScreen(
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToEditProfile = {
+                    navController.navigate(Screen.EditProfile.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToChangePassword = {
+                    navController.navigate(Screen.ChangePassword.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToManageLink = {
+                    navController.navigate(Screen.ManageLink.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToNotifications = {
+                    navController.navigate(Screen.NotificationSettings.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToLanguage = {
+                    navController.navigate(Screen.LanguageSettings.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToHelp = {
+                    navController.navigate(Screen.Help.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToAbout = {
+                    navController.navigate(Screen.About.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onLogout = {
+                    navController.navigate(Screen.Welcome.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+        
+        // Edit Profile Screen
+        composable(
+            route = Screen.EditProfile.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            EditProfileScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = { navController.popBackStack() }
+            )
+        }
+        
+        // Change Password Screen
+        composable(
+            route = Screen.ChangePassword.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            ChangePasswordScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = { navController.popBackStack() }
+            )
+        }
+        
+        // Manage Link Screen
+        composable(
+            route = Screen.ManageLink.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            ManageLinkScreen(
+                onBackClick = { navController.popBackStack() },
+                onUnlink = { navController.popBackStack() }
+            )
+        }
+        
+        // Notification Settings Screen
+        composable(
+            route = Screen.NotificationSettings.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            NotificationSettingsScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        
+        // Language Settings Screen
+        composable(
+            route = Screen.LanguageSettings.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            LanguageSettingsScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        
+        // Help Screen
+        composable(
+            route = Screen.Help.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            HelpScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        
+        // About Screen
+        composable(
+            route = Screen.About.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            AboutScreen(
+                onBackClick = { navController.popBackStack() }
             )
         }
     }

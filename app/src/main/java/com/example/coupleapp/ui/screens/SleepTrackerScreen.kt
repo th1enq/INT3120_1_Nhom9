@@ -45,6 +45,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 fun SleepTrackerScreen(
     onBackClick: () -> Unit,
     onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
     onNavigateToHistory: (String) -> Unit = {},
     viewModel: SleepTrackerViewModel = viewModel()
@@ -52,7 +55,26 @@ fun SleepTrackerScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var visible by remember { mutableStateOf(false) }
-    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
+    var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
+    
+    // Handle navigation
+    LaunchedEffect(selectedBottomNavItem) {
+        when (selectedBottomNavItem) {
+            BottomNavItem.HOME -> {
+                onNavigateToHome()
+            }
+            BottomNavItem.FRIENDS -> {
+                onNavigateToPartnerHub()
+            }
+            BottomNavItem.ACTIVITIES -> {
+                onNavigateToMoments()
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
+            }
+            null -> { /* Initial state, do nothing */ }
+        }
+    }
     
     // TODO: Remove after testing - Temporary state to show BedtimeReminderDialog for testing
     var showTestBedtimeDialog by remember { mutableStateOf(true) }
@@ -81,12 +103,9 @@ fun SleepTrackerScreen(
     Scaffold(
         bottomBar = {
             CoupleBottomNavigation(
-                selectedItem = selectedBottomNavItem,
+                selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
                 onItemSelected = { item ->
                     selectedBottomNavItem = item
-                    if (item == BottomNavItem.HOME) {
-                        onBackClick()
-                    }
                 }
             )
         },

@@ -34,6 +34,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun PartnerHubScreen(
     onNavigateToHome: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onNavigateToLinkPartner: () -> Unit,
     onNavigateToChat: () -> Unit,
     onNavigateToQA: () -> Unit,
@@ -102,7 +104,9 @@ fun PartnerHubScreen(
                         viewModel.rejectAnswer(questionId, comment)
                     },
                     onNavigateToLinkPartner = onNavigateToLinkPartner,
-                    onNavigateToHome = onNavigateToHome
+                    onNavigateToHome = onNavigateToHome,
+                    onNavigateToMoments = onNavigateToMoments,
+                    onNavigateToProfile = onNavigateToProfile
                 )
             }
         }
@@ -190,7 +194,9 @@ private fun LinkedPartnerScreen(
     onApproveAnswer: (String) -> Unit,
     onRejectAnswer: (String, String) -> Unit,
     onNavigateToLinkPartner: () -> Unit,
-    onNavigateToHome: () -> Unit
+    onNavigateToHome: () -> Unit,
+    onNavigateToMoments: () -> Unit,
+    onNavigateToProfile: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -255,7 +261,8 @@ private fun LinkedPartnerScreen(
                 when (item) {
                     BottomNavItem.HOME -> onNavigateToHome()
                     BottomNavItem.FRIENDS -> { /* Already here */ }
-                    else -> { /* TODO */ }
+                    BottomNavItem.ACTIVITIES -> onNavigateToMoments()
+                    BottomNavItem.PROFILE -> onNavigateToProfile()
                 }
             },
             modifier = Modifier.align(Alignment.BottomCenter)

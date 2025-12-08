@@ -54,7 +54,17 @@ sealed class Screen(val route: String) {
     // Garden screen
     object Garden : Screen("garden")
     object GardenGallery : Screen("garden_gallery")
-    
+
     // Moments screen
     object Moments : Screen("moments")
+    
+    // Profile screen
+    object Profile : Screen("profile")
+    object EditProfile : Screen("edit_profile")
+    object ChangePassword : Screen("change_password")
+    object ManageLink : Screen("manage_link")
+    object NotificationSettings : Screen("notification_settings")
+    object LanguageSettings : Screen("language_settings")
+    object Help : Screen("help")
+    object About : Screen("about")
 }

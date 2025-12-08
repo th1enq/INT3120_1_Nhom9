@@ -45,13 +45,36 @@ fun LocketScreen(
     onBackClick: () -> Unit,
     onNavigateToHistory: () -> Unit = {},
     onNavigateToDrawing: () -> Unit = {},
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LocketViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
     var visible by remember { mutableStateOf(false) }
-    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
+    var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
+    
+    // Handle navigation
+    LaunchedEffect(selectedBottomNavItem) {
+        when (selectedBottomNavItem) {
+            BottomNavItem.HOME -> {
+                onNavigateToHome()
+            }
+            BottomNavItem.FRIENDS -> {
+                onNavigateToPartnerHub()
+            }
+            BottomNavItem.ACTIVITIES -> {
+                onNavigateToMoments()
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
+            }
+            null -> { /* Initial state, do nothing */ }
+        }
+    }
     
     // Swipe detection state
     var swipeOffset by remember { mutableFloatStateOf(0f) }
@@ -104,12 +127,9 @@ fun LocketScreen(
             // Hide bottom nav when showing photo confirmation
             if (!uiState.showPreview) {
                 CoupleBottomNavigation(
-                    selectedItem = selectedBottomNavItem,
+                    selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
                     onItemSelected = { item ->
                         selectedBottomNavItem = item
-                        if (item == BottomNavItem.HOME) {
-                            onBackClick()
-                        }
                     }
                 )
             }

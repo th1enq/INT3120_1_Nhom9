@@ -31,20 +31,20 @@ fun LocketMomentCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFFE8F5E9).copy(alpha = 0.6f))
-            .padding(16.dp)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left side - Locket content preview
             Box(
                 modifier = Modifier
-                    .size(90.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         Brush.verticalGradient(
                             listOf(
@@ -59,13 +59,13 @@ fun LocketMomentCard(
                     LocketType.EMOJI -> {
                         Text(
                             text = moment.content,
-                            fontSize = 48.sp
+                            fontSize = 32.sp
                         )
                     }
                     LocketType.TEXT -> {
                         Text(
                             text = "💬",
-                            fontSize = 48.sp
+                            fontSize = 32.sp
                         )
                     }
                     LocketType.PHOTO -> {
@@ -73,7 +73,7 @@ fun LocketMomentCard(
                             imageVector = Icons.Filled.Image,
                             contentDescription = null,
                             tint = Color(0xFF66BB6A),
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                     LocketType.DRAWING -> {
@@ -81,7 +81,7 @@ fun LocketMomentCard(
                             imageVector = Icons.Filled.Brush,
                             contentDescription = null,
                             tint = Color(0xFF66BB6A),
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
@@ -90,12 +90,12 @@ fun LocketMomentCard(
             // Right side - Information
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 // Type
                 Text(
                     text = "Locket",
-                    fontSize = 14.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF718096)
                 )
@@ -103,7 +103,7 @@ fun LocketMomentCard(
                 // Sender
                 Text(
                     text = moment.senderName,
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF66BB6A)
                 )
@@ -112,7 +112,7 @@ fun LocketMomentCard(
                 if (moment.locketType == LocketType.TEXT || moment.locketType == LocketType.EMOJI) {
                     Text(
                         text = moment.content,
-                        fontSize = 14.sp,
+                        fontSize = 12.sp,
                         color = Color(0xFF2D2D2D),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -123,7 +123,7 @@ fun LocketMomentCard(
                 moment.caption?.let { caption ->
                     Text(
                         text = caption,
-                        fontSize = 12.sp,
+                        fontSize = 10.sp,
                         color = Color(0xFF718096),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -133,7 +133,7 @@ fun LocketMomentCard(
                 // Time
                 Text(
                     text = moment.getFormattedTime(),
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = Color(0xFF718096)
                 )
             }

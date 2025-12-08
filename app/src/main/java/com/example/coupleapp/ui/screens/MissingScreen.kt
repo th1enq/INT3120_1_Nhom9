@@ -33,18 +33,41 @@ import kotlinx.coroutines.delay
 @Composable
 fun MissingScreen(
     onBackClick: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: MissingViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
     var visible by remember { mutableStateOf(false) }
-    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
+    var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
     
     val scrollState = rememberScrollState()
     
     // Snackbar for success feedback
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Handle navigation
+    LaunchedEffect(selectedBottomNavItem) {
+        when (selectedBottomNavItem) {
+            BottomNavItem.HOME -> {
+                onNavigateToHome()
+            }
+            BottomNavItem.FRIENDS -> {
+                onNavigateToPartnerHub()
+            }
+            BottomNavItem.ACTIVITIES -> {
+                onNavigateToMoments()
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
+            }
+            null -> { /* Initial state, do nothing */ }
+        }
+    }
     
     // Animation timing
     LaunchedEffect(uiState.isLoading) {
@@ -78,12 +101,9 @@ fun MissingScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             CoupleBottomNavigation(
-                selectedItem = selectedBottomNavItem,
+                selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
                 onItemSelected = { item ->
                     selectedBottomNavItem = item
-                    if (item == BottomNavItem.HOME) {
-                        onBackClick()
-                    }
                 }
             )
         },

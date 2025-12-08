@@ -22,8 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.LoadingScreen
-import com.example.coupleapp.ui.components.home.BottomNavItem
-import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.components.quest.*
 import com.example.coupleapp.viewmodel.QuestViewModel
 import kotlinx.coroutines.delay
@@ -41,6 +39,10 @@ import kotlinx.coroutines.delay
 @Composable
 fun QuestScreen(
     onBackClick: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onNavigateToLocket: () -> Unit = {},
     onNavigateToMissing: () -> Unit = {},
     onNavigateToStore: () -> Unit = {},
@@ -53,7 +55,6 @@ fun QuestScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     var visible by remember { mutableStateOf(false) }
-    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
     
     val scrollState = rememberLazyListState()
     
@@ -95,26 +96,14 @@ fun QuestScreen(
         )
     }
     
-    Scaffold(
-        bottomBar = {
-            CoupleBottomNavigation(
-                selectedItem = selectedBottomNavItem,
-                onItemSelected = { item ->
-                    selectedBottomNavItem = item
-                    if (item == BottomNavItem.HOME) {
-                        onBackClick()
-                    }
-                }
-            )
-        },
-        containerColor = Color.Transparent
-    ) { paddingValues ->
-        
+    Box(
+        modifier = modifier.fillMaxSize()
+    ) {
         Crossfade(
             targetState = uiState.isLoading,
             animationSpec = tween(durationMillis = 200),  // Faster transition
             label = "LoadingCrossfade",
-            modifier = modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
                 LoadingScreen()
@@ -158,7 +147,7 @@ fun QuestScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues)
+                            .statusBarsPadding()
                     ) {
                         // PINNED HEADER - Top Bar (transparent, no white background)
                         AnimatedVisibility(

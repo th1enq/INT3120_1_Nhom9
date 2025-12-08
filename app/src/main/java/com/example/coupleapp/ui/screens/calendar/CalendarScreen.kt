@@ -15,18 +15,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.CalendarViewMode
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.calendar.*
-import com.example.coupleapp.ui.components.home.BottomNavItem
-import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.viewmodel.CalendarViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     onBackClick: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     viewModel: CalendarViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
     var visible by remember { mutableStateOf(false) }
     
     // Loading animation timing similar to other screens
@@ -59,13 +60,6 @@ fun CalendarScreen(
             CalendarMainContent(
                 uiState = uiState,
                 visible = visible,
-                selectedBottomNavItem = selectedBottomNavItem,
-                onBottomNavItemSelected = { item ->
-                    selectedBottomNavItem = item
-                    if (item == BottomNavItem.HOME) {
-                        onBackClick()
-                    }
-                },
                 onBackClick = onBackClick,
                 viewModel = viewModel
             )
@@ -77,19 +71,10 @@ fun CalendarScreen(
 private fun CalendarMainContent(
     uiState: com.example.coupleapp.viewmodel.CalendarUiState,
     visible: Boolean,
-    selectedBottomNavItem: BottomNavItem,
-    onBottomNavItemSelected: (BottomNavItem) -> Unit,
     onBackClick: () -> Unit,
     viewModel: CalendarViewModel
 ) {
-    Scaffold(
-        bottomBar = {
-            CoupleBottomNavigation(
-                selectedItem = selectedBottomNavItem,
-                onItemSelected = onBottomNavItemSelected
-            )
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()

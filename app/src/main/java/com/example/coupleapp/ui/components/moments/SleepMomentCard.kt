@@ -40,18 +40,18 @@ fun SleepMomentCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFFB8FFD6).copy(alpha = 0.4f))
-            .padding(16.dp)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left side - Quality Circle with Progress
             Box(
-                modifier = Modifier.size(90.dp),
+                modifier = Modifier.size(64.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val progress = moment.achievementPercentage / 100f
@@ -62,8 +62,8 @@ fun SleepMomentCard(
                 )
                 
                 // Draw circular progress
-                Canvas(modifier = Modifier.size(90.dp)) {
-                    val strokeWidth = 8.dp.toPx()
+                Canvas(modifier = Modifier.size(64.dp)) {
+                    val strokeWidth = 5.dp.toPx()
                     
                     // Background circle
                     drawCircle(
@@ -87,7 +87,7 @@ fun SleepMomentCard(
                     painter = painterResource(id = qualityIcon),
                     contentDescription = qualityLabel,
                     modifier = Modifier
-                        .size(70.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                 )
             }
@@ -95,12 +95,12 @@ fun SleepMomentCard(
             // Right side - Information
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // User name
                 Text(
                     text = moment.userName,
-                    fontSize = 14.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF718096)
                 )
@@ -108,20 +108,20 @@ fun SleepMomentCard(
                 // Quality text
                 Text(
                     text = qualityLabel,
-                    fontSize = 20.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = qualityColor
                 )
                 
                 // Sleep duration
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "😴", fontSize = 16.sp)
+                    Text(text = "😴", fontSize = 12.sp)
                     Text(
                         text = moment.getSleepDurationFormatted(),
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF2D2D2D)
                     )
@@ -129,13 +129,13 @@ fun SleepMomentCard(
                 
                 // Time range
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "🕐", fontSize = 16.sp)
+                    Text(text = "🕐", fontSize = 12.sp)
                     Text(
                         text = moment.getTimeRangeFormatted(),
-                        fontSize = 14.sp,
+                        fontSize = 11.sp,
                         color = Color(0xFF718096)
                     )
                 }

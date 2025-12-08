@@ -52,38 +52,38 @@ fun EventMomentCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(bgColor)
-            .padding(16.dp)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left side - Icon
             Box(
                 modifier = Modifier
-                    .size(90.dp)
+                    .size(64.dp)
                     .clip(CircleShape)
                     .background(iconColor.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = emoji,
-                    fontSize = 48.sp
+                    fontSize = 32.sp
                 )
             }
 
             // Right side - Information
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 // Type
                 Text(
                     text = "Event",
-                    fontSize = 14.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF718096)
                 )
@@ -91,7 +91,7 @@ fun EventMomentCard(
                 // Title
                 Text(
                     text = moment.title,
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = iconColor,
                     maxLines = 2,
@@ -100,13 +100,13 @@ fun EventMomentCard(
                 
                 // Days until
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "📅", fontSize = 16.sp)
+                    Text(text = "📅", fontSize = 12.sp)
                     Text(
                         text = moment.getDaysUntilFormatted(),
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF2D2D2D)
                     )
@@ -115,7 +115,7 @@ fun EventMomentCard(
                 // Time
                 Text(
                     text = moment.getFormattedTime(),
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = Color(0xFF718096)
                 )
             }

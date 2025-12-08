@@ -46,6 +46,10 @@ fun DistanceScreen(
     onBackClick: () -> Unit,
     onNavigateToSharedPlaces: () -> Unit,
     onNavigateToPlacePhotos: (String) -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     targetPlaceId: String? = null,
     viewModel: DistanceViewModel = viewModel()
 ) {
@@ -55,6 +59,26 @@ fun DistanceScreen(
     
     var visible by remember { mutableStateOf(false) }
     var selectedSharedPlace by remember { mutableStateOf<SharedPlace?>(null) }
+    var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
+    
+    // Handle navigation
+    LaunchedEffect(selectedBottomNavItem) {
+        when (selectedBottomNavItem) {
+            BottomNavItem.HOME -> {
+                onNavigateToHome()
+            }
+            BottomNavItem.FRIENDS -> {
+                onNavigateToPartnerHub()
+            }
+            BottomNavItem.ACTIVITIES -> {
+                onNavigateToMoments()
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
+            }
+            null -> { /* Initial state, do nothing */ }
+        }
+    }
     
     // Camera state for controlling map animations from outside
     val cameraState = remember { CoupleMapCameraState() }
@@ -256,12 +280,9 @@ fun DistanceScreen(
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
                     CoupleBottomNavigation(
-                        selectedItem = BottomNavItem.HOME,
+                        selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
                         onItemSelected = { item ->
-                            when (item) {
-                                BottomNavItem.HOME -> onBackClick()
-                                else -> { /* Handle other navigation */ }
-                            }
+                            selectedBottomNavItem = item
                         }
                     )
                 }

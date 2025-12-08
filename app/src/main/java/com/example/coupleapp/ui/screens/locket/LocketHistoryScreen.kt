@@ -40,14 +40,37 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun LocketHistoryScreen(
     onBackClick: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: LocketViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
     var visible by remember { mutableStateOf(false) }
-    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
+    var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
     var selectedPost by remember { mutableStateOf<LocketPost?>(null) }
+    
+    // Handle navigation
+    LaunchedEffect(selectedBottomNavItem) {
+        when (selectedBottomNavItem) {
+            BottomNavItem.HOME -> {
+                onNavigateToHome()
+            }
+            BottomNavItem.FRIENDS -> {
+                onNavigateToPartnerHub()
+            }
+            BottomNavItem.ACTIVITIES -> {
+                onNavigateToMoments()
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
+            }
+            null -> { /* Initial state, do nothing */ }
+        }
+    }
     
     LaunchedEffect(uiState.isLoading) {
         if (uiState.isLoading) {
@@ -69,12 +92,9 @@ fun LocketHistoryScreen(
     Scaffold(
         bottomBar = {
             CoupleBottomNavigation(
-                selectedItem = selectedBottomNavItem,
+                selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
                 onItemSelected = { item ->
                     selectedBottomNavItem = item
-                    if (item == BottomNavItem.HOME) {
-                        onBackClick()
-                    }
                 }
             )
         },

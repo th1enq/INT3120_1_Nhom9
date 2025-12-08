@@ -26,55 +26,55 @@ fun MissingMomentCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(Color(0xFFFCE4EC).copy(alpha = 0.6f))
-            .padding(16.dp)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left side - Hearts with avatars
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(90.dp)
+                modifier = Modifier.width(64.dp)
             ) {
                 // Sender avatar
                 Box(
                     modifier = Modifier
-                        .size(50.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = moment.senderAvatar ?: "💕",
-                        fontSize = 32.sp
+                        fontSize = 22.sp
                     )
                 }
                 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 
                 // Hearts
                 Text(
                     text = "❤️".repeat(minOf(moment.missCount, 3)),
-                    fontSize = 14.sp
+                    fontSize = 10.sp
                 )
                 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 
                 // Receiver avatar
                 Box(
                     modifier = Modifier
-                        .size(50.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = moment.receiverAvatar ?: "💕",
-                        fontSize = 32.sp
+                        fontSize = 22.sp
                     )
                 }
             }
@@ -82,12 +82,12 @@ fun MissingMomentCard(
             // Right side - Information
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 // Type
                 Text(
                     text = "Missing",
-                    fontSize = 14.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF718096)
                 )
@@ -95,20 +95,20 @@ fun MissingMomentCard(
                 // Title
                 Text(
                     text = "${moment.senderName} → ${moment.receiverName}",
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFFF6B9D)
                 )
                 
                 // Count
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "💌", fontSize = 16.sp)
+                    Text(text = "💌", fontSize = 12.sp)
                     Text(
                         text = "${moment.missCount} messages",
-                        fontSize = 16.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF2D2D2D)
                     )
@@ -117,7 +117,7 @@ fun MissingMomentCard(
                 // Time
                 Text(
                     text = moment.getFormattedTime(),
-                    fontSize = 12.sp,
+                    fontSize = 10.sp,
                     color = Color(0xFF718096)
                 )
             }

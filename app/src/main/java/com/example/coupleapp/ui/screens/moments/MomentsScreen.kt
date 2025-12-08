@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 fun MomentsScreen(
     onNavigateToHome: () -> Unit = {},
     onNavigateToFriends: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     viewModel: MomentsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -55,6 +56,10 @@ fun MomentsScreen(
             }
             BottomNavItem.FRIENDS -> {
                 onNavigateToFriends()
+                selectedBottomNavItem = BottomNavItem.ACTIVITIES
+            }
+            BottomNavItem.PROFILE -> {
+                onNavigateToProfile()
                 selectedBottomNavItem = BottomNavItem.ACTIVITIES
             }
             else -> {}
@@ -99,7 +104,7 @@ fun MomentsScreen(
             label = "LoadingCrossfade"
         ) { loading ->
             if (loading) {
-                MomentsLoadingScreen()
+                LoadingScreen()
             } else {
                 Box(
                     modifier = Modifier
