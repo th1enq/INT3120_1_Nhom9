@@ -36,8 +36,7 @@ class QuestViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                delay(600) // Simulate loading
-
+                // Load data immediately (no fake delay)
                 val today = Date()
                 val todayString = dateFormat.format(today)
                 val todayDisplay = dateFormatDisplay.format(today)

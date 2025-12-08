@@ -51,8 +51,7 @@ class MissingViewModel : ViewModel() {
 
         loadDataJob = viewModelScope.launch {
             try {
-                delay(800) // Simulate network delay
-                
+                // Load data immediately (no fake delay)
                 val dailyHistory = MissingRepository.getDailyMissingHistory()
                 val summary = MissingRepository.getMissingSummary()
                 val todayCounts = MissingRepository.getTodayCounts()

@@ -34,20 +34,11 @@ fun GardenScreen(
     viewModel: GardenViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var visible by remember { mutableStateOf(false) }
     var showGalleryDialog by remember { mutableStateOf(false) }
     var showSeedDialog by remember { mutableStateOf(false) }
     var showDeathDialog by remember { mutableStateOf(false) }
     var showBloomCelebration by remember { mutableStateOf(false) }
     var isItemAnimating by remember { mutableStateOf(false) }
-
-    // Animation states
-    LaunchedEffect(uiState.isLoading) {
-        if (!uiState.isLoading) {
-            delay(100)
-            visible = true
-        }
-    }
 
     // Check for plant death
     LaunchedEffect(uiState.plant?.status?.isDead) {
@@ -125,7 +116,7 @@ fun GardenScreen(
 
     Crossfade(
         targetState = uiState.isLoading,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 200),  // Faster transition
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
@@ -146,27 +137,21 @@ fun GardenScreen(
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // Top bar with animation
+                    // Top bar (no animation)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
                     ) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = visible,
-                            enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { -it },
-                            exit = fadeOut(tween(300))
-                        ) {
-                            GardenTopBar(
-                                plantName = uiState.plant?.name ?: "Garden",
-                                onBackClick = onBackClick,
-                                onMenuClick = { viewModel.showSettingsMenu(true) },
-                                showMenu = uiState.showSettingsMenu,
-                                onRenameClick = { viewModel.showRenameDialog(true) },
-                                onSettingsClick = { /* Open settings */ },
-                                onDismissMenu = { viewModel.showSettingsMenu(false) }
-                            )
-                        }
+                        GardenTopBar(
+                            plantName = uiState.plant?.name ?: "Garden",
+                            onBackClick = onBackClick,
+                            onMenuClick = { viewModel.showSettingsMenu(true) },
+                            showMenu = uiState.showSettingsMenu,
+                            onRenameClick = { viewModel.showRenameDialog(true) },
+                            onSettingsClick = { /* Open settings */ },
+                            onDismissMenu = { viewModel.showSettingsMenu(false) }
+                        )
                     }
 
                     // Plant area with status panel and side buttons
@@ -182,15 +167,8 @@ fun GardenScreen(
                                 .padding(12.dp)
                                 .width(140.dp)
                         ) {
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = visible && uiState.plant != null,
-                                enter = fadeIn(tween(400, delayMillis = 100)) + 
-                                        slideInHorizontally(tween(400, delayMillis = 100)) { -it },
-                                exit = fadeOut(tween(300))
-                            ) {
-                                uiState.plant?.let { plant ->
-                                    PlantStatusPanel(status = plant.status)
-                                }
+                            uiState.plant?.let { plant ->
+                                PlantStatusPanel(status = plant.status)
                             }
                         }
 
@@ -200,17 +178,10 @@ fun GardenScreen(
                                 .align(Alignment.CenterEnd)
                                 .padding(end = 12.dp)
                         ) {
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = visible,
-                                enter = fadeIn(tween(400, delayMillis = 150)) + 
-                                        slideInHorizontally(tween(400, delayMillis = 150)) { it },
-                                exit = fadeOut(tween(300))
-                            ) {
-                                SideButtons(
-                                    onGalleryClick = { showGalleryDialog = true },
-                                    onShopClick = onNavigateToStore
-                                )
-                            }
+                            SideButtons(
+                                onGalleryClick = { showGalleryDialog = true },
+                                onShopClick = onNavigateToStore
+                            )
                         }
 
                         // Plant display (center-bottom) - positioned on shelf in background
@@ -222,35 +193,29 @@ fun GardenScreen(
                                 .padding(top = 15.dp)
                                 .offset(y = 35.dp)  // Plant position - increase to move down
                         ) {
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = visible && uiState.plant != null,
-                                enter = fadeIn(tween(500, delayMillis = 200)) + scaleIn(tween(500, delayMillis = 200)),
-                                exit = fadeOut(tween(300))
-                            ) {
-                                uiState.plant?.let { plant ->
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        AnimatedPlantDisplay(
-                                            plant = plant,
-                                            plantThought = uiState.plantThought,
-                                            isExcited = uiState.showItemAnimation,
-                                            modifier = Modifier.size(220.dp)
-                                        )
+                            uiState.plant?.let { plant ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    AnimatedPlantDisplay(
+                                        plant = plant,
+                                        plantThought = uiState.plantThought,
+                                        isExcited = uiState.showItemAnimation,
+                                        modifier = Modifier.size(220.dp)
+                                    )
 
-                                        // Stage label - EDIT offset(y = XX.dp) to move label up/down
-                                        PlantStageLabel(
-                                            stageName = plant.stage.displayName,
-                                            modifier = Modifier.offset(y = (-5).dp)
-                                             // Label position
-                                        )
-                                    }
+                                    // Stage label - EDIT offset(y = XX.dp) to move label up/down
+                                    PlantStageLabel(
+                                        stageName = plant.stage.displayName,
+                                        modifier = Modifier.offset(y = (-5).dp)
+                                         // Label position
+                                    )
                                 }
                             }
                         }
 
                         // No plant message
-                        if (visible && uiState.plant == null) {
+                        if (uiState.plant == null) {
                             Column(
                                 modifier = Modifier.align(Alignment.Center),
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -282,27 +247,19 @@ fun GardenScreen(
 
                     // Bottom panel - transparent background
                     Box(
-                        modifier = Modifier.weight(0.55f)
+                        modifier = Modifier.weight(0.55f).fillMaxSize().padding(top = 4.dp)
                     ) {
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = visible,
-                            enter = slideInVertically(tween(500, delayMillis = 300)) { it } + 
-                                    fadeIn(tween(500, delayMillis = 300)),
-                            exit = fadeOut(tween(300)),
-                            modifier = Modifier.fillMaxSize().padding(top = 4.dp)
-                        ) {
-                            BottomPanel(
-                                plant = uiState.plant,
-                                inventory = uiState.inventory,
-                                selectedTab = uiState.selectedTab,
-                                onTabSelected = { viewModel.selectTab(it) },
-                                onItemClick = { item ->
-                                    if (uiState.plant != null && !uiState.plant!!.status.isDead) {
-                                        viewModel.useCareItem(item.type)
-                                    }
+                        BottomPanel(
+                            plant = uiState.plant,
+                            inventory = uiState.inventory,
+                            selectedTab = uiState.selectedTab,
+                            onTabSelected = { viewModel.selectTab(it) },
+                            onItemClick = { item ->
+                                if (uiState.plant != null && !uiState.plant!!.status.isDead) {
+                                    viewModel.useCareItem(item.type)
                                 }
-                            )
-                        }
+                            }
+                        )
                     }
                 }
 

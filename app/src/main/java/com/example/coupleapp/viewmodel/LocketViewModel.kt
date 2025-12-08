@@ -50,8 +50,7 @@ class LocketViewModel : ViewModel() {
 
         loadDataJob = viewModelScope.launch {
             try {
-                delay(500) // Simulate network delay
-                
+                // Load data immediately (no fake delay)
                 val history = LocketRepository.getLocketHistory()
                 val emojis = LocketRepository.getEmojis()
                 val settings = LocketRepository.getLocketSettings(_uiState.value.currentUser.id)

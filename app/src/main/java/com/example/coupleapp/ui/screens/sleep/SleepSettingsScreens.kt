@@ -34,7 +34,7 @@ fun WhenToSleepScreen(
     var selectedMinute by remember { mutableIntStateOf(currentBedTime.minute) }
     
     LaunchedEffect(Unit) {
-        delay(100)
+        delay(50)  // Minimal delay for smooth transition
         visible = true
     }
     

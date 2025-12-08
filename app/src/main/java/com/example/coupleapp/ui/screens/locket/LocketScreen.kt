@@ -74,7 +74,7 @@ fun LocketScreen(
             visible = false
         } else {
             if (!visible) {
-                delay(300)
+                delay(50)  // Minimal delay for smooth transition
                 visible = true
             }
         }
@@ -140,7 +140,7 @@ fun LocketScreen(
         ) {
             Crossfade(
                 targetState = uiState.isLoading,
-                animationSpec = tween(durationMillis = 400),
+                animationSpec = tween(durationMillis = 200),  // Faster transition
                 label = "LoadingCrossfade",
                 modifier = modifier.fillMaxSize()
             ) { loading ->

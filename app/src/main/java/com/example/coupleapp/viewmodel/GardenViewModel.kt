@@ -39,8 +39,7 @@ class GardenViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                delay(800) // Simulate loading
-
+                // Load data immediately (no fake delay)
                 // TODO: Load from Firebase/local storage
                 val existingPlant = loadPlant()
                 val inventory = loadInventory()

@@ -68,8 +68,23 @@ fun DistanceScreen(
     )
     
     LaunchedEffect(uiState.isLoading) {
-        if (!uiState.isLoading && !visible) {
-            kotlinx.coroutines.delay(200)
+        if (uiState.isLoading) {
+            // Nếu đang loading thì ẩn content
+            visible = false
+        } else {
+            // Nếu loading xong (isLoading = false)
+            if (!visible) {
+                // Delay lâu hơn để Maps render xong trước khi hiện UI
+                kotlinx.coroutines.delay(500)  // Tăng từ 400ms -> 500ms
+                visible = true
+            }
+            // Nếu visible đã là true (quay lại từ màn hình khác), giữ nguyên -> Không bị chớp
+        }
+    }
+    
+    // Xử lý trường hợp quay lại màn hình (Hot Reload)
+    LaunchedEffect(Unit) {
+        if (!uiState.isLoading) {
             visible = true
         }
     }
@@ -93,10 +108,10 @@ fun DistanceScreen(
         }
     }
     
-    // Handle loading state - No animation delay
+    // Handle loading state with smooth crossfade
     Crossfade(
         targetState = uiState.isLoading,
-        animationSpec = tween(300),
+        animationSpec = tween(durationMillis = 600),  // Smooth like HomeScreen
         label = "loadingCrossfade"
     ) { isLoading ->
         if (isLoading) {

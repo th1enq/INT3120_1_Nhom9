@@ -30,7 +30,7 @@ class DistanceViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true) }
             
             // Simulate API call delay
-            delay(1500)
+            delay(1000)
             
             val myLocation = getMockMyLocation()
             val partnerLocation = getMockPartnerLocation()

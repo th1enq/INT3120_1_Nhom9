@@ -27,9 +27,21 @@ fun StoreScreen(
     val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
 
+    // Animation timing like Friend page
     LaunchedEffect(uiState.isLoading) {
+        if (uiState.isLoading) {
+            visible = false
+        } else {
+            if (!visible) {
+                delay(200)  // Match Friend page delay
+                visible = true
+            }
+        }
+    }
+    
+    LaunchedEffect(Unit) {
         if (!uiState.isLoading) {
-            delay(100)
+            delay(200)
             visible = true
         }
     }
@@ -64,7 +76,7 @@ fun StoreScreen(
 
     Crossfade(
         targetState = uiState.isLoading,
-        animationSpec = tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 200),  // Fast like Missing/Quest
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
@@ -81,10 +93,11 @@ fun StoreScreen(
                     contentScale = ContentScale.FillBounds
                 )
 
-                // Top bar overlay
+                // Top bar with slide animation (like Friend page)
                 AnimatedVisibility(
                     visible = visible,
-                    enter = fadeIn(tween(300)),
+                    enter = fadeIn(animationSpec = tween(500)) +
+                            slideInVertically(animationSpec = tween(500)) { -it / 4 },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
@@ -95,18 +108,15 @@ fun StoreScreen(
                     )
                 }
 
-                // Scrollable content directly on background (no rounded container)
+                // Scrollable content with staggered animation (like Friend page)
                 AnimatedVisibility(
                     visible = visible,
-                    enter = slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = tween(500)
-                    ) + fadeIn(tween(400)),
+                    enter = fadeIn(animationSpec = tween(500, delayMillis = 150)) +
+                            slideInVertically(animationSpec = tween(500, delayMillis = 150)) { it / 4 },
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(0.75f)
                         .align(Alignment.BottomCenter)
-
                 ) {
                     ShelvesContent(
                         categories = uiState.categories,

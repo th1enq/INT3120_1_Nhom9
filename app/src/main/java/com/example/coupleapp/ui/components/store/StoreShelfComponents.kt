@@ -1,7 +1,10 @@
 package com.example.coupleapp.ui.components.store
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.StoreCategory
 import com.example.coupleapp.data.model.StoreItem
+import kotlinx.coroutines.delay
 
 /**
  * Shelves content with all categories

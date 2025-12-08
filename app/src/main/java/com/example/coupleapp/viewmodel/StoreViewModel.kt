@@ -32,8 +32,7 @@ class StoreViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                delay(800) // Simulate loading
-
+                // Load data immediately (no fake delay)
                 val categories = createStoreCategories()
                 val wallet = loadUserWallet()
                 val canClaimFree = checkFreeGiftAvailability()

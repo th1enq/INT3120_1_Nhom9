@@ -36,10 +36,8 @@ fun HomeScreen(
     // 1. Lấy UI State từ ViewModel
     val uiState by viewModel.uiState.collectAsState()
 
-    // State cục bộ chỉ để quản lý animation hiển thị (bay vào)
+    // State cục bộ chỉ để quản lý navigation
     var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
-    var visible by remember { mutableStateOf(false) }
-
     val scrollState = rememberLazyListState()
     
     // Xử lý navigation khi chọn tab Friends hoặc Activities
@@ -57,34 +55,6 @@ fun HomeScreen(
         }
     }
 
-    // --- CẢI TIẾN LOGIC TIMING THÔNG MINH ---
-    LaunchedEffect(uiState.isLoading) {
-        if (uiState.isLoading) {
-            // Nếu đang loading thì ẩn content
-            visible = false
-        } else {
-            // Nếu loading xong (isLoading = false)
-            // Kiểm tra xem đây là lần đầu hay là quay lại?
-
-            if (!visible) {
-                // Nếu content chưa hiện -> Đây là lần chuyển từ Loading sang Content
-                // Delay nhẹ để Crossfade chạy được một chút rồi mới cho Content bay lên
-                delay(400)
-                visible = true
-            }
-            // Nếu visible đã là true (do quay lại từ màn hình khác mà VM vẫn giữ state),
-            // thì không làm gì cả, content sẽ giữ nguyên -> Không bị chớp.
-        }
-    }
-
-    // Xử lý trường hợp quay lại màn hình (Hot Reload):
-    // Nếu vào màn hình mà VM báo đã load xong rồi, cho hiện content ngay
-    LaunchedEffect(Unit) {
-        if (!uiState.isLoading) {
-            visible = true
-        }
-    }
-
     Scaffold(
         bottomBar = {
             CoupleBottomNavigation(
@@ -95,15 +65,10 @@ fun HomeScreen(
         containerColor = Color.Transparent
     ) { paddingValues ->
 
-        // Dùng uiState.isLoading của ViewModel
-        Crossfade(
-            targetState = uiState.isLoading,
-            animationSpec = tween(durationMillis = 600),
-            label = "LoadingCrossfade"
-        ) { loading ->
-            if (loading) {
-                LoadingScreen()
-            } else {
+        // No loading screen - display content immediately
+        if (false) {  // Never show loading for HomeScreen
+            LoadingScreen()
+        } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -126,100 +91,75 @@ fun HomeScreen(
                     ) {
                         item { Spacer(modifier = Modifier.height(16.dp)) }
 
-                        // Slider Section
+                        // Slider Section (no animation)
                         item {
                             key("slider_section") {
-                                AnimatedVisibility(
-                                    visible = visible,
-                                    enter = fadeIn(animationSpec = tween(700)) +
-                                            slideInVertically(animationSpec = tween(700)) { it / 8 }
-                                ) {
-                                    AutoImageSlider(
-                                        slides = rememberSlides(),
-                                        modifier = Modifier,
-                                        onButtonClick = { index ->
-                                            when (index) {
-                                                0 -> onNavigateToFeature("Pets")
-                                                1 -> onNavigateToFeature("Sleep")
-                                                2 -> onNavigateToFeature("Calendar")
-                                            }
+                                AutoImageSlider(
+                                    slides = rememberSlides(),
+                                    modifier = Modifier,
+                                    onButtonClick = { index ->
+                                        when (index) {
+                                            0 -> onNavigateToFeature("Pets")
+                                            1 -> onNavigateToFeature("Sleep")
+                                            2 -> onNavigateToFeature("Calendar")
                                         }
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
 
                         item { Spacer(modifier = Modifier.height(32.dp)) }
 
-                        // Features Section
+                        // Features Section (no animation)
                         item {
                             key("features_section") {
-                                AnimatedVisibility(
-                                    visible = visible,
-                                    // Logic: Nếu vừa loading xong thì delay, còn nếu hiện sẵn thì hiện luôn
-                                    enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 150 else 0)) +
-                                            slideInVertically(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 150 else 0)) { it / 8 }
-                                ) {
-                                    FeaturesRow(onFeatureClick = onNavigateToFeature)
-                                }
+                                FeaturesRow(onFeatureClick = onNavigateToFeature)
                             }
                         }
 
                         item { Spacer(modifier = Modifier.height(32.dp)) }
 
-                        // Widgets Header
+                        // Widgets Header (no animation)
                         item {
-                            AnimatedVisibility(
-                                visible = visible,
-                                enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 300 else 0))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Your Widgets",
-                                        style = MaterialTheme.typography.titleLarge.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 22.sp
-                                        ),
-                                        color = Color(0xFF2D2D2D)
-                                    )
+                                Text(
+                                    text = "Your Widgets",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 22.sp
+                                    ),
+                                    color = Color(0xFF2D2D2D)
+                                )
 
-                                    Text(
-                                        text = "See all →",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.Medium
-                                        ),
-                                        color = Color(0xFFFF9ECE),
-                                        fontSize = 14.sp
-                                    )
-                                }
+                                Text(
+                                    text = "See all →",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Medium
+                                    ),
+                                    color = Color(0xFFFF9ECE),
+                                    fontSize = 14.sp
+                                )
                             }
                         }
 
                         item { Spacer(modifier = Modifier.height(16.dp)) }
 
-                        // Widgets Grid
+                        // Widgets Grid (no animation)
                         item {
                             key("widgets_section") {
-                                AnimatedVisibility(
-                                    visible = visible,
-                                    enter = fadeIn(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 450 else 0)) +
-                                            slideInVertically(animationSpec = tween(700, delayMillis = if(uiState.isLoading) 450 else 0)) { it / 8 }
-                                ) {
-                                    WidgetsGrid(onWidgetClick = onNavigateToWidget)
-                                }
+                                WidgetsGrid(onWidgetClick = onNavigateToWidget)
                             }
                         }
 
                         item { Spacer(modifier = Modifier.height(32.dp)) }
                     }
                 }
-            }
         }
     }
 }
