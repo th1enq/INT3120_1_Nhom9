@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepSettingsBottomSheet(
-    onUtilitiesClick: () -> Unit,
+    onAddWidgetClick: () -> Unit,
     onWhenToSleepClick: () -> Unit,
     onSleepGoalClick: () -> Unit,
     onMyHistoryClick: () -> Unit,
@@ -68,10 +68,10 @@ fun SleepSettingsBottomSheet(
         
         // Settings items
         SettingsItem(
-            icon = Icons.Default.Settings,
-            title = "Utilities",
+            icon = Icons.Default.Add,
+            title = "Add Widget",
             currentValue = "",
-            onClick = onUtilitiesClick
+            onClick = onAddWidgetClick
         )
         
         HorizontalDivider(

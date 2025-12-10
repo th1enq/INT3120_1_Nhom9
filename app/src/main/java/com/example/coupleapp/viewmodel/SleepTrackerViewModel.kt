@@ -1,11 +1,13 @@
 package com.example.coupleapp.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.SleepRecord
 import com.example.coupleapp.data.model.SleepSettings
 import com.example.coupleapp.data.model.UserProfile
 import com.example.coupleapp.data.repository.SleepRepository
+import com.example.coupleapp.widget.SleepWidgetManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -105,7 +107,8 @@ class SleepTrackerViewModel : ViewModel() {
     fun dismissBedtimeReminder() {
         _uiState.update { it.copy(showBedtimeReminder = false) }
     }
-    fun updateBedTime(newTime: LocalTime) {
+    
+    fun updateBedTime(newTime: LocalTime, context: Context? = null) {
         val currentSettings = _uiState.value.settings
         val updatedSettings = currentSettings.copy(idealBedTime = newTime)
 
@@ -117,13 +120,16 @@ class SleepTrackerViewModel : ViewModel() {
             try {
                 SleepRepository.updateSleepSettings(currentSettings.userId, updatedSettings)
                 loadUserData(getActiveUser().id, isInitialLoad = false)
+                
+                // Update widget with new bedtime
+                context?.let { SleepWidgetManager.onBedtimeSettingsChanged(it) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(settings = currentSettings) }
             }
         }
     }
 
-    fun updateSleepGoal(minutes: Int) {
+    fun updateSleepGoal(minutes: Int, context: Context? = null) {
         val currentSettings = _uiState.value.settings
         val updatedSettings = currentSettings.copy(targetSleepDuration = minutes)
 
@@ -133,6 +139,9 @@ class SleepTrackerViewModel : ViewModel() {
             try {
                 SleepRepository.updateSleepSettings(currentSettings.userId, updatedSettings)
                 loadUserData(getActiveUser().id, isInitialLoad = false)
+                
+                // Update widget with new sleep goal
+                context?.let { SleepWidgetManager.onSleepDataChanged(it) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(settings = currentSettings) }
             }
@@ -145,6 +154,14 @@ class SleepTrackerViewModel : ViewModel() {
 
     fun showTimeEditor(show: Boolean, type: TimeEditorType = TimeEditorType.NONE) {
         _uiState.update { it.copy(showTimeEditor = show, timeEditorType = type) }
+    }
+
+    fun showWidgetInstructions() {
+        _uiState.update { it.copy(showWidgetInstructions = true) }
+    }
+
+    fun dismissWidgetInstructions() {
+        _uiState.update { it.copy(showWidgetInstructions = false) }
     }
 
     fun getActiveUser(): UserProfile {
@@ -172,7 +189,8 @@ data class SleepTrackerUiState(
     val showBottomSheet: Boolean = false,
     val showTimeEditor: Boolean = false,
     val timeEditorType: TimeEditorType = TimeEditorType.NONE,
-    val showBedtimeReminder: Boolean = false
+    val showBedtimeReminder: Boolean = false,
+    val showWidgetInstructions: Boolean = false
 ) {
     val isContentReady: Boolean
         get() = !isLoading && sleepRecord != null

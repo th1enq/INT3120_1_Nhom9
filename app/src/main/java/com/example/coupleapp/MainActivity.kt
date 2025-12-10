@@ -19,10 +19,16 @@ class MainActivity : ComponentActivity() {
         // Make status bar transparent
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
+        // Get navigation target from intent (for widget clicks)
+        val navigateTo = intent.getStringExtra("navigate_to")
+        
         setContent {
             CoupleAppTheme {
                 val navController = rememberNavController()
-                NavGraph(navController = navController)
+                NavGraph(
+                    navController = navController,
+                    startDestination = if (navigateTo == "sleep_tracker") "sleep_tracker" else null
+                )
             }
         }
     }

@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">CoupleApp</string>
+    
+    <!-- Widget related strings -->
+    <string name="widget_sleep_tracker_description">Compare sleep quality with your partner</string>
+    <string name="avatar_left">Left user avatar</string>
+    <string name="avatar_right">Right user avatar</string>
+    <string name="sleep_status">Sleep status indicator</string>
+    <string name="bedtime_reminder">Bedtime reminder</string>
 </resources>

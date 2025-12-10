@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +54,7 @@ fun SleepTrackerScreen(
     viewModel: SleepTrackerViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
@@ -316,10 +318,12 @@ fun SleepTrackerScreen(
                 dragHandle = null
             ) {
                 SleepSettingsBottomSheet(
-                    onUtilitiesClick = {
+                    onAddWidgetClick = {
                         scope.launch {
                             sheetState.hide()
                             viewModel.showBottomSheet(false)
+                            // Show instruction to add widget
+                            viewModel.showWidgetInstructions()
                         }
                     },
                     onWhenToSleepClick = {
@@ -361,7 +365,7 @@ fun SleepTrackerScreen(
                         initialTime = uiState.sleepRecord?.bedTime ?: LocalTime.of(22, 0),
                         onDismiss = { viewModel.showTimeEditor(false, TimeEditorType.NONE) },
                         onConfirm = { newTime ->
-                            viewModel.updateBedTime(newTime)
+                            viewModel.updateBedTime(newTime, context)
                             viewModel.showTimeEditor(false, TimeEditorType.NONE)
                         }
                     )
@@ -382,7 +386,7 @@ fun SleepTrackerScreen(
                         initialDurationMinutes = uiState.settings.targetSleepDuration,
                         onDismiss = { viewModel.showTimeEditor(false, TimeEditorType.NONE) },
                         onConfirm = { newDuration ->
-                            viewModel.updateSleepGoal(newDuration)
+                            viewModel.updateSleepGoal(newDuration, context)
                             viewModel.showTimeEditor(false, TimeEditorType.NONE)
                         }
                     )
@@ -396,6 +400,12 @@ fun SleepTrackerScreen(
                 bedTime = uiState.settings.idealBedTime,
                 onDismiss = { viewModel.dismissBedtimeReminder() },
                 onGoToSleep = { viewModel.dismissBedtimeReminder() }
+            )
+        }
+
+        if (uiState.showWidgetInstructions) {
+            WidgetInstructionDialog(
+                onDismiss = { viewModel.dismissWidgetInstructions() }
             )
         }
         

@@ -38,10 +38,13 @@ import com.example.coupleapp.ui.screens.profile.AboutScreen
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun NavGraph(navController: NavHostController) {
+fun NavGraph(
+    navController: NavHostController,
+    startDestination: String? = null
+) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Welcome.route
+        startDestination = startDestination ?: Screen.Welcome.route
     ) {
         composable(
             route = Screen.Welcome.route,
