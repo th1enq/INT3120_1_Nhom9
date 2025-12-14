@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -87,6 +88,24 @@ dependencies {
     
     // Core library desugaring for Java 8 Time API support on older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    
+    // Firebase BOM
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    
+    // Firebase Authentication
+    implementation("com.google.firebase:firebase-auth-ktx")
+    
+    // Firestore Database
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    
+    // Firebase Storage
+    implementation("com.google.firebase:firebase-storage-ktx")
+    
+    // Firebase Analytics
+    implementation("com.google.firebase:firebase-analytics-ktx")
+    
+    // Firebase Cloud Messaging (for notifications)
+    implementation("com.google.firebase:firebase-messaging-ktx")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

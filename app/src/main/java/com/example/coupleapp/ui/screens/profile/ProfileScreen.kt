@@ -32,9 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
+import com.example.coupleapp.viewmodel.ProfileViewModel
 import kotlinx.coroutines.delay
 
 /**
@@ -58,19 +60,35 @@ fun ProfileScreen(
     onNavigateToHelp: () -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
     onLogout: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ProfileViewModel = viewModel()
 ) {
     var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.PROFILE) }
     var visible by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     
-    // Demo user data
-    val userName = remember { "You" }
-    val userAvatar = remember { "😊" }
-    val partnerName = remember { "Partner" }
-    val partnerAvatar = remember { "💕" }
-    val daysTogethers = remember { 365 }
-    val linkCode = remember { "ABC123" }
+    // Get real user data from Firebase
+    val uiState by viewModel.uiState.collectAsState()
+    
+    // Debug: Log UI state changes
+    LaunchedEffect(uiState) {
+        android.util.Log.d("ProfileScreen", "UI State updated:")
+        android.util.Log.d("ProfileScreen", "  - isLoading: ${uiState.isLoading}")
+        android.util.Log.d("ProfileScreen", "  - currentUser: ${uiState.currentUser?.displayName}")
+        android.util.Log.d("ProfileScreen", "  - partner: ${uiState.partner?.displayName}")
+        android.util.Log.d("ProfileScreen", "  - daysTogether: ${uiState.daysTogether}")
+        android.util.Log.d("ProfileScreen", "  - linkCode: ${uiState.currentUser?.linkCode}")
+        android.util.Log.d("ProfileScreen", "  - error: ${uiState.error}")
+    }
+    
+    val userName = uiState.currentUser?.displayName ?: "User"
+    val userAvatar = "😊" // TODO: Add custom avatar support
+    val partnerName = uiState.partner?.displayName ?: "No Partner"
+    val partnerAvatar = if (uiState.partner != null) "💕" else "❓"
+    val daysTogethers = uiState.daysTogether
+    val linkCode = uiState.currentUser?.linkCode ?: "------"
+    
+    android.util.Log.d("ProfileScreen", "Rendering with userName: $userName, linkCode: $linkCode")
     
     // Handle navigation
     LaunchedEffect(selectedBottomNavItem) {
@@ -103,14 +121,14 @@ fun ProfileScreen(
             onDismissRequest = { showLogoutDialog = false },
             title = {
                 Text(
-                    text = "Logout",
+                    text = "Đăng xuất",
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2D3748)
                 )
             },
             text = {
                 Text(
-                    text = "Are you sure you want to logout from your account?",
+                    text = "Bạn có chắc muốn đăng xuất khỏi tài khoản?",
                     color = Color(0xFF718096)
                 )
             },
@@ -118,11 +136,12 @@ fun ProfileScreen(
                 TextButton(
                     onClick = {
                         showLogoutDialog = false
+                        viewModel.signOut()
                         onLogout()
                     }
                 ) {
                     Text(
-                        text = "Logout",
+                        text = "Đăng xuất",
                         color = Color(0xFFFF6B9D),
                         fontWeight = FontWeight.SemiBold
                     )
@@ -131,7 +150,7 @@ fun ProfileScreen(
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
                     Text(
-                        text = "Cancel",
+                        text = "Hủy",
                         color = Color(0xFF718096)
                     )
                 }
@@ -139,6 +158,30 @@ fun ProfileScreen(
             containerColor = Color.White,
             shape = RoundedCornerShape(24.dp)
         )
+    }
+    
+    // Show loading indicator while fetching data
+    if (uiState.isLoading) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                color = Color(0xFFFF6B9D),
+                modifier = Modifier.size(48.dp)
+            )
+        }
+    }
+    
+    // Show error message if data loading fails
+    uiState.error?.let { error ->
+        LaunchedEffect(error) {
+            // TODO: Show snackbar or toast with error message
+            // For now, just log it
+            android.util.Log.e("ProfileScreen", "Error: $error")
+        }
     }
     
     Scaffold(

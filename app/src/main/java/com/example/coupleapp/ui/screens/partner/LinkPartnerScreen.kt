@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.coupleapp.data.model.PartnerUser
+import com.example.coupleapp.data.model.FirebaseUser
 import com.example.coupleapp.ui.theme.*
 import com.example.coupleapp.viewmodel.LinkPartnerViewModel
 import kotlinx.coroutines.delay
@@ -139,7 +139,7 @@ fun LinkPartnerScreen(
             EnterLinkCodeSection(
                 linkCode = linkCode,
                 onLinkCodeChanged = viewModel::onLinkCodeChanged,
-                onSearchClick = viewModel::searchUser,
+                onSearchClick = viewModel::searchByLinkCode,
                 isSearching = isSearching,
                 error = error
             )
@@ -378,22 +378,29 @@ private fun EnterLinkCodeSection(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Input field
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = BackgroundWhite,
-            shadowElevation = 2.dp
+        // Input field with visible text field
+        val focusRequester = remember { FocusRequester() }
+        
+        LaunchedEffect(Unit) {
+            delay(300)
+            focusRequester.requestFocus()
+        }
+        
+        Box(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Visual boxes
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = BackgroundWhite,
+                shadowElevation = 2.dp
             ) {
-                // Code input boxes
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     repeat(6) { index ->
@@ -405,27 +412,38 @@ private fun EnterLinkCodeSection(
                     }
                 }
             }
-        }
-        
-        // Hidden text field for input
-        BasicTextField(
-            value = linkCode,
-            onValueChange = onLinkCodeChanged,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Characters,
-                imeAction = ImeAction.Search
-            ),
-            keyboardActions = KeyboardActions(
-                onSearch = {
-                    focusManager.clearFocus()
-                    onSearchClick()
+            
+            // Transparent text field overlay
+            BasicTextField(
+                value = linkCode,
+                onValueChange = onLinkCodeChanged,
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.Characters,
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        focusManager.clearFocus()
+                        onSearchClick()
+                    }
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .focusRequester(focusRequester),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Invisible text field - just for keyboard input
+                        Box(modifier = Modifier.size(0.dp)) {
+                            innerTextField()
+                        }
+                    }
                 }
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(Color.Transparent)
-        )
+            )
+        }
         
         // Error message
         AnimatedVisibility(
@@ -518,7 +536,7 @@ private fun LinkCodeInputBox(
 
 @Composable
 private fun FoundUserCard(
-    user: PartnerUser,
+    user: FirebaseUser,
     isSendingRequest: Boolean,
     requestSent: Boolean,
     onSendRequest: () -> Unit
@@ -574,7 +592,7 @@ private fun FoundUserCard(
                 )
                 
                 Text(
-                    text = "Đang chờ ${user.name} chấp nhận",
+                    text = "Đang chờ ${user.displayName ?: "người dùng"} chấp nhận",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     modifier = Modifier.padding(top = 4.dp)
@@ -593,7 +611,7 @@ private fun FoundUserCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = user.name.first().toString(),
+                        text = user.displayName?.firstOrNull()?.toString() ?: "?",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -603,15 +621,15 @@ private fun FoundUserCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = user.name,
+                    text = user.displayName ?: "Người dùng",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 
-                if (user.nickname.isNotEmpty()) {
+                user.bio?.takeIf { it.isNotEmpty() }?.let { bio ->
                     Text(
-                        text = "\"${user.nickname}\"",
+                        text = "\"$bio\"",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )

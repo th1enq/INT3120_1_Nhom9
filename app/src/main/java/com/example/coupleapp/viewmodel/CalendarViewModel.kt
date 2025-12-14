@@ -302,5 +302,6 @@ data class CalendarUiState(
     val showSettingsDialog: Boolean = false,
     val showAnniversaryManagement: Boolean = false,
     val editingAnniversary: Anniversary? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
 )

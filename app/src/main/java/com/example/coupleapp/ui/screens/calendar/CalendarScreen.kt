@@ -15,7 +15,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.CalendarViewMode
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.calendar.*
-import com.example.coupleapp.viewmodel.CalendarViewModel
+import com.example.coupleapp.viewmodel.CalendarViewModelFirebase
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,7 +25,7 @@ fun CalendarScreen(
     onNavigateToPartnerHub: () -> Unit = {},
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
-    viewModel: CalendarViewModel = viewModel()
+    viewModel: CalendarViewModelFirebase = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
@@ -72,9 +72,23 @@ private fun CalendarMainContent(
     uiState: com.example.coupleapp.viewmodel.CalendarUiState,
     visible: Boolean,
     onBackClick: () -> Unit,
-    viewModel: CalendarViewModel
+    viewModel: CalendarViewModelFirebase
 ) {
-    Scaffold { paddingValues ->
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Show error/success message
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+    
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -151,13 +165,16 @@ private fun CalendarMainContent(
                     coupleProfile = uiState.coupleProfile,
                     onDismiss = { viewModel.hideSettings() },
                     onUpdateNickname = { userId, nickname ->
-                        viewModel.updateNickname(userId, nickname)
+                        // Not implemented in Firebase version yet
                     },
                     onUpdateBackground = { imageUrl ->
-                        viewModel.updateBackgroundImage(imageUrl)
+                        // Not implemented in Firebase version yet
                     },
                     onToggleHeartbeat = { enabled ->
-                        viewModel.toggleHeartbeatAnimation(enabled)
+                        // Not implemented in Firebase version yet
+                    },
+                    onInsertMockData = {
+                        viewModel.insertMockCalendarData()
                     }
                 )
             }

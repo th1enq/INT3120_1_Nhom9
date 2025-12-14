@@ -10,10 +10,14 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.ui.screens.HomeScreen
 import com.example.coupleapp.ui.screens.PhoneLoginScreen
 import com.example.coupleapp.ui.screens.RegisterScreen
+import com.example.coupleapp.ui.screens.LoginWithFirebaseScreen
+import com.example.coupleapp.ui.screens.RegisterWithFirebaseScreen
 import com.example.coupleapp.ui.screens.WelcomeScreen
+import com.example.coupleapp.viewmodel.AuthViewModel
 import com.example.coupleapp.ui.screens.SleepTrackerScreen
 import com.example.coupleapp.ui.screens.SleepCalendarHistoryScreen
 import com.example.coupleapp.ui.screens.MissingScreen
@@ -55,6 +59,13 @@ fun NavGraph(
                 fadeOut(animationSpec = tween(300))
             }
         ) {
+            val authViewModel: AuthViewModel = viewModel()
+            
+            // Reset auth state when entering Welcome screen
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                authViewModel.resetAuthState()
+            }
+            
             WelcomeScreen(
                 onGoogleLoginClick = {
                     // Handle Google login
@@ -100,10 +111,8 @@ fun NavGraph(
                 ) + fadeOut(animationSpec = tween(400))
             }
         ) {
-            PhoneLoginScreen(
-                onLoginClick = { phone, password ->
-                    // Handle phone login
-                    // TODO: Implement authentication
+            LoginWithFirebaseScreen(
+                onLoginSuccess = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Welcome.route) { inclusive = true }
                     }
@@ -145,10 +154,8 @@ fun NavGraph(
                 ) + fadeOut(animationSpec = tween(400))
             }
         ) {
-            RegisterScreen(
-                onRegisterClick = { fullName, dateOfBirth, phone, password, confirmPassword ->
-                    // Handle registration
-                    // TODO: Implement registration
+            RegisterWithFirebaseScreen(
+                onRegisterSuccess = {
                     navController.navigate(Screen.Home.route) {
                         popUpTo(Screen.Welcome.route) { inclusive = true }
                     }

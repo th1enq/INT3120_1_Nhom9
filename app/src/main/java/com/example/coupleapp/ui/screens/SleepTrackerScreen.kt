@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import com.example.coupleapp.ui.components.sleep.*
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.viewmodel.SleepTrackerViewModel
+import com.example.coupleapp.viewmodel.SleepTrackerViewModelFirebase
 import com.example.coupleapp.viewmodel.TimeEditorType
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -51,7 +52,7 @@ fun SleepTrackerScreen(
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
     onNavigateToHistory: (String) -> Unit = {},
-    viewModel: SleepTrackerViewModel = viewModel()
+    viewModel: SleepTrackerViewModelFirebase = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -345,6 +346,13 @@ fun SleepTrackerScreen(
                             sheetState.hide()
                             viewModel.showBottomSheet(false)
                             onNavigateToHistory(viewModel.getActiveUser().id)
+                        }
+                    },
+                    onInsertMockDataClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            viewModel.showBottomSheet(false)
+                            viewModel.insertMockSleepData()
                         }
                     },
                     onDismiss = {

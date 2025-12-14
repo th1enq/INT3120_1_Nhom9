@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.viewmodel.ProfileViewModel
 import kotlinx.coroutines.delay
 
 /**
@@ -32,16 +34,20 @@ import kotlinx.coroutines.delay
 fun ManageLinkScreen(
     onBackClick: () -> Unit = {},
     onUnlink: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ProfileViewModel = viewModel()
 ) {
     var visible by remember { mutableStateOf(false) }
     var showUnlinkDialog by remember { mutableStateOf(false) }
     
-    // Demo data
-    val linkCode = remember { "ABC123" }
-    val partnerName = remember { "Partner" }
-    val partnerAvatar = remember { "💕" }
-    val linkedDate = remember { "January 1, 2024" }
+    // Get real data from Firebase
+    val uiState by viewModel.uiState.collectAsState()
+    
+    val linkCode = uiState.currentUser?.linkCode ?: "------"
+    val partnerName = uiState.partner?.displayName ?: "No Partner"
+    val partnerAvatar = if (uiState.partner != null) "💕" else "❓"
+    val linkedDate = uiState.couple?.createdAt ?: "Not linked yet"
+    val isLinked = uiState.partner != null
     
     LaunchedEffect(Unit) {
         delay(100)
@@ -54,14 +60,14 @@ fun ManageLinkScreen(
             onDismissRequest = { showUnlinkDialog = false },
             title = {
                 Text(
-                    text = "Unlink Partner",
+                    text = "Hủy liên kết",
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2D3748)
                 )
             },
             text = {
                 Text(
-                    text = "Are you sure you want to unlink from $partnerName? This action cannot be undone and all shared data will be removed.",
+                    text = "Bạn có chắc muốn hủy liên kết với $partnerName? Hành động này không thể hoàn tác và tất cả dữ liệu chia sẻ sẽ bị xóa.",
                     color = Color(0xFF718096)
                 )
             },
@@ -73,7 +79,7 @@ fun ManageLinkScreen(
                     }
                 ) {
                     Text(
-                        text = "Unlink",
+                        text = "Hủy liên kết",
                         color = Color(0xFFE53935),
                         fontWeight = FontWeight.SemiBold
                     )
@@ -82,7 +88,7 @@ fun ManageLinkScreen(
             dismissButton = {
                 TextButton(onClick = { showUnlinkDialog = false }) {
                     Text(
-                        text = "Cancel",
+                        text = "Hủy",
                         color = Color(0xFF718096)
                     )
                 }
@@ -227,58 +233,99 @@ fun ManageLinkScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                         
                         // Partner info card
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(20.dp),
-                            color = Color.White,
-                            shadowElevation = 2.dp
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp)
+                        if (isLinked) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White,
+                                shadowElevation = 2.dp
                             ) {
-                                Text(
-                                    text = "Linked Partner",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF2D3748)
-                                )
-                                
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(
+                                    modifier = Modifier.padding(20.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(56.dp)
-                                            .shadow(4.dp, CircleShape)
-                                            .clip(CircleShape)
-                                            .background(Color.White),
-                                        contentAlignment = Alignment.Center
+                                    Text(
+                                        text = "Linked Partner",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF2D3748)
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(text = partnerAvatar, fontSize = 28.sp)
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = partnerName,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF2D3748)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(56.dp)
+                                                .shadow(4.dp, CircleShape)
+                                                .clip(CircleShape)
+                                                .background(Color.White),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(text = partnerAvatar, fontSize = 28.sp)
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = partnerName,
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF2D3748)
+                                            )
+                                            Text(
+                                                text = "Linked since $linkedDate",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFF718096)
+                                            )
+                                        }
+                                        
+                                        Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = "Linked",
+                                            tint = Color(0xFF4CAF50)
                                         )
-                                        Text(
-                                            text = "Linked since $linkedDate",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF718096)
-                                        )
                                     }
-                                    
+                                }
+                            }
+                        } else {
+                            // Not linked yet - show message
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color(0xFFFFF9E6),
+                                shadowElevation = 2.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Filled.CheckCircle,
-                                        contentDescription = "Linked",
-                                        tint = Color(0xFF4CAF50)
+                                        imageVector = Icons.Filled.Info,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFA726),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    Text(
+                                        text = "Chưa liên kết với ai",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF2D3748),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    Text(
+                                        text = "Chia sẻ mã liên kết của bạn với người yêu để kết nối",
+                                        fontSize = 14.sp,
+                                        color = Color(0xFF718096),
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
@@ -286,33 +333,35 @@ fun ManageLinkScreen(
                         
                         Spacer(modifier = Modifier.weight(1f))
                         
-                        // Unlink button
-                        OutlinedButton(
-                            onClick = { showUnlinkDialog = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = Color(0xFFE53935)
-                            ),
-                            border = ButtonDefaults.outlinedButtonBorder.copy(
-                                brush = Brush.linearGradient(
-                                    listOf(Color(0xFFE53935), Color(0xFFE53935))
+                        // Unlink button - only show if linked
+                        if (isLinked) {
+                            OutlinedButton(
+                                onClick = { showUnlinkDialog = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color(0xFFE53935)
+                                ),
+                                border = ButtonDefaults.outlinedButtonBorder.copy(
+                                    brush = Brush.linearGradient(
+                                        listOf(Color(0xFFE53935), Color(0xFFE53935))
+                                    )
                                 )
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.LinkOff,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Unlink Partner",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.LinkOff,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Hủy liên kết",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }

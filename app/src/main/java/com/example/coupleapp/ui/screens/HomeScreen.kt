@@ -34,9 +34,6 @@ fun HomeScreen(
     // Inject ViewModel vào đây
     viewModel: HomeViewModel = viewModel()
 ) {
-    // 1. Lấy UI State từ ViewModel
-    val uiState by viewModel.uiState.collectAsState()
-
     // State cục bộ chỉ để quản lý navigation
     var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
     val scrollState = rememberLazyListState()
@@ -92,40 +89,44 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        // Tối ưu scrolling performance
+                        userScrollEnabled = true
                     ) {
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                        item(key = "spacer_top") { 
+                            Spacer(modifier = Modifier.height(16.dp)) 
+                        }
 
                         // Slider Section (no animation)
-                        item {
-                            key("slider_section") {
-                                AutoImageSlider(
-                                    slides = rememberSlides(),
-                                    modifier = Modifier,
-                                    onButtonClick = { index ->
-                                        when (index) {
-                                            0 -> onNavigateToFeature("Pets")
-                                            1 -> onNavigateToFeature("Sleep")
-                                            2 -> onNavigateToFeature("Calendar")
-                                        }
+                        item(key = "slider_section") {
+                            AutoImageSlider(
+                                slides = rememberSlides(),
+                                modifier = Modifier,
+                                onButtonClick = { index ->
+                                    when (index) {
+                                        0 -> onNavigateToFeature("Pets")
+                                        1 -> onNavigateToFeature("Sleep")
+                                        2 -> onNavigateToFeature("Calendar")
                                     }
-                                )
-                            }
+                                }
+                            )
                         }
 
-                        item { Spacer(modifier = Modifier.height(32.dp)) }
+                        item(key = "spacer_1") { 
+                            Spacer(modifier = Modifier.height(32.dp)) 
+                        }
 
                         // Features Section (no animation)
-                        item {
-                            key("features_section") {
-                                FeaturesRow(onFeatureClick = onNavigateToFeature)
-                            }
+                        item(key = "features_section") {
+                            FeaturesRow(onFeatureClick = onNavigateToFeature)
                         }
 
-                        item { Spacer(modifier = Modifier.height(32.dp)) }
+                        item(key = "spacer_2") { 
+                            Spacer(modifier = Modifier.height(32.dp)) 
+                        }
 
                         // Widgets Header (no animation)
-                        item {
+                        item(key = "widgets_header") {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -144,16 +145,18 @@ fun HomeScreen(
                             }
                         }
 
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
-
-                        // Widgets Grid (no animation)
-                        item {
-                            key("widgets_section") {
-                                WidgetsGrid(onWidgetClick = onNavigateToWidget)
-                            }
+                        item(key = "spacer_3") { 
+                            Spacer(modifier = Modifier.height(16.dp)) 
                         }
 
-                        item { Spacer(modifier = Modifier.height(32.dp)) }
+                        // Widgets Grid (no animation)
+                        item(key = "widgets_section") {
+                            WidgetsGrid(onWidgetClick = onNavigateToWidget)
+                        }
+
+                        item(key = "spacer_bottom") { 
+                            Spacer(modifier = Modifier.height(32.dp)) 
+                        }
                     }
                 }
         }

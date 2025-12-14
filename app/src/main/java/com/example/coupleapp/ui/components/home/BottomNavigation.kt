@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 
 enum class BottomNavItem(val icon: ImageVector, val iconSelected: ImageVector, val label: String) {
     HOME(Icons.Outlined.Home, Icons.Filled.Home, "Home"),
-    FRIENDS(Icons.Outlined.Person, Icons.Filled.Person, "Friends"),
+    FRIENDS(Icons.Outlined.Person, Icons.Filled.Person, "Partner"),
     ACTIVITIES(Icons.Outlined.DateRange, Icons.Filled.DateRange, "Activities"),
     PROFILE(Icons.Outlined.AccountCircle, Icons.Filled.AccountCircle, "Profile")
 }

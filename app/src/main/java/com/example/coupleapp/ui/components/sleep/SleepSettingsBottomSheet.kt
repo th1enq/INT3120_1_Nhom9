@@ -29,6 +29,7 @@ fun SleepSettingsBottomSheet(
     onWhenToSleepClick: () -> Unit,
     onSleepGoalClick: () -> Unit,
     onMyHistoryClick: () -> Unit,
+    onInsertMockDataClick: () -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -108,6 +109,18 @@ fun SleepSettingsBottomSheet(
             title = "My History",
             currentValue = "",
             onClick = onMyHistoryClick
+        )
+        
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            color = Color(0xFFF5F5F5)
+        )
+        
+        SettingsItem(
+            icon = Icons.Default.Edit,
+            title = "Insert Mock Data (Test)",
+            currentValue = "",
+            onClick = onInsertMockDataClick
         )
         
         Spacer(modifier = Modifier.height(16.dp))

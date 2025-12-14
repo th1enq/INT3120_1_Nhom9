@@ -23,17 +23,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.quest.*
-import com.example.coupleapp.viewmodel.QuestViewModel
+import com.example.coupleapp.viewmodel.QuestViewModelFirebase
 import kotlinx.coroutines.delay
 
 /**
- * Quest Screen - Daily quests for earning coins
+ * Quest Screen - Daily quests for earning coins (Firebase integrated)
  * Features:
- * 1. Pinned header with progress and coins
+ * 1. Pinned header with progress and coins (synced with Firebase)
  * 2. Special quest for new users (link partner)
  * 3. 5 random daily quests from quest pool
  * 4. Clickable cards to navigate to quest location
  * 5. Bonus rewards for completing all quests
+ * 6. Coin synchronization with Store via user_wallets collection
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +51,7 @@ fun QuestScreen(
     onNavigateToSleep: () -> Unit = {},
     onNavigateToPartnerLink: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: QuestViewModel = viewModel()
+    viewModel: QuestViewModelFirebase = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
@@ -288,6 +289,26 @@ fun QuestScreen(
                         }
                     }
                 }
+            }
+        }
+        
+        // FAB for inserting mock data (for testing)
+        FloatingActionButton(
+            onClick = { viewModel.insertMockQuestData() },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            containerColor = MaterialTheme.colorScheme.primary
+        ) {
+            Text(text = "📝", style = MaterialTheme.typography.titleLarge)
+        }
+        
+        // Show snackbar for error/success messages
+        uiState.errorMessage?.let { message ->
+            LaunchedEffect(message) {
+                // Message will be shown via state
+                delay(3000)
+                viewModel.clearError()
             }
         }
     }

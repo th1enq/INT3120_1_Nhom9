@@ -71,8 +71,8 @@ fun ChatScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             // Header
             ChatHeader(
-                partnerName = partner?.name ?: "Partner",
-                partnerAvatar = partner?.avatarUrl,
+                partnerName = partner?.displayName ?: "Partner",
+                partnerAvatar = partner?.profileImageUrl,
                 onBackClick = onBackClick
             )
             

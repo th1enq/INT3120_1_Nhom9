@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.viewmodel.ProfileViewModel
 import kotlinx.coroutines.delay
 
 /**
@@ -34,15 +36,35 @@ import kotlinx.coroutines.delay
 fun EditProfileScreen(
     onBackClick: () -> Unit = {},
     onSaveClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ProfileViewModel = viewModel()
 ) {
     var visible by remember { mutableStateOf(false) }
-    var displayName by remember { mutableStateOf("You") }
-    var email by remember { mutableStateOf("user@example.com") }
+    
+    // Get data from ViewModel
+    val uiState by viewModel.uiState.collectAsState()
+    
+    // Initialize fields with Firebase data
+    var displayName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var dateOfBirth by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var selectedAvatar by remember { mutableStateOf("😊") }
     var showAvatarPicker by remember { mutableStateOf(false) }
+    
+    // Load user data when available
+    LaunchedEffect(uiState.currentUser) {
+        uiState.currentUser?.let { user ->
+            displayName = user.displayName
+            email = user.email
+            phone = user.phoneNumber
+            dateOfBirth = user.dateOfBirth
+            gender = user.gender
+            bio = user.bio
+        }
+    }
     
     val avatarOptions = listOf("😊", "😎", "🥰", "😇", "🤗", "😍", "🥳", "😋", "🤩", "😺", "🐱", "🐶")
     

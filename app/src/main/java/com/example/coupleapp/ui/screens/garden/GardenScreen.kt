@@ -23,7 +23,7 @@ import com.example.coupleapp.R
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.garden.*
-import com.example.coupleapp.viewmodel.GardenViewModel
+import com.example.coupleapp.viewmodel.GardenViewModelFirebase
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -31,7 +31,7 @@ import kotlinx.coroutines.delay
 fun GardenScreen(
     onBackClick: () -> Unit,
     onNavigateToStore: () -> Unit,
-    viewModel: GardenViewModel = viewModel()
+    viewModel: GardenViewModelFirebase = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showGalleryDialog by remember { mutableStateOf(false) }

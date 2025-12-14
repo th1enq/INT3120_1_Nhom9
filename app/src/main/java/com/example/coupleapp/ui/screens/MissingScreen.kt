@@ -19,6 +19,7 @@ import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.components.missing.*
 import com.example.coupleapp.viewmodel.MissingViewModel
+import com.example.coupleapp.viewmodel.MissingViewModelFirebase
 import kotlinx.coroutines.delay
 
 /**
@@ -38,7 +39,7 @@ fun MissingScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: MissingViewModel = viewModel()
+    viewModel: MissingViewModelFirebase = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
@@ -91,7 +92,7 @@ fun MissingScreen(
     LaunchedEffect(uiState.sendSuccess) {
         if (uiState.sendSuccess) {
             snackbarHostState.showSnackbar(
-                message = "Love sent to ${uiState.partnerUser.name}! 💕",
+                message = "Love sent to ${uiState.partnerUser?.name ?: "partner"}! 💕",
                 duration = SnackbarDuration.Short
             )
         }

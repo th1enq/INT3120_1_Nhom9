@@ -45,16 +45,17 @@ fun AutoImageSlider(
     val pagerState = rememberPagerState(pageCount = { slides.size })
     val coroutineScope = rememberCoroutineScope()
 
-    // Auto-slide effect
-    LaunchedEffect(pagerState.currentPage) {
-        delay(autoSlideDelay)
-        val nextPage = (pagerState.currentPage + 1) % slides.size
-        coroutineScope.launch {
-            pagerState.animateScrollToPage(nextPage,
-                animationSpec = tween(600)
-            )
-        }
-    }
+    // Auto-slide disabled to improve performance
+    // Users can still swipe manually
+    // LaunchedEffect(pagerState.currentPage) {
+    //     delay(autoSlideDelay)
+    //     val nextPage = (pagerState.currentPage + 1) % slides.size
+    //     coroutineScope.launch {
+    //         pagerState.animateScrollToPage(nextPage,
+    //             animationSpec = tween(600)
+    //         )
+    //     }
+    // }
     
     Box(
         modifier = modifier
@@ -81,11 +82,8 @@ fun AutoImageSlider(
         ) {
             repeat(slides.size) { index ->
                 val isSelected = pagerState.currentPage == index
-                val width by animateDpAsState(
-                    targetValue = if (isSelected) 24.dp else 6.dp,
-                    animationSpec = tween(300),
-                    label = "indicatorWidth"
-                )
+                // Simplified - no animation for better performance
+                val width = if (isSelected) 24.dp else 6.dp
                 
                 Box(
                     modifier = Modifier

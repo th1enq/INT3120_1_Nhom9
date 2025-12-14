@@ -29,7 +29,8 @@ fun CalendarSettingsDialog(
     onDismiss: () -> Unit,
     onUpdateNickname: (String, String) -> Unit,
     onUpdateBackground: (String) -> Unit,
-    onToggleHeartbeat: (Boolean) -> Unit
+    onToggleHeartbeat: (Boolean) -> Unit,
+    onInsertMockData: () -> Unit = {}
 ) {
     var user1Nickname by remember { mutableStateOf(coupleProfile?.user1?.nickname ?: "") }
     var user2Nickname by remember { mutableStateOf(coupleProfile?.user2?.nickname ?: "") }
@@ -216,6 +217,23 @@ fun CalendarSettingsDialog(
                                     subtitle = "Nhận thông báo trước ${settings.reminderHoursBefore}h",
                                     onClick = { 
                                         // TODO: Open time picker for reminder
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Test Section
+                    item {
+                        SettingsSection(title = "Test & Debug") {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                SettingItem(
+                                    icon = Icons.Default.Add,
+                                    title = "Insert Mock Data",
+                                    subtitle = "Thêm dữ liệu mẫu để test",
+                                    onClick = {
+                                        onInsertMockData()
+                                        onDismiss()
                                     }
                                 )
                             }
