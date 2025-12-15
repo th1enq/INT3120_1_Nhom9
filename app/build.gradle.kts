@@ -4,17 +4,17 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
+    // id("com.google.gms.google-services") // Commented out - uncomment when you add google-services.json
 }
 
 android {
     namespace = "com.example.coupleapp"
-    compileSdk = 36
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.coupleapp"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -49,6 +49,12 @@ android {
     buildFeatures {
         compose = true
     }
+    
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
 }
 
 dependencies {
@@ -67,7 +73,7 @@ dependencies {
     implementation(libs.accompanist.systemuicontroller)
     
     // Lifecycle runtime compose for LocalLifecycleOwner
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
     
     // Lottie for animations
     implementation("com.airbnb.android:lottie-compose:6.1.0")
