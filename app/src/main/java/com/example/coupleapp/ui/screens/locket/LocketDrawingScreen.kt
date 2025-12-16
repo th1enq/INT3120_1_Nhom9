@@ -479,3 +479,41 @@ private enum class DrawingTool {
     PEN,
     ERASER
 }
+
+/**
+ * Convert drawing paths to Bitmap
+ */
+fun convertPathsToBitmap(drawingPaths: List<DrawingPath>, width: Int, height: Int): Bitmap {
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    
+    // Fill with white background
+    canvas.drawColor(android.graphics.Color.WHITE)
+    
+    // Draw all paths
+    drawingPaths.forEach { drawingPath ->
+        if (drawingPath.points.isEmpty()) return@forEach
+        
+        val paint = android.graphics.Paint().apply {
+            color = drawingPath.color.toInt()
+            strokeWidth = drawingPath.strokeWidth
+            style = android.graphics.Paint.Style.STROKE
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            isAntiAlias = true
+        }
+        
+        val path = android.graphics.Path()
+        val firstPoint = drawingPath.points.first()
+        path.moveTo(firstPoint.x, firstPoint.y)
+        
+        for (i in 1 until drawingPath.points.size) {
+            val point = drawingPath.points[i]
+            path.lineTo(point.x, point.y)
+        }
+        
+        canvas.drawPath(path, paint)
+    }
+    
+    return bitmap
+}

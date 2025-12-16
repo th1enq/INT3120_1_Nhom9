@@ -43,13 +43,25 @@ class FirebaseStorageRepository {
     suspend fun uploadBitmap(bitmap: Bitmap, path: String, filename: String, quality: Int = 80): Result<String> {
         return try {
             val baos = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos)
+            // Use PNG for drawings (preserve transparency), JPEG for photos
+            val format = if (filename.contains("drawing")) {
+                Bitmap.CompressFormat.PNG
+            } else {
+                Bitmap.CompressFormat.JPEG
+            }
+            bitmap.compress(format, quality, baos)
             val data = baos.toByteArray()
 
             val imageRef = storageRef.child("$path/$filename")
-            imageRef.putBytes(data).await()
-            val downloadUrl = imageRef.downloadUrl.await()
-            Result.success(downloadUrl.toString())
+            val uploadTask = imageRef.putBytes(data).await()
+            
+            // Verify upload succeeded
+            if (uploadTask.task.isSuccessful) {
+                val downloadUrl = imageRef.downloadUrl.await()
+                Result.success(downloadUrl.toString())
+            } else {
+                Result.failure(uploadTask.task.exception ?: Exception("Upload failed"))
+            }
         } catch (e: Exception) {
             Result.failure(e)
         }

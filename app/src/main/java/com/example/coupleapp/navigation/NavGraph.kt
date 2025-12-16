@@ -5,6 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -516,14 +519,21 @@ fun NavGraph(
                     animationSpec = tween(400)
                 ) + fadeOut(animationSpec = tween(400))
             }
-        ) {
+        ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(Screen.SleepTracker.route)
+            }
+            val sleepViewModel: com.example.coupleapp.viewmodel.SleepTrackerViewModelFirebase = 
+                androidx.lifecycle.viewmodel.compose.viewModel(parentEntry)
+            val uiState by sleepViewModel.uiState.collectAsState()
+            
             com.example.coupleapp.ui.screens.sleep.WhenToSleepScreen(
-                currentBedTime = java.time.LocalTime.of(22, 0),
+                currentBedTime = uiState.settings?.idealBedTime ?: java.time.LocalTime.of(22, 0),
                 onBackClick = {
                     navController.popBackStack()
                 },
                 onSave = { newTime ->
-                    // TODO: Save to repository
+                    sleepViewModel.updateBedTime(newTime)
                 }
             )
         }
@@ -554,14 +564,21 @@ fun NavGraph(
                     animationSpec = tween(400)
                 ) + fadeOut(animationSpec = tween(400))
             }
-        ) {
+        ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(Screen.SleepTracker.route)
+            }
+            val sleepViewModel: com.example.coupleapp.viewmodel.SleepTrackerViewModelFirebase = 
+                androidx.lifecycle.viewmodel.compose.viewModel(parentEntry)
+            val uiState by sleepViewModel.uiState.collectAsState()
+            
             com.example.coupleapp.ui.screens.sleep.SleepGoalScreen(
-                currentGoalMinutes = 480,
+                currentGoalMinutes = uiState.settings?.targetSleepDuration ?: 480,
                 onBackClick = {
                     navController.popBackStack()
                 },
                 onSave = { newGoal ->
-                    // TODO: Save to repository
+                    sleepViewModel.updateSleepGoal(newGoal)
                 }
             )
         }
@@ -701,12 +718,21 @@ fun NavGraph(
                 ) + fadeOut(animationSpec = tween(300))
             }
         ) {
+            // Get the parent entry to access LocketScreen's ViewModel
+            val parentEntry = remember(it) {
+                navController.getBackStackEntry(Screen.Locket.route)
+            }
+            val locketViewModel: com.example.coupleapp.viewmodel.LocketViewModelFirebase = 
+                androidx.lifecycle.viewmodel.compose.viewModel(viewModelStoreOwner = parentEntry)
+            
             com.example.coupleapp.ui.screens.locket.LocketDrawingScreen(
                 onBackClick = {
                     navController.popBackStack()
                 },
                 onSaveDrawing = { paths ->
-                    // TODO: Save drawing and go back
+                    // Convert paths to Bitmap
+                    val bitmap = com.example.coupleapp.ui.screens.locket.convertPathsToBitmap(paths, 800, 800)
+                    locketViewModel.setDrawingBitmap(bitmap)
                     navController.popBackStack()
                 }
             )

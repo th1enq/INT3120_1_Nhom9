@@ -35,9 +35,12 @@ import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.components.locket.*
 import com.example.coupleapp.viewmodel.LocketViewModel
+import com.example.coupleapp.viewmodel.LocketViewModelFirebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import android.graphics.BitmapFactory
+import android.provider.MediaStore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +53,7 @@ fun LocketScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: LocketViewModel = viewModel()
+    viewModel: LocketViewModelFirebase = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
@@ -83,12 +86,22 @@ fun LocketScreen(
     val scrollState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     
     // Gallery picker launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { viewModel.onGalleryImageSelected(it.toString()) }
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(it)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream?.close()
+                bitmap?.let { bmp -> viewModel.onGalleryImageSelected(bmp) }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
     
     // Animation timing
@@ -117,6 +130,16 @@ fun LocketScreen(
             snackbarHostState.showSnackbar(
                 message = "Sent successfully! 💕",
                 duration = SnackbarDuration.Short
+            )
+        }
+    }
+    
+    // Error snackbar
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(
+                message = "Error: $error",
+                duration = SnackbarDuration.Long
             )
         }
     }
@@ -268,8 +291,8 @@ fun LocketScreen(
                                                     onFlashToggle = { viewModel.toggleFlash() },
                                                     onCameraToggle = { viewModel.toggleCamera() },
                                                     onZoomToggle = { viewModel.cycleZoom() },
-                                                    onCapture = { bitmap -> 
-                                                        viewModel.onPhotoCaptured(bitmap)
+                                                    onCapture = { bitmap ->
+                                                        bitmap?.let { viewModel.onPhotoCaptured(it) }
                                                     },
                                                     onGalleryClick = { 
                                                         galleryLauncher.launch("image/*")
