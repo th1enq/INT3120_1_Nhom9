@@ -83,6 +83,7 @@ class CalendarViewModelFirebase : ViewModel() {
 
                         // Load partner if exists
                         val partnerId = currentUser.partnerId
+                        Log.d(TAG, "[CALENDAR] Partner ID: $partnerId")
                         if (!partnerId.isNullOrEmpty()) {
                             val partnerResult = firestoreRepository.getDocument(
                                 "users",
@@ -93,7 +94,24 @@ class CalendarViewModelFirebase : ViewModel() {
                             partnerResult.fold(
                                 onSuccess = { partner ->
                                     if (partner != null) {
-                                        val coupleProfile = createCoupleProfile(currentUser, partner)
+                                        Log.d(TAG, "[CALENDAR] Partner loaded: ${partner.displayName}")
+                                        // Load couple data to get nicknames and anniversary date
+                                        val coupleData = if (!coupleIdToUse.isNullOrEmpty() && coupleIdToUse != userId) {
+                                            Log.d(TAG, "[CALENDAR] Loading couple data from couples/$coupleIdToUse")
+                                            val result = firestoreRepository.getDocument(
+                                                "couples",
+                                                coupleIdToUse,
+                                                FirebaseCouple::class.java
+                                            ).getOrNull()
+                                            Log.d(TAG, "[CALENDAR] Couple data loaded: user1Nick=${result?.user1Nickname}, user2Nick=${result?.user2Nickname}, anniversaryDate=${result?.anniversaryDate}")
+                                            result
+                                        } else {
+                                            Log.d(TAG, "[CALENDAR] No coupleId or coupleId == userId, skipping couple data load")
+                                            null
+                                        }
+
+                                        val coupleProfile = createCoupleProfile(currentUser, partner, coupleData)
+                                        Log.d(TAG, "[CALENDAR] Couple profile created: ${coupleProfile.user1.nickname} & ${coupleProfile.user2.nickname}, startDate=${coupleProfile.relationshipStartDate}")
                                         _uiState.update {
                                             it.copy(
                                                 coupleProfile = coupleProfile,
@@ -135,13 +153,22 @@ class CalendarViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Create couple profile from Firebase users
+     * Create couple profile from Firebase users and couple data
      */
-    private fun createCoupleProfile(user1: FirebaseUser, user2: FirebaseUser): CoupleProfile {
+    private fun createCoupleProfile(user1: FirebaseUser, user2: FirebaseUser, coupleData: FirebaseCouple? = null): CoupleProfile {
+        // Get nicknames from couple data or use default
+        val user1Nickname = coupleData?.let {
+            if (it.user1Id == user1.id) it.user1Nickname else it.user2Nickname
+        } ?: user1.displayName.split(" ").firstOrNull() ?: "Bạn"
+
+        val user2Nickname = coupleData?.let {
+            if (it.user2Id == user2.id) it.user2Nickname else it.user1Nickname
+        } ?: user2.displayName.split(" ").firstOrNull() ?: "Partner"
+
         val user1Profile = CalendarUserProfile(
             id = user1.id,
             name = user1.displayName,
-            nickname = user1.displayName.split(" ").firstOrNull() ?: "Bạn",
+            nickname = user1Nickname,
             avatarUrl = user1.profileImageUrl,
             dateOfBirth = parseDateString(user1.dateOfBirth),
             zodiacSign = ZodiacSign.fromDate(parseDateString(user1.dateOfBirth))
@@ -150,14 +177,24 @@ class CalendarViewModelFirebase : ViewModel() {
         val user2Profile = CalendarUserProfile(
             id = user2.id,
             name = user2.displayName,
-            nickname = user2.displayName.split(" ").firstOrNull() ?: "Partner",
+            nickname = user2Nickname,
             avatarUrl = user2.profileImageUrl,
             dateOfBirth = parseDateString(user2.dateOfBirth),
             zodiacSign = ZodiacSign.fromDate(parseDateString(user2.dateOfBirth))
         )
 
-        // Default relationship start date
-        val startDate = LocalDateTime.now().minusDays(365)
+        // Get relationship start date from couple data or use default
+        val startDate = if (coupleData != null && coupleData.anniversaryDate.isNotEmpty()) {
+            try {
+                val date = LocalDate.parse(coupleData.anniversaryDate, DateTimeFormatter.ISO_LOCAL_DATE)
+                date.atStartOfDay()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing anniversary date: ${coupleData.anniversaryDate}", e)
+                LocalDateTime.now().minusDays(365)
+            }
+        } else {
+            LocalDateTime.now().minusDays(365)
+        }
 
         return CoupleProfile(
             user1 = user1Profile,
@@ -387,13 +424,16 @@ class CalendarViewModelFirebase : ViewModel() {
      * Show add event dialog
      */
     fun showAddEventDialog(date: LocalDate? = null) {
+        val selectedDate = date ?: LocalDate.now()
+        Log.d(TAG, "[CALENDAR] ▶️ showAddEventDialog called: selectedDate=$selectedDate")
         _uiState.update {
             it.copy(
                 showAddEventDialog = true,
-                selectedDate = date ?: LocalDate.now(),
+                selectedDate = selectedDate,
                 editingAnniversary = null
             )
         }
+        Log.d(TAG, "[CALENDAR] Add event dialog opened for date: $selectedDate")
     }
 
     /**
@@ -426,8 +466,14 @@ class CalendarViewModelFirebase : ViewModel() {
      * Save anniversary to Firebase
      */
     fun saveAnniversary(anniversary: Anniversary) {
+        Log.d(TAG, "[CALENDAR] ▶️ saveAnniversary called: id=${anniversary.id}, title=${anniversary.title}, date=${anniversary.date}")
         viewModelScope.launch {
-            val userId = authRepository.currentUser?.uid ?: return@launch
+            val userId = authRepository.currentUser?.uid
+            if (userId == null) {
+                Log.e(TAG, "[CALENDAR] ❌ User not logged in")
+                return@launch
+            }
+            Log.d(TAG, "[CALENDAR] Current userId: $userId")
             
             // Get real coupleId from user
             val userResult = firestoreRepository.getDocument(
@@ -437,13 +483,15 @@ class CalendarViewModelFirebase : ViewModel() {
             )
 
             val coupleId = userResult.getOrNull()?.coupleId
+            Log.d(TAG, "[CALENDAR] User's coupleId: $coupleId")
             if (coupleId.isNullOrEmpty()) {
-                Log.e(TAG, "No coupleId found, cannot save anniversary")
+                Log.e(TAG, "[CALENDAR] ❌ No coupleId found, cannot save anniversary")
                 return@launch
             }
 
+            val eventId = anniversary.id.ifEmpty { UUID.randomUUID().toString() }
             val firebaseEvent = FirebaseCalendarEvent(
-                id = anniversary.id.ifEmpty { UUID.randomUUID().toString() },
+                id = eventId,
                 coupleId = coupleId,
                 title = anniversary.title,
                 description = anniversary.description,
@@ -454,6 +502,9 @@ class CalendarViewModelFirebase : ViewModel() {
                 reminderMinutes = if (anniversary.reminderEnabled) 60 else 0,
                 createdAt = Date()
             )
+            
+            Log.d(TAG, "[CALENDAR] Saving event to calendar_events/$eventId with coupleId=$coupleId")
+            Log.d(TAG, "[CALENDAR] Event details: title=${firebaseEvent.title}, date=${firebaseEvent.date}, type=${firebaseEvent.eventType}")
 
             firestoreRepository.setDocument(
                 collection = "calendar_events",
@@ -461,12 +512,12 @@ class CalendarViewModelFirebase : ViewModel() {
                 data = firebaseEvent
             ).fold(
                 onSuccess = {
-                    Log.d(TAG, "Anniversary saved successfully")
+                    Log.d(TAG, "[CALENDAR] ✅ Anniversary saved successfully: $eventId")
                     loadAnniversaries(coupleId)
                     hideEventDialog()
                 },
                 onFailure = { error ->
-                    Log.e(TAG, "Error saving anniversary", error)
+                    Log.e(TAG, "[CALENDAR] ❌ Error saving anniversary: ${error.message}", error)
                 }
             )
         }
@@ -476,23 +527,42 @@ class CalendarViewModelFirebase : ViewModel() {
      * Delete anniversary
      */
     fun deleteAnniversary(anniversaryId: String) {
+        Log.d(TAG, "[CALENDAR] ▶️ deleteAnniversary called: anniversaryId=$anniversaryId")
         viewModelScope.launch {
-            firestoreRepository.deleteDocument(
-                collection = "calendar_events",
-                documentId = anniversaryId
-            ).fold(
-                onSuccess = {
-                    Log.d(TAG, "Anniversary deleted successfully")
-                    val coupleId = _uiState.value.coupleProfile?.let {
-                        authRepository.currentUser?.uid ?: ""
-                    } ?: ""
-                    loadAnniversaries(coupleId)
-                    hideEventDialog()
-                },
-                onFailure = { error ->
-                    Log.e(TAG, "Error deleting anniversary", error)
+            try {
+                val userId = authRepository.currentUser?.uid
+                if (userId == null) {
+                    Log.e(TAG, "[CALENDAR] ❌ User not logged in")
+                    return@launch
                 }
-            )
+                
+                // Get coupleId for reloading
+                val userResult = firestoreRepository.getDocument(
+                    "users",
+                    userId,
+                    FirebaseUser::class.java
+                )
+                val coupleId = userResult.getOrNull()?.coupleId ?: ""
+                Log.d(TAG, "[CALENDAR] Deleting event from calendar_events/$anniversaryId")
+                
+                firestoreRepository.deleteDocument(
+                    collection = "calendar_events",
+                    documentId = anniversaryId
+                ).fold(
+                    onSuccess = {
+                        Log.d(TAG, "[CALENDAR] ✅ Anniversary deleted successfully: $anniversaryId")
+                        if (coupleId.isNotEmpty()) {
+                            loadAnniversaries(coupleId)
+                        }
+                        hideEventDialog()
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "[CALENDAR] ❌ Error deleting anniversary: ${error.message}", error)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "[CALENDAR] ❌ Exception deleting anniversary: ${e.message}", e)
+            }
         }
     }
 
@@ -522,6 +592,185 @@ class CalendarViewModelFirebase : ViewModel() {
      */
     fun hideAnniversaryManagement() {
         _uiState.update { it.copy(showAnniversaryManagement = false) }
+    }
+
+    /**
+     * Update nickname for a user - saves to couples collection
+     */
+    fun updateNickname(userId: String, newNickname: String) {
+        Log.d(TAG, "[CALENDAR] ▶️ updateNickname called: userId=$userId, newNickname=$newNickname")
+        viewModelScope.launch {
+            try {
+                val currentUserId = authRepository.currentUser?.uid
+                if (currentUserId == null) {
+                    Log.e(TAG, "[CALENDAR] ❌ User not logged in")
+                    return@launch
+                }
+                Log.d(TAG, "[CALENDAR] Current userId: $currentUserId")
+                
+                // Load current user to get coupleId
+                val userResult = firestoreRepository.getDocument(
+                    "users",
+                    currentUserId,
+                    FirebaseUser::class.java
+                )
+
+                val user = userResult.getOrNull()
+                val coupleId = user?.coupleId
+                val partnerId = user?.partnerId
+                Log.d(TAG, "[CALENDAR] User's coupleId: $coupleId, partnerId: $partnerId")
+                if (coupleId.isNullOrEmpty()) {
+                    Log.e(TAG, "[CALENDAR] ❌ No coupleId found, cannot update nickname")
+                    return@launch
+                }
+
+                // Check if couple document exists, create if not
+                val coupleResult = firestoreRepository.getDocument(
+                    "couples",
+                    coupleId,
+                    FirebaseCouple::class.java
+                )
+                
+                if (coupleResult.isFailure || coupleResult.getOrNull() == null) {
+                    Log.d(TAG, "[CALENDAR] Couple document doesn't exist, creating it...")
+                    // Create couple document
+                    val sortedIds = listOf(currentUserId, partnerId ?: "").sorted()
+                    val newCouple = FirebaseCouple(
+                        id = coupleId,
+                        user1Id = sortedIds[0],
+                        user2Id = sortedIds[1],
+                        user1Nickname = "",
+                        user2Nickname = "",
+                        anniversaryDate = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE),
+                        relationshipStatus = "dating",
+                        sharedGardenLevel = 1,
+                        sharedPoints = 0,
+                        createdAt = java.util.Date()
+                    )
+                    firestoreRepository.setDocument(
+                        "couples",
+                        coupleId,
+                        newCouple
+                    )
+                    Log.d(TAG, "[CALENDAR] Created couple document: $coupleId")
+                }
+
+                // Update nickname in couples document
+                val fieldName = if (userId == currentUserId) "user1Nickname" else "user2Nickname"
+                Log.d(TAG, "[CALENDAR] Updating field '$fieldName' in couples/$coupleId with value: $newNickname")
+                
+                firestoreRepository.updateDocument(
+                    "couples",
+                    coupleId,
+                    mapOf(fieldName to newNickname)
+                ).fold(
+                    onSuccess = {
+                        Log.d(TAG, "[CALENDAR] ✅ Nickname updated successfully")
+                        // Reload data to reflect changes
+                        loadData()
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "[CALENDAR] ❌ Error updating nickname: ${error.message}", error)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "[CALENDAR] ❌ Exception updating nickname: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Update relationship start date - saves to couples collection
+     */
+    fun updateRelationshipStartDate(newDate: LocalDate) {
+        Log.d(TAG, "[CALENDAR] ▶️ updateRelationshipStartDate called: newDate=$newDate")
+        viewModelScope.launch {
+            try {
+                val userId = authRepository.currentUser?.uid
+                if (userId == null) {
+                    Log.e(TAG, "[CALENDAR] ❌ User not logged in")
+                    return@launch
+                }
+                Log.d(TAG, "[CALENDAR] Current userId: $userId")
+                
+                // Load current user to get coupleId
+                val userResult = firestoreRepository.getDocument(
+                    "users",
+                    userId,
+                    FirebaseUser::class.java
+                )
+
+                val user = userResult.getOrNull()
+                val coupleId = user?.coupleId
+                val partnerId = user?.partnerId
+                Log.d(TAG, "[CALENDAR] User's coupleId: $coupleId, partnerId: $partnerId")
+                if (coupleId.isNullOrEmpty()) {
+                    Log.e(TAG, "[CALENDAR] ❌ No coupleId found, cannot update anniversary date")
+                    return@launch
+                }
+
+                // Check if couple document exists, create if not
+                val coupleResult = firestoreRepository.getDocument(
+                    "couples",
+                    coupleId,
+                    FirebaseCouple::class.java
+                )
+                
+                if (coupleResult.isFailure || coupleResult.getOrNull() == null) {
+                    Log.d(TAG, "[CALENDAR] Couple document doesn't exist, creating it...")
+                    // Create couple document with the new anniversary date
+                    val sortedIds = listOf(userId, partnerId ?: "").sorted()
+                    val dateString = newDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                    val newCouple = FirebaseCouple(
+                        id = coupleId,
+                        user1Id = sortedIds[0],
+                        user2Id = sortedIds[1],
+                        user1Nickname = "",
+                        user2Nickname = "",
+                        anniversaryDate = dateString,
+                        relationshipStatus = "dating",
+                        sharedGardenLevel = 1,
+                        sharedPoints = 0,
+                        createdAt = java.util.Date()
+                    )
+                    firestoreRepository.setDocument(
+                        "couples",
+                        coupleId,
+                        newCouple
+                    ).fold(
+                        onSuccess = {
+                            Log.d(TAG, "[CALENDAR] ✅ Created couple document and set anniversary date: $dateString")
+                            loadData()
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "[CALENDAR] ❌ Error creating couple document: ${error.message}", error)
+                        }
+                    )
+                    return@launch
+                }
+
+                // Update anniversaryDate in existing couples document
+                val dateString = newDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                Log.d(TAG, "[CALENDAR] Updating anniversaryDate in couples/$coupleId with value: $dateString")
+                
+                firestoreRepository.updateDocument(
+                    "couples",
+                    coupleId,
+                    mapOf("anniversaryDate" to dateString)
+                ).fold(
+                    onSuccess = {
+                        Log.d(TAG, "[CALENDAR] ✅ Anniversary date updated successfully to: $dateString")
+                        // Reload data to reflect changes
+                        loadData()
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "[CALENDAR] ❌ Error updating anniversary date: ${error.message}", error)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "[CALENDAR] ❌ Exception updating anniversary date: ${e.message}", e)
+            }
+        }
     }
 
     /**

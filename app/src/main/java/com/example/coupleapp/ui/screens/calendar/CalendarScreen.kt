@@ -25,7 +25,8 @@ fun CalendarScreen(
     onNavigateToPartnerHub: () -> Unit = {},
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
-    viewModel: CalendarViewModelFirebase = viewModel()
+    viewModel: CalendarViewModelFirebase = viewModel(),
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
@@ -61,7 +62,8 @@ fun CalendarScreen(
                 uiState = uiState,
                 visible = visible,
                 onBackClick = onBackClick,
-                viewModel = viewModel
+                viewModel = viewModel,
+                questViewModel = questViewModel
             )
         }
     }
@@ -72,7 +74,8 @@ private fun CalendarMainContent(
     uiState: com.example.coupleapp.viewmodel.CalendarUiState,
     visible: Boolean,
     onBackClick: () -> Unit,
-    viewModel: CalendarViewModelFirebase
+    viewModel: CalendarViewModelFirebase,
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -150,11 +153,18 @@ private fun CalendarMainContent(
             
             // Dialogs
             if (uiState.showAddEventDialog) {
+                val isNewEvent = uiState.editingAnniversary == null
                 AddEditEventDialog(
                     anniversary = uiState.editingAnniversary,
                     selectedDate = uiState.selectedDate,
                     onDismiss = { viewModel.hideEventDialog() },
-                    onSave = { anniversary -> viewModel.saveAnniversary(anniversary) },
+                    onSave = { anniversary -> 
+                        viewModel.saveAnniversary(anniversary)
+                        // Update quest progress when adding new event (not editing)
+                        if (isNewEvent) {
+                            questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.ADD_CALENDAR_EVENT, 1)
+                        }
+                    },
                     onDelete = { id -> viewModel.deleteAnniversary(id) }
                 )
             }
@@ -165,13 +175,16 @@ private fun CalendarMainContent(
                     coupleProfile = uiState.coupleProfile,
                     onDismiss = { viewModel.hideSettings() },
                     onUpdateNickname = { userId, nickname ->
-                        // Not implemented in Firebase version yet
+                        viewModel.updateNickname(userId, nickname)
                     },
                     onUpdateBackground = { imageUrl ->
                         // Not implemented in Firebase version yet
                     },
                     onToggleHeartbeat = { enabled ->
                         // Not implemented in Firebase version yet
+                    },
+                    onUpdateAnniversaryDate = { date ->
+                        viewModel.updateRelationshipStartDate(date)
                     },
                     onInsertMockData = {
                         viewModel.insertMockCalendarData()

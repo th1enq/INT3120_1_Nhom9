@@ -51,7 +51,8 @@ fun DistanceScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     targetPlaceId: String? = null,
-    viewModel: DistanceViewModel = viewModel()
+    viewModel: DistanceViewModel = viewModel(),
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val configuration = LocalConfiguration.current
@@ -129,6 +130,14 @@ fun DistanceScreen(
     LaunchedEffect(Unit) {
         if (!locationPermissions.allPermissionsGranted) {
             locationPermissions.launchMultiplePermissionRequest()
+        }
+    }
+    
+    // Update quest progress when location is shared (permissions granted and screen loaded)
+    LaunchedEffect(locationPermissions.allPermissionsGranted, uiState.isLoading) {
+        if (locationPermissions.allPermissionsGranted && !uiState.isLoading) {
+            // User has shared location by granting permissions and viewing distance screen
+            questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SHARE_LOCATION, 1)
         }
     }
     

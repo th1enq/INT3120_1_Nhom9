@@ -39,7 +39,8 @@ fun MissingScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: MissingViewModelFirebase = viewModel()
+    viewModel: MissingViewModelFirebase = viewModel(),
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
@@ -168,7 +169,10 @@ fun MissingScreen(
                             MissingHeartAnimation(
                                 isAnimating = uiState.isHeartAnimating,
                                 clickCount = uiState.clickCount,
-                                onHeartClick = { viewModel.sendMissing() },
+                                onHeartClick = { 
+                                    viewModel.sendMissing()
+                                    questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SEND_MISSING, 1)
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp)
@@ -187,7 +191,10 @@ fun MissingScreen(
                                     )
                         ) {
                             MissingButton(
-                                onClick = { viewModel.sendMissing() },
+                                onClick = { 
+                                    viewModel.sendMissing()
+                                    questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SEND_MISSING, 1)
+                                },
                                 isAnimating = false // Always enabled
                             )
                         }

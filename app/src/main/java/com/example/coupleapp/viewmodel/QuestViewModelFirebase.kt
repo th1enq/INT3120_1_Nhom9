@@ -79,19 +79,46 @@ class QuestViewModelFirebase : ViewModel() {
                 // Select 5 random quests from pool with saved progress
                 val dailyQuests = selectDailyQuestsWithProgress(seed, questProgress)
                 Log.d(TAG, "Generated ${dailyQuests.size} daily quests")
+                
+                // Auto-save login quest progress if it was auto-completed
+                val loginQuest = dailyQuests.find { it.type == QuestType.DAILY_LOGIN }
+                if (loginQuest != null && loginQuest.status == QuestStatus.COMPLETED && questProgress[loginQuest.id] == null) {
+                    Log.d(TAG, "Auto-completing and saving login quest")
+                    saveQuestProgressToFirebase(loginQuest)
+                }
 
                 // Check partner link status
                 val isLinked = checkPartnerLinkStatus(userId)
-                Log.d(TAG, "Partner link status: $isLinked")
+                Log.d(TAG, "[QUEST] Partner link status: $isLinked")
 
-                // Get special quest for unlinked users
+                // Get special quest - show if not linked OR if linked but not claimed yet
+                val specialProgress = questProgress["link_partner"]
+                Log.d(TAG, "[QUEST] Special quest progress from Firebase: currentProgress=${specialProgress?.currentProgress}, status=${specialProgress?.status}")
+                
                 val specialQuest = if (!isLinked) {
-                    val specialProgress = questProgress["special_link_partner"]
+                    // Not linked yet - show quest with saved progress
+                    Log.d(TAG, "[QUEST] User not linked - showing special quest as NOT_STARTED or saved status")
                     QuestPool.getSpecialLinkPartnerQuest().copy(
                         currentProgress = specialProgress?.currentProgress ?: 0,
                         status = specialProgress?.status ?: QuestStatus.NOT_STARTED
                     )
-                } else null
+                } else {
+                    // Already linked - check if already claimed
+                    if (specialProgress?.status == QuestStatus.CLAIMED) {
+                        // Already claimed - hide quest
+                        Log.d(TAG, "[QUEST] User linked and quest already claimed - hiding quest")
+                        null
+                    } else {
+                        // Linked but not claimed yet - show as completed so user can claim
+                        Log.d(TAG, "[QUEST] User linked but quest not claimed - showing as COMPLETED")
+                        QuestPool.getSpecialLinkPartnerQuest().copy(
+                            currentProgress = 1,
+                            status = QuestStatus.COMPLETED
+                        )
+                    }
+                }
+                
+                Log.d(TAG, "[QUEST] Final special quest: ${if (specialQuest == null) "null (hidden)" else "visible with status ${specialQuest.status}"}")
 
                 // Calculate summary
                 val summary = calculateDailySummary(dailyQuests)
@@ -302,8 +329,17 @@ class QuestViewModelFirebase : ViewModel() {
 
             result.fold(
                 onSuccess = { user ->
-                    val hasPartner = !user?.coupleId.isNullOrEmpty()
-                    Log.d(TAG, "Partner link status: $hasPartner (coupleId: ${user?.coupleId})")
+                    if (user == null) {
+                        Log.w(TAG, "User document not found for userId: $userId")
+                        return@fold false
+                    }
+                    
+                    // Check both partnerId and coupleId (partnerId is set when link request is accepted)
+                    val hasPartner = !user.partnerId.isNullOrEmpty() || !user.coupleId.isNullOrEmpty()
+                    Log.d(TAG, "[QUEST] Partner link check for user $userId:")
+                    Log.d(TAG, "[QUEST] - partnerId: ${user.partnerId}")
+                    Log.d(TAG, "[QUEST] - coupleId: ${user.coupleId}")
+                    Log.d(TAG, "[QUEST] - hasPartner: $hasPartner")
                     hasPartner
                 },
                 onFailure = { e ->
@@ -421,17 +457,19 @@ class QuestViewModelFirebase : ViewModel() {
                 val success = addCoinsToWallet(userId, quest.reward.coins)
                 if (success) {
                     val newCoins = _uiState.value.userCoins + quest.reward.coins
+                    // Save special quest progress as CLAIMED before hiding
+                    saveQuestProgressToFirebase(quest.copy(status = QuestStatus.CLAIMED))
+                    
+                    // Hide special quest after claiming by setting it to null
                     _uiState.update {
                         it.copy(
-                            specialQuest = quest.copy(status = QuestStatus.CLAIMED),
+                            specialQuest = null,
                             userCoins = newCoins,
                             showRewardDialog = true,
                             claimedReward = quest.reward
                         )
                     }
-                    // Save special quest progress
-                    saveQuestProgressToFirebase(quest.copy(status = QuestStatus.CLAIMED))
-                    Log.d(TAG, "Special quest reward claimed successfully, new balance: $newCoins")
+                    Log.d(TAG, "Special quest reward claimed successfully, new balance: $newCoins, quest hidden")
                 }
                 return@launch
             }

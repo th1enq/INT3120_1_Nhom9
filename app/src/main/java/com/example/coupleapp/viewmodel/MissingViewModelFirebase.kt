@@ -223,24 +223,27 @@ class MissingViewModelFirebase : ViewModel() {
             val myCount = loadTodayCount(coupleId, currentUserId, dateString)
             val partnerCount = loadTodayCount(coupleId, partnerId, dateString)
 
-            val summaries = listOf(
-                DailyMissingSummary(
-                    date = date,
-                    userId = myCount.userId,
-                    userName = myCount.userName,
-                    userAvatar = myCount.userAvatar,
-                    missCount = myCount.todayCount
-                ),
-                DailyMissingSummary(
-                    date = date,
-                    userId = partnerCount.userId,
-                    userName = partnerCount.userName,
-                    userAvatar = partnerCount.userAvatar,
-                    missCount = partnerCount.todayCount
+            // Only add day if at least one person has > 0 hearts (skip days where both are 0)
+            if (myCount.todayCount > 0 || partnerCount.todayCount > 0) {
+                val summaries = listOf(
+                    DailyMissingSummary(
+                        date = date,
+                        userId = myCount.userId,
+                        userName = myCount.userName,
+                        userAvatar = myCount.userAvatar,
+                        missCount = myCount.todayCount
+                    ),
+                    DailyMissingSummary(
+                        date = date,
+                        userId = partnerCount.userId,
+                        userName = partnerCount.userName,
+                        userAvatar = partnerCount.userAvatar,
+                        missCount = partnerCount.todayCount
+                    )
                 )
-            )
 
-            histories.add(DailyMissingHistory(date = date, summaries = summaries))
+                histories.add(DailyMissingHistory(date = date, summaries = summaries))
+            }
         }
 
         return histories

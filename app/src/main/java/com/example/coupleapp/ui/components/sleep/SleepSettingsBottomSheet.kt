@@ -31,6 +31,7 @@ fun SleepSettingsBottomSheet(
     onWhenToSleepClick: () -> Unit,
     onSleepGoalClick: () -> Unit,
     onMyHistoryClick: () -> Unit,
+    onSyncHealthConnectClick: () -> Unit = {},
     onInsertMockDataClick: () -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -111,6 +112,18 @@ fun SleepSettingsBottomSheet(
             title = "My History",
             currentValue = "",
             onClick = onMyHistoryClick
+        )
+        
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            color = Color(0xFFF5F5F5)
+        )
+        
+        SettingsItem(
+            icon = Icons.Default.Refresh,
+            title = "Sync Health Connect",
+            currentValue = "",
+            onClick = onSyncHealthConnectClick
         )
         
         HorizontalDivider(

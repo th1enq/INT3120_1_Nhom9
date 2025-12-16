@@ -271,7 +271,8 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.phan4h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 50
+                        coinPrice = 100,
+                        durationHours = 4
                     ),
                     StoreItem(
                         id = "fertilizer_8h",
@@ -280,7 +281,8 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.phan8h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 80
+                        coinPrice = 100,
+                        durationHours = 8
                     ),
                     StoreItem(
                         id = "fertilizer_24h",
@@ -289,33 +291,52 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.phan24h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 100
+                        coinPrice = 100,
+                        durationHours = 24
                     )
                 )
             ),
 
-            // Care Items
+            // Gardening Tools
             StoreCategory(
-                id = "care_items",
-                name = "Care Items",
+                id = "tools",
+                name = "Gardening Tools",
                 items = listOf(
                     StoreItem(
-                        id = "watering_can",
-                        name = "Watering Can",
-                        description = "Instantly add 30% water",
-                        iconRes = R.drawable.xit,
-                        type = StoreItemType.TOOL,
-                        purchaseType = PurchaseType.COIN,
-                        coinPrice = 30
-                    ),
-                    StoreItem(
-                        id = "sunlight_bottle",
-                        name = "Sunlight Bottle",
-                        description = "Instantly add 30% sunlight",
+                        id = "tool_sun",
+                        name = "Sun Lamp",
+                        description = "Provide light for plants",
                         iconRes = R.drawable.sun,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 30
+                        coinPrice = 150
+                    ),
+                    StoreItem(
+                        id = "tool_keo",
+                        name = "Watering Can",
+                        description = "Water your plants",
+                        iconRes = R.drawable.keo,
+                        type = StoreItemType.TOOL,
+                        purchaseType = PurchaseType.COIN,
+                        coinPrice = 150
+                    ),
+                    StoreItem(
+                        id = "tool_xit",
+                        name = "Pesticide",
+                        description = "Protect plants from pests",
+                        iconRes = R.drawable.xit,
+                        type = StoreItemType.TOOL,
+                        purchaseType = PurchaseType.COIN,
+                        coinPrice = 150
+                    ),
+                    StoreItem(
+                        id = "tool_xoa",
+                        name = "Plant Scrubber",
+                        description = "Clean your plants",
+                        iconRes = R.drawable.xoa,
+                        type = StoreItemType.TOOL,
+                        purchaseType = PurchaseType.COIN,
+                        coinPrice = 150
                     )
                 )
             )
@@ -432,7 +453,8 @@ class StoreViewModelFirebase(
     /**
      * Add purchased item to user's garden inventory
      */
-    private suspend fun addToInventory(userId: String, item: StoreItem) {
+    private suspend fun addToInventory(userId: String, item: StoreItem, quantity: Int = 1) {
+        Log.d(TAG, "[STORE→GARDEN] Adding to inventory: itemId=${item.id}, quantity=$quantity, userId=$userId")
         try {
             val result = firestoreRepository.getDocument(
                 "garden_inventories",
@@ -443,37 +465,59 @@ class StoreViewModelFirebase(
             result.fold(
                 onSuccess = { inventoryDoc ->
                     val updates = mutableMapOf<String, Any>()
+                    Log.d(TAG, "[STORE→GARDEN] Current inventory: seeds=${inventoryDoc?.seeds}, fert4h=${inventoryDoc?.fertilizer4h}, fert8h=${inventoryDoc?.fertilizer8h}, fert12h=${inventoryDoc?.fertilizer12h}, water=${inventoryDoc?.wateringCan}, sun=${inventoryDoc?.sunlightBottle}")
                     
                     when (item.id) {
                         "seed_normal", "seed_rare", "seed_super_rare" -> {
                             val currentSeeds = inventoryDoc?.seeds ?: 0
-                            updates["seeds"] = currentSeeds + 1
+                            updates["seeds"] = currentSeeds + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Seed update: $currentSeeds → ${currentSeeds + quantity}")
                         }
                         "fertilizer_4h" -> {
                             val current = inventoryDoc?.fertilizer4h ?: 0
-                            updates["fertilizer4h"] = current + 1
+                            updates["fertilizer4h"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Fertilizer 4h update: $current → ${current + quantity}")
                         }
                         "fertilizer_8h" -> {
                             val current = inventoryDoc?.fertilizer8h ?: 0
-                            updates["fertilizer8h"] = current + 1
+                            updates["fertilizer8h"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Fertilizer 8h update: $current → ${current + quantity}")
                         }
-                        "fertilizer_12h" -> {
+                        "fertilizer_24h" -> {
                             val current = inventoryDoc?.fertilizer12h ?: 0
-                            updates["fertilizer12h"] = current + 1
+                            updates["fertilizer12h"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Fertilizer 24h update (stored as fertilizer12h): $current → ${current + quantity}")
                         }
-                        "watering_can" -> {
+                        "tool_keo", "watering_can" -> {
                             val current = inventoryDoc?.wateringCan ?: 0
-                            updates["wateringCan"] = current + 1
+                            updates["wateringCan"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Watering can update: $current → ${current + quantity}")
                         }
-                        "sunlight_bottle" -> {
+                        "tool_sun", "sunlight_bottle" -> {
                             val current = inventoryDoc?.sunlightBottle ?: 0
-                            updates["sunlightBottle"] = current + 1
+                            updates["sunlightBottle"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Sunlight bottle update: $current → ${current + quantity}")
+                        }
+                        "tool_xit", "pesticide" -> {
+                            val current = inventoryDoc?.pesticide ?: 0
+                            updates["pesticide"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Pesticide update: $current → ${current + quantity}")
+                        }
+                        "tool_xoa", "scissors" -> {
+                            val current = inventoryDoc?.scissors ?: 0
+                            updates["scissors"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Scissors update: $current → ${current + quantity}")
+                        }
+                        else -> {
+                            Log.w(TAG, "[STORE→GARDEN] ❌ Unknown item ID: ${item.id} - will not be added to garden inventory!")
                         }
                     }
                     
                     if (updates.isNotEmpty()) {
+                        Log.d(TAG, "[STORE→GARDEN] Applying updates to Firebase: $updates")
                         if (inventoryDoc == null) {
                             // Create new inventory
+                            Log.d(TAG, "[STORE→GARDEN] Creating new inventory document for user $userId")
                             val newInventory = FirebaseGardenInventory(
                                 id = userId,
                                 userId = userId
@@ -486,6 +530,9 @@ class StoreViewModelFirebase(
                             userId,
                             updates
                         )
+                        Log.d(TAG, "[STORE→GARDEN] ✓ Inventory updated successfully")
+                    } else {
+                        Log.w(TAG, "[STORE→GARDEN] ⚠️ No updates generated for item ${item.id}")
                     }
                 },
                 onFailure = { e ->
@@ -500,15 +547,16 @@ class StoreViewModelFirebase(
     /**
      * Record purchase in history
      */
-    private suspend fun recordPurchase(userId: String, item: StoreItem, purchaseType: String) {
+    private suspend fun recordPurchase(userId: String, item: StoreItem, purchaseType: String, quantity: Int = 1) {
         try {
             val purchase = FirebasePurchaseHistory(
                 userId = userId,
                 itemId = item.id,
                 itemName = item.name,
                 itemType = item.type.name,
-                price = item.coinPrice,
-                purchaseType = purchaseType
+                price = item.coinPrice * quantity,
+                purchaseType = purchaseType,
+                quantity = quantity
             )
             
             firestoreRepository.addDocument("purchase_history", purchase)
@@ -582,8 +630,51 @@ class StoreViewModelFirebase(
      * Purchase with coins
      */
     fun purchaseWithCoins(item: StoreItem, quantity: Int) {
-        // For now, just purchase once (quantity support can be added later)
-        purchaseItem(item)
+        viewModelScope.launch {
+            try {
+                val currentUserId = authRepository.currentUser?.uid ?: return@launch
+                val wallet = _uiState.value.userWallet
+                
+                // Calculate total cost
+                val totalCost = item.coinPrice * quantity
+                
+                if (wallet.coins < totalCost) {
+                    _uiState.update { 
+                        it.copy(errorMessage = "Not enough coins. Need $totalCost coins") 
+                    }
+                    return@launch
+                }
+                
+                // Deduct coins (total cost)
+                val newCoins = wallet.coins - totalCost
+                firestoreRepository.updateDocument(
+                    "user_wallets",
+                    currentUserId,
+                    mapOf("coins" to newCoins)
+                )
+                
+                // Add to inventory (with quantity)
+                addToInventory(currentUserId, item, quantity)
+                
+                // Record purchase
+                recordPurchase(currentUserId, item, "coin", quantity)
+                
+                // Update local state
+                _uiState.update { 
+                    it.copy(
+                        userWallet = wallet.copy(coins = newCoins),
+                        purchaseResult = PurchaseResult.Success(item, newCoins, quantity),
+                        errorMessage = null
+                    ) 
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error purchasing items", e)
+                _uiState.update { 
+                    it.copy(errorMessage = "Purchase failed: ${e.message}") 
+                }
+            }
+        }
     }
     
     /**
