@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:padding="16dp">
+
+    <!-- Container for entire widget -->
+    <LinearLayout
+        android:id="@+id/widget_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:weightSum="10">
+
+        <!-- Left User Sleep Info -->
+        <LinearLayout
+            android:id="@+id/left_user_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="4"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="4dp">
+
+            <!-- Avatar with emoji badge -->
+            <TextView
+                android:id="@+id/left_emoji_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="top|start"
+                android:background="@drawable/circle_image_background"
+                android:gravity="center"
+                android:text="😊"
+                android:textSize="20sp" />
+
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+                
+                <!-- Progress circle background -->
+                <ImageView
+                    android:id="@+id/left_progress_bg"
+                    android:layout_width="90dp"
+                    android:layout_height="90dp"
+                    android:contentDescription="@string/sleep_status" />
+                
+                <!-- Status Image in center -->
+                <ImageView
+                    android:id="@+id/left_status_circle"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/excellent"
+                    android:background="@drawable/circle_image_background"
+                    android:clipToOutline="true"
+                    android:contentDescription="@string/sleep_status" />
+                
+                <!-- Emoji badge at top-left corner -->
+            </FrameLayout>
+
+            <!-- Status Text -->
+            <TextView
+                android:id="@+id/left_status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Tốt"
+                android:textColor="#4CAF50"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/left_date_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Tháng 12 10"
+                android:textColor="#666666"
+                android:textSize="10sp" />
+
+            <!-- Date -->
+
+            <!-- Sleep Duration -->
+
+            <TextView
+                android:id="@+id/left_duration_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="7h 0min"
+                android:textColor="#2D2D2D"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- VS Divider -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="VS"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#9C27B0"
+                android:alpha="0.6" />
+        </LinearLayout>
+
+        <!-- Right User Sleep Info -->
+        <LinearLayout
+            android:id="@+id/right_user_container"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="4"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="4dp">
+
+            <!-- Avatar with emoji badge -->
+            <TextView
+                android:id="@+id/right_emoji_icon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="top|end"
+                android:background="@drawable/circle_image_background"
+                android:gravity="center"
+                android:text="🥦"
+                android:textSize="20sp" />
+
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <!-- Progress circle background -->
+                <ImageView
+                    android:id="@+id/right_progress_bg"
+                    android:layout_width="90dp"
+                    android:layout_height="90dp"
+                    android:contentDescription="@string/sleep_status" />
+
+                <!-- Status Image in center -->
+                <ImageView
+                    android:id="@+id/right_status_circle"
+                    android:layout_width="70dp"
+                    android:layout_height="70dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/circle_image_background"
+                    android:clipToOutline="true"
+                    android:contentDescription="@string/sleep_status"
+                    android:src="@drawable/good" />
+
+                <!-- Emoji badge at top-right corner -->
+            </FrameLayout>
+
+            <!-- Status Text - can be multiple lines -->
+            <TextView
+                android:id="@+id/right_status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="2"
+                android:text="Có lẽ vẫn đang ngáy khò khò"
+                android:textColor="#FF9800"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <!-- Date (optional for right side) -->
+            <TextView
+                android:id="@+id/right_date_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textColor="#666666"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
+            <!-- Sleep Duration (optional for right side) -->
+            <TextView
+                android:id="@+id/right_duration_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text=""
+                android:textColor="#2D2D2D"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Bedtime Reminder Overlay (hidden by default) -->
+    <LinearLayout
+        android:id="@+id/bedtime_reminder_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#2C3E5F"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/sleep_tracker"
+            android:contentDescription="@string/bedtime_reminder" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Time to sleep!"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+
+        <TextView
+            android:id="@+id/bedtime_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Sleep goal: 22:00"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
+            android:alpha="0.8" />
+    </LinearLayout>
+</RelativeLayout>
