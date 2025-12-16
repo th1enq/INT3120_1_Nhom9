@@ -33,7 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.QAQuestion
 import com.example.coupleapp.data.model.QAStatus
 import com.example.coupleapp.ui.theme.*
-import com.example.coupleapp.viewmodel.QAViewModel
+import com.example.coupleapp.viewmodel.QAViewModelFirebase
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
@@ -41,7 +41,7 @@ import java.time.temporal.ChronoUnit
 @Composable
 fun QAScreen(
     onBackClick: () -> Unit,
-    viewModel: QAViewModel = viewModel()
+    viewModel: QAViewModelFirebase = viewModel()
 ) {
     val questions by viewModel.filteredQuestions.collectAsState()
     val partner by viewModel.partner.collectAsState()
@@ -109,7 +109,7 @@ fun QAScreen(
         if (showCreateDialog) {
             CreateQuestionDialog(
                 question = newQuestion,
-                partnerName = partner?.name ?: "Partner",
+                partnerName = partner?.displayName ?: "Partner",
                 onQuestionChanged = viewModel::onNewQuestionChanged,
                 onDismiss = { 
                     showCreateDialog = false

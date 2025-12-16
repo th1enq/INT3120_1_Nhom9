@@ -1,5 +1,6 @@
 package com.example.coupleapp.ui.components.partner
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -43,6 +44,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
+private const val TAG = "QATimelineSection"
+
 /**
  * Section hiển thị Q&A với timeline theo ngày
  */
@@ -56,9 +59,12 @@ fun QATimelineSection(
     onRejectAnswer: (String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    Log.d(TAG, "[QA] QATimelineSection composing, questions: ${questions.size}, userId: $currentUserId")
+    
     var isVisible by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
+        Log.d(TAG, "[QA] LaunchedEffect triggered, setting visible")
         isVisible = true
     }
     
@@ -67,20 +73,24 @@ fun QATimelineSection(
         enter = fadeIn(animationSpec = tween(500, delayMillis = 300)) +
                 slideInVertically(animationSpec = tween(500, delayMillis = 300)) { it / 4 }
     ) {
+        Log.d(TAG, "[QA] AnimatedVisibility visible, rendering Column")
         Column(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
         ) {
             // Header: Title + Add button
+            Log.d(TAG, "[QA] Rendering QAHeader")
             QAHeader(onAddClick = onAddQuestion)
             
             Spacer(modifier = Modifier.height(16.dp))
             
             // Timeline content
             if (questions.isEmpty()) {
+                Log.d(TAG, "[QA] No questions, showing empty content")
                 EmptyQAContent()
             } else {
+                Log.d(TAG, "[QA] Rendering timeline with ${questions.size} questions")
                 QATimelineContent(
                     questions = questions,
                     currentUserId = currentUserId,

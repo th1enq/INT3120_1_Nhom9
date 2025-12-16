@@ -44,12 +44,19 @@ fun PartnerHubScreen(
     onNavigateToShortcut: (String) -> Unit,
     viewModel: PartnerHubViewModelFirebase = viewModel()
 ) {
+    android.util.Log.d("PartnerHubScreen", "[PARTNER] Screen composing")
+    
     val uiState by viewModel.uiState.collectAsState()
     val qaQuestions by viewModel.qaQuestions.collectAsState()
     val pendingRequests by viewModel.pendingRequests.collectAsState()
     
+    android.util.Log.d("PartnerHubScreen", "[PARTNER] UI State: linkStatus=${uiState.linkStatus}, isLoading=${uiState.isLoading}")
+    android.util.Log.d("PartnerHubScreen", "[PARTNER] QA Questions count: ${qaQuestions.size}")
+    android.util.Log.d("PartnerHubScreen", "[PARTNER] Pending requests count: ${pendingRequests.size}")
+    
     // Refresh data when screen is visible
     LaunchedEffect(Unit) {
+        android.util.Log.d("PartnerHubScreen", "[PARTNER] LaunchedEffect triggered, refreshing data")
         viewModel.refreshData()
     }
     
@@ -71,43 +78,75 @@ fun PartnerHubScreen(
     ) {
         when {
             uiState.isLoading -> {
+                android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing loading state")
                 PartnerHubLoading()
             }
             uiState.linkStatus == LinkStatus.PENDING_RECEIVED && pendingRequests.isNotEmpty() -> {
+                android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing pending requests screen")
                 PendingRequestsScreenFirebase(
                     requests = pendingRequests,
-                    onAccept = { viewModel.acceptLinkRequest(it) },
-                    onReject = { viewModel.rejectLinkRequest(it) }
+                    onAccept = { 
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Accepting request: $it")
+                        viewModel.acceptLinkRequest(it) 
+                    },
+                    onReject = { 
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Rejecting request: $it")
+                        viewModel.rejectLinkRequest(it) 
+                    }
                 )
             }
             uiState.linkStatus == LinkStatus.NOT_LINKED -> {
+                android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing not connected screen")
                 NotConnectedScreenFirebase(
                     myLinkCode = uiState.myLinkCode,
                     onNavigateToLinkPartner = onNavigateToLinkPartner
                 )
             }
             uiState.linkStatus == LinkStatus.LINKED -> {
+                android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing linked partner screen")
+                android.util.Log.d("PartnerHubScreen", "[PARTNER] Current user: ${uiState.currentUser?.displayName}")
+                android.util.Log.d("PartnerHubScreen", "[PARTNER] Partner: ${uiState.partner?.displayName}")
                 LinkedPartnerScreenFirebase(
                     currentUser = uiState.currentUser,
                     partner = uiState.partner,
                     shortcuts = viewModel.shortcuts,
                     qaQuestions = qaQuestions,
-                    onNavigateToChat = onNavigateToChat,
-                    onNavigateToQA = onNavigateToQA,
-                    onNavigateToShortcut = onNavigateToShortcut,
-                    onAddQuestion = { showCreateQuestionDialog = true },
+                    onNavigateToChat = {
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Navigate to chat")
+                        onNavigateToChat()
+                    },
+                    onNavigateToQA = {
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Navigate to QA")
+                        onNavigateToQA()
+                    },
+                    onNavigateToShortcut = { route ->
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Navigate to shortcut: $route")
+                        onNavigateToShortcut(route)
+                    },
+                    onAddQuestion = { 
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Add question clicked")
+                        showCreateQuestionDialog = true 
+                    },
                     onAnswerQuestion = { question, answer ->
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Answer question: ${question.id}")
                         viewModel.answerQuestion(question.id, answer)
                     },
-                    onApproveAnswer = { viewModel.approveAnswer(it) },
+                    onApproveAnswer = { 
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Approve answer: $it")
+                        viewModel.approveAnswer(it) 
+                    },
                     onRejectAnswer = { questionId, comment ->
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Reject answer: $questionId")
                         viewModel.rejectAnswer(questionId, comment)
                     },
                     onNavigateToLinkPartner = onNavigateToLinkPartner,
                     onNavigateToHome = onNavigateToHome,
                     onNavigateToMoments = onNavigateToMoments,
                     onNavigateToProfile = onNavigateToProfile,
-                    onUnlinkPartner = { viewModel.unlinkPartner() }
+                    onUnlinkPartner = { 
+                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Unlink partner")
+                        viewModel.unlinkPartner() 
+                    }
                 )
             }
         }
@@ -301,8 +340,14 @@ private fun LinkedPartnerScreenFirebase(
     onNavigateToProfile: () -> Unit,
     onUnlinkPartner: () -> Unit
 ) {
+    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Composing LinkedPartnerScreenFirebase")
+    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Current user null? ${currentUser == null}")
+    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Partner null? ${partner == null}")
+    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] QA questions: ${qaQuestions.size}")
+    
     // Convert FirebaseUser to PartnerUser for HouseCard
     val partnerUser = partner?.let {
+        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Converting partner to PartnerUser: ${it.displayName}")
         PartnerUser(
             id = it.id,
             name = it.displayName,
@@ -312,6 +357,8 @@ private fun LinkedPartnerScreenFirebase(
             locationName = "Unknown"
         )
     }
+    
+    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Partner user created: ${partnerUser?.name}")
 
     Box(
         modifier = Modifier
@@ -344,15 +391,55 @@ private fun LinkedPartnerScreenFirebase(
             
             // House Card như mock data
             if (partnerUser != null) {
+                android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Rendering HouseCard for: ${partnerUser.name}")
                 HouseCard(
                     partner = partnerUser,
                     partnerDistance = "Unknown",
                     partnerLocation = partnerUser.locationName,
                     shortcuts = shortcuts,
-                    onChatClick = onNavigateToChat,
-                    onShortcutClick = onNavigateToShortcut
+                    onChatClick = {
+                        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] HouseCard chat clicked")
+                        onNavigateToChat()
+                    },
+                    onShortcutClick = { route ->
+                        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] HouseCard shortcut clicked: $route")
+                        onNavigateToShortcut(route)
+                    }
+                )
+            } else {
+                android.util.Log.e("LinkedPartnerScreen", "[PARTNER] ❌ Partner user is null")
+                Text(
+                    text = "Partner data not available",
+                    color = Color.Gray,
+                    modifier = Modifier.padding(16.dp)
                 )
             }
+            
+            android.util.Log.d("LinkedPartnerScreen", "[PARTNER] After HouseCard, before Spacer")
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Q&A Timeline Section
+            android.util.Log.d("LinkedPartnerScreen", "[PARTNER] After Spacer, rendering Q&A Timeline, questions: ${qaQuestions.size}")
+            QATimelineSection(
+                questions = qaQuestions,
+                currentUserId = currentUser?.id ?: "",
+                onAddQuestion = {
+                    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Add question from timeline")
+                    onAddQuestion()
+                },
+                onAnswerQuestion = { question, answer ->
+                    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Answer question from timeline: ${question.id}")
+                    onAnswerQuestion(question, answer)
+                },
+                onApproveAnswer = { questionId ->
+                    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Approve from timeline: $questionId")
+                    onApproveAnswer(questionId)
+                },
+                onRejectAnswer = { questionId, reason ->
+                    android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Reject from timeline: $questionId")
+                    onRejectAnswer(questionId, reason)
+                }
+            )
         }
         
         // Bottom Navigation

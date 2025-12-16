@@ -9,7 +9,9 @@ import com.example.coupleapp.data.model.FirebaseUser
 import com.example.coupleapp.data.model.MessageType
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.google.firebase.database.*
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Date
+import java.util.UUID
 
 /**
  * ViewModel for Chat Screen with Firebase integration
@@ -25,9 +28,15 @@ import java.util.Date
 class ChatViewModel : ViewModel() {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val realtimeDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(
+        "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    )
+    private var messagesListener: ValueEventListener? = null
+    private var messagesRef: DatabaseReference? = null
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private const val SEND_TIMEOUT_MS = 10000L // 10 seconds
     }
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -54,6 +63,15 @@ class ChatViewModel : ViewModel() {
     init {
         Log.d(TAG, "ChatViewModel initialized")
         loadCurrentUserAndPartner()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Remove realtime listener when ViewModel is cleared
+        messagesListener?.let { listener ->
+            messagesRef?.removeEventListener(listener)
+        }
+        Log.d(TAG, "ChatViewModel cleared, realtime listener removed")
     }
 
     /**
@@ -115,73 +133,103 @@ class ChatViewModel : ViewModel() {
     }
 
     /**
-     * Load messages between current user and partner
+     * Listen to messages realtime between current user and partner
      */
     private fun listenToMessages(userId: String, partnerId: String) {
-        viewModelScope.launch {
-            Log.d(TAG, "Loading messages between $userId and $partnerId")
+        Log.d(TAG, "[CHAT] 🔥 Setting up realtime listener for messages")
+        
+        // Generate couple ID
+        val coupleId = listOf(userId, partnerId).sorted().joinToString("_")
+        Log.d(TAG, "[CHAT] Couple ID: $coupleId")
 
-            // Generate couple ID
-            val coupleId = listOf(userId, partnerId).sorted().joinToString("_")
-            Log.d(TAG, "Couple ID: $coupleId")
-
-            // Query messages by coupleId
-            firestoreRepository.queryDocuments(
-                collection = FirebaseFirestoreRepository.MESSAGES_COLLECTION,
-                field = "coupleId",
-                value = coupleId,
-                clazz = FirebaseChatMessage::class.java
-            ).onSuccess { firebaseMessages ->
-                Log.d(TAG, "Loaded ${firebaseMessages.size} messages")
+        // Reference to messages in Realtime Database
+        messagesRef = realtimeDatabase.getReference("chats/$coupleId/messages")
+        
+        // Create realtime listener
+        messagesListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d(TAG, "[CHAT] 📨 Realtime update received, ${snapshot.childrenCount} messages")
+                
+                val messagesList = mutableListOf<ChatMessage>()
+                
+                for (messageSnapshot in snapshot.children) {
+                    try {
+                        val messageId = messageSnapshot.key ?: continue
+                        val senderId = messageSnapshot.child("senderId").getValue(String::class.java) ?: continue
+                        val message = messageSnapshot.child("message").getValue(String::class.java) ?: ""
+                        val messageType = messageSnapshot.child("messageType").getValue(String::class.java) ?: "text"
+                        val timestamp = messageSnapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
+                        val isRead = messageSnapshot.child("isRead").getValue(Boolean::class.java) ?: false
+                        
+                        val receiverId = if (senderId == userId) partnerId else userId
+                        val createdAt = Instant.ofEpochMilli(timestamp)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDateTime()
+                        
+                        val chatMessage = ChatMessage(
+                            id = messageId,
+                            senderId = senderId,
+                            receiverId = receiverId,
+                            content = message,
+                            type = MessageType.valueOf(messageType.uppercase()),
+                            createdAt = createdAt,
+                            isRead = isRead
+                        )
+                        
+                        messagesList.add(chatMessage)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[CHAT] Error parsing message: ${e.message}", e)
+                    }
+                }
                 
                 // Sort by timestamp
-                val sortedMessages = firebaseMessages.sortedBy { it.timestamp }
+                val sortedMessages = messagesList.sortedBy { it.createdAt }
+                _messages.value = sortedMessages
                 
-                // Convert Firebase messages to ChatMessage
-                val chatMessages = sortedMessages.map { firebaseMsg ->
-                    val receiverId = if (firebaseMsg.senderId == userId) partnerId else userId
-                    ChatMessage(
-                        id = firebaseMsg.id,
-                        senderId = firebaseMsg.senderId,
-                        receiverId = receiverId,
-                        content = firebaseMsg.message,
-                        type = MessageType.valueOf(firebaseMsg.messageType.uppercase()),
-                        createdAt = firebaseMsg.timestamp?.toLocalDateTime() ?: LocalDateTime.now(),
-                        isRead = firebaseMsg.isRead
-                    )
-                }
-
-                _messages.value = chatMessages
-                Log.d(TAG, "Converted to ${chatMessages.size} chat messages")
-
+                Log.d(TAG, "[CHAT] ✅ Updated ${sortedMessages.size} messages in UI")
+                
                 // Mark unread messages as read
-                markMessagesAsRead(userId, sortedMessages)
-            }.onFailure { error ->
-                Log.e(TAG, "Failed to load messages: ${error.message}", error)
-                _error.value = "Không thể tải tin nhắn"
+                markUnreadMessagesAsRead(userId, sortedMessages)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "[CHAT] ❌ Realtime listener cancelled: ${error.message}")
+                _error.value = "Lỗi kết nối realtime: ${error.message}"
+            }
+        }
+        
+        // Attach listener
+        messagesRef?.addValueEventListener(messagesListener!!)
+        Log.d(TAG, "[CHAT] ✅ Realtime listener attached")
+    }
+
+    /**
+     * Mark unread messages as read in Realtime Database
+     */
+    private fun markUnreadMessagesAsRead(currentUserId: String, messages: List<ChatMessage>) {
+        val unreadMessages = messages.filter { it.senderId != currentUserId && !it.isRead }
+        if (unreadMessages.isEmpty()) return
+        
+        viewModelScope.launch {
+            val coupleId = listOf(currentUserId, _partner.value?.id ?: "").sorted().joinToString("_")
+            val messagesRef = realtimeDatabase.getReference("chats/$coupleId/messages")
+            
+            unreadMessages.forEach { message ->
+                messagesRef.child(message.id).child("isRead").setValue(true)
+                    .addOnSuccessListener {
+                        Log.d(TAG, "[CHAT] Marked message ${message.id} as read")
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e(TAG, "[CHAT] Failed to mark message as read: ${e.message}")
+                    }
             }
         }
     }
 
-    /**
-     * Mark messages as read
-     */
-    private fun markMessagesAsRead(currentUserId: String, messages: List<FirebaseChatMessage>) {
-        viewModelScope.launch {
-            messages
-                .filter { it.senderId != currentUserId && !it.isRead }
-                .forEach { message ->
-                    firestoreRepository.updateDocument(
-                        FirebaseFirestoreRepository.MESSAGES_COLLECTION,
-                        message.id,
-                        mapOf("isRead" to true)
-                    )
-                }
-        }
-    }
+
 
     /**
-     * Send a new message
+     * Send a new message via Realtime Database
      */
     fun sendMessage() {
         val text = _messageText.value.trim()
@@ -193,35 +241,80 @@ class ChatViewModel : ViewModel() {
         val partnerId = _partner.value?.id
 
         if (currentUserId == null || partnerId == null) {
-            Log.e(TAG, "Cannot send message: missing user or partner")
+            Log.e(TAG, "[CHAT] ❌ Cannot send message: missing user or partner")
             return
         }
 
+        _isSending.value = true
+        Log.d(TAG, "[CHAT] 📤 Sending message from $currentUserId to $partnerId: $text")
+
+        // Check Firebase Realtime Database connection
+        val connectedRef = realtimeDatabase.getReference(".info/connected")
+        connectedRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val connected = snapshot.getValue(Boolean::class.java) ?: false
+                Log.d(TAG, "[CHAT] Firebase connection status: $connected")
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "[CHAT] Cannot check connection: ${error.message}")
+            }
+        })
+
+        // Generate coupleId
+        val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
+        Log.d(TAG, "[CHAT] Generated coupleId: $coupleId")
+        
+        val messagesRef = realtimeDatabase.getReference("chats/$coupleId/messages")
+        Log.d(TAG, "[CHAT] Firebase path: chats/$coupleId/messages")
+        Log.d(TAG, "[CHAT] Database URL: ${realtimeDatabase.reference.toString()}")
+        
+        // Create new message with auto-generated key
+        val newMessageRef = messagesRef.push()
+        val messageId = newMessageRef.key
+        Log.d(TAG, "[CHAT] Generated message ID: $messageId")
+        
+        val messageData = mapOf(
+            "senderId" to currentUserId,
+            "message" to text,
+            "messageType" to "text",
+            "timestamp" to System.currentTimeMillis(),
+            "isRead" to false
+        )
+        Log.d(TAG, "[CHAT] Message data prepared: $messageData")
+        Log.d(TAG, "[CHAT] Calling setValue()...")
+
+        // Timeout handler in case Firebase never responds
         viewModelScope.launch {
-            _isSending.value = true
-            Log.d(TAG, "Sending message from $currentUserId to $partnerId: $text")
-
-            // Get or create coupleId (for now, use a combined ID)
-            val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
-
-            val message = FirebaseChatMessage(
-                coupleId = coupleId,
-                senderId = currentUserId,
-                message = text,
-                messageType = "text",
-                isRead = false
-            )
-
-            firestoreRepository.addDocument(
-                FirebaseFirestoreRepository.MESSAGES_COLLECTION,
-                message
-            ).onSuccess {
-                Log.d(TAG, "Message sent successfully")
-                _messageText.value = ""
-                _isSending.value = false
-            }.onFailure { error ->
-                Log.e(TAG, "Failed to send message: ${error.message}", error)
-                _error.value = "Không thể gửi tin nhắn"
+            var callbackReceived = false
+            
+            newMessageRef.setValue(messageData)
+                .addOnSuccessListener {
+                    callbackReceived = true
+                    Log.d(TAG, "[CHAT] ✅ Message sent successfully to Firebase")
+                    _messageText.value = ""
+                    _isSending.value = false
+                }
+                .addOnFailureListener { error ->
+                    callbackReceived = true
+                    Log.e(TAG, "[CHAT] ❌ Failed to send message: ${error.message}", error)
+                    Log.e(TAG, "[CHAT] ❌ Error details: ${error.javaClass.name}")
+                    _error.value = "Không thể gửi tin nhắn: ${error.message}"
+                    _isSending.value = false
+                }
+            
+            Log.d(TAG, "[CHAT] setValue() called, waiting for callback...")
+            
+            // Wait for timeout
+            delay(SEND_TIMEOUT_MS)
+            
+            if (!callbackReceived) {
+                Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Firebase Realtime Database không phản hồi sau ${SEND_TIMEOUT_MS}ms")
+                Log.e(TAG, "[CHAT] ⚠️ Kiểm tra:")
+                Log.e(TAG, "[CHAT] 1. Realtime Database đã được tạo trong Firebase Console chưa?")
+                Log.e(TAG, "[CHAT] 2. Rules cho phép authenticated user ghi chưa?")
+                Log.e(TAG, "[CHAT] 3. Database URL trong google-services.json đúng chưa?")
+                _error.value = "Kết nối Firebase timeout. Kiểm tra cấu hình Realtime Database."
                 _isSending.value = false
             }
         }
@@ -242,7 +335,7 @@ class ChatViewModel : ViewModel() {
     }
 
     /**
-     * Send emoji as message
+     * Send emoji as message via Realtime Database
      */
     fun sendEmoji(emoji: String) {
         if (_isSending.value) return
@@ -251,35 +344,58 @@ class ChatViewModel : ViewModel() {
         val partnerId = _partner.value?.id
 
         if (currentUserId == null || partnerId == null) {
-            Log.e(TAG, "Cannot send emoji: missing user or partner")
+            Log.e(TAG, "[CHAT] ❌ Cannot send emoji: missing user or partner")
             return
         }
 
+        _isSending.value = true
+        Log.d(TAG, "[CHAT] 📤 Sending emoji from $currentUserId to $partnerId: $emoji")
+
+        val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
+        Log.d(TAG, "[CHAT] Generated coupleId for emoji: $coupleId")
+        
+        val messagesRef = realtimeDatabase.getReference("chats/$coupleId/messages")
+        Log.d(TAG, "[CHAT] Firebase path for emoji: chats/$coupleId/messages")
+        
+        // Create new emoji message
+        val newMessageRef = messagesRef.push()
+        val messageId = newMessageRef.key
+        Log.d(TAG, "[CHAT] Generated emoji message ID: $messageId")
+        
+        val messageData = mapOf(
+            "senderId" to currentUserId,
+            "message" to emoji,
+            "messageType" to "emoji",
+            "timestamp" to System.currentTimeMillis(),
+            "isRead" to false
+        )
+        Log.d(TAG, "[CHAT] Emoji data prepared: $messageData")
+        Log.d(TAG, "[CHAT] Calling setValue() for emoji...")
+
         viewModelScope.launch {
-            _isSending.value = true
-            Log.d(TAG, "Sending emoji from $currentUserId to $partnerId: $emoji")
-
-            val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
-
-            val message = FirebaseChatMessage(
-                coupleId = coupleId,
-                senderId = currentUserId,
-                message = emoji,
-                messageType = "emoji",
-                isRead = false
-            )
-
-            firestoreRepository.addDocument(
-                FirebaseFirestoreRepository.MESSAGES_COLLECTION,
-                message
-            ).onSuccess {
-                Log.d(TAG, "Emoji sent successfully")
-                _isSending.value = false
-                // Reload messages
-                listenToMessages(currentUserId, partnerId)
-            }.onFailure { error ->
-                Log.e(TAG, "Failed to send emoji: ${error.message}", error)
-                _error.value = "Không thể gửi emoji"
+            var callbackReceived = false
+            
+            newMessageRef.setValue(messageData)
+                .addOnSuccessListener {
+                    callbackReceived = true
+                    Log.d(TAG, "[CHAT] ✅ Emoji sent successfully to Firebase")
+                    _isSending.value = false
+                }
+                .addOnFailureListener { error ->
+                    callbackReceived = true
+                    Log.e(TAG, "[CHAT] ❌ Failed to send emoji: ${error.message}", error)
+                    Log.e(TAG, "[CHAT] ❌ Error details: ${error.javaClass.name}")
+                    _error.value = "Không thể gửi emoji: ${error.message}"
+                    _isSending.value = false
+                }
+            
+            Log.d(TAG, "[CHAT] setValue() called for emoji, waiting for callback...")
+            
+            delay(SEND_TIMEOUT_MS)
+            
+            if (!callbackReceived) {
+                Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Emoji sending timeout after ${SEND_TIMEOUT_MS}ms")
+                _error.value = "Kết nối Firebase timeout. Kiểm tra cấu hình Realtime Database."
                 _isSending.value = false
             }
         }

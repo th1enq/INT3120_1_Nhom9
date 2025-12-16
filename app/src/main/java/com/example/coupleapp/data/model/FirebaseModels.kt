@@ -3,7 +3,19 @@ package com.example.coupleapp.data.model
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.ServerTimestamp
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.Date
+
+/**
+ * Extension function to convert Date to LocalDateTime
+ */
+fun Date.toLocalDateTime(): LocalDateTime {
+    return Instant.ofEpochMilli(this.time)
+        .atZone(ZoneId.systemDefault())
+        .toLocalDateTime()
+}
 
 /**
  * Firebase User Model
@@ -156,16 +168,44 @@ data class FirebaseQAQuestion(
     @DocumentId
     val id: String = "",
     val coupleId: String = "",
+    val askerId: String = "",
+    val askerName: String = "",
+    val responderId: String = "",
+    val responderName: String = "",
     val question: String = "",
-    val user1Answer: String? = null,
-    val user2Answer: String? = null,
-    val category: String = "",
-    val status: String = "pending", // pending, answered
+    val answer: String? = null,
+    val status: String = "pending", // pending, answered, approved, rejected
+    val isApproved: Boolean? = null, // null = chưa đánh giá, true = chấp thuận, false = từ chối
     @ServerTimestamp
     val createdAt: Date? = null,
     @ServerTimestamp
-    val answeredAt: Date? = null
-)
+    val answeredAt: Date? = null,
+    @ServerTimestamp
+    val approvedAt: Date? = null
+) {
+    fun toQAQuestion(): QAQuestion {
+        return QAQuestion(
+            id = id,
+            askerId = askerId,
+            askerName = askerName,
+            responderId = responderId,
+            responderName = responderName,
+            question = question,
+            answer = answer,
+            status = when (status) {
+                "pending" -> QAStatus.PENDING
+                "answered" -> QAStatus.ANSWERED
+                "approved" -> QAStatus.APPROVED
+                "rejected" -> QAStatus.REJECTED
+                else -> QAStatus.PENDING
+            },
+            isApproved = isApproved,
+            createdAt = createdAt?.toLocalDateTime() ?: java.time.LocalDateTime.now(),
+            answeredAt = answeredAt?.toLocalDateTime(),
+            approvedAt = approvedAt?.toLocalDateTime()
+        )
+    }
+}
 
 /**
  * Firebase Calendar Event Model

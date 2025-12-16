@@ -104,6 +104,9 @@ dependencies {
     // Firestore Database
     implementation("com.google.firebase:firebase-firestore-ktx")
     
+    // Firebase Realtime Database
+    implementation("com.google.firebase:firebase-database-ktx")
+    
     // Firebase Storage
     implementation("com.google.firebase:firebase-storage-ktx")
     
