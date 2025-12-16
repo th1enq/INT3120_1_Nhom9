@@ -4,7 +4,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
+    // Temporarily disabled Firebase for build without google-services.json
+    // id("com.google.gms.google-services")
 }
 
 android {
@@ -92,23 +93,24 @@ dependencies {
     // Core library desugaring for Java 8 Time API support on older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     
+    // Temporarily disabled Firebase dependencies for build without google-services.json
     // Firebase BOM
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    // implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     
     // Firebase Authentication
-    implementation("com.google.firebase:firebase-auth-ktx")
+    // implementation("com.google.firebase:firebase-auth-ktx")
     
     // Firestore Database
-    implementation("com.google.firebase:firebase-firestore-ktx")
+    // implementation("com.google.firebase:firebase-firestore-ktx")
     
     // Firebase Storage
-    implementation("com.google.firebase:firebase-storage-ktx")
+    // implementation("com.google.firebase:firebase-storage-ktx")
     
     // Firebase Analytics
-    implementation("com.google.firebase:firebase-analytics-ktx")
+    // implementation("com.google.firebase:firebase-analytics-ktx")
     
     // Firebase Cloud Messaging (for notifications)
-    implementation("com.google.firebase:firebase-messaging-ktx")
+    // implementation("com.google.firebase:firebase-messaging-ktx")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
