@@ -48,9 +48,13 @@ fun HouseCard(
     onShortcutClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    android.util.Log.d("HouseCard", "[PARTNER] HouseCard composing, partner: ${partner?.name}")
+    android.util.Log.d("HouseCard", "[PARTNER] Shortcuts count: ${shortcuts.size}")
+    
     var isVisible by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
+        android.util.Log.d("HouseCard", "[PARTNER] HouseCard LaunchedEffect")
         isVisible = true
     }
     
@@ -59,6 +63,7 @@ fun HouseCard(
         enter = fadeIn(animationSpec = tween(500)) +
                 scaleIn(initialScale = 0.9f, animationSpec = tween(500))
     ) {
+        android.util.Log.d("HouseCard", "[PARTNER] AnimatedVisibility visible, rendering Surface")
         Surface(
             modifier = modifier
                 .fillMaxWidth()
@@ -67,9 +72,11 @@ fun HouseCard(
             color = Color(0xFF8BC34A), // Màu xanh lá giống ảnh
             shadowElevation = 8.dp
         ) {
+            android.util.Log.d("HouseCard", "[PARTNER] Surface rendered, rendering Column")
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
+                android.util.Log.d("HouseCard", "[PARTNER] Column rendered, rendering HouseTopSection")
                 // Phần trên - Thông tin partner và hình ngôi nhà
                 HouseTopSection(
                     partner = partner,
@@ -78,11 +85,13 @@ fun HouseCard(
                     onChatClick = onChatClick
                 )
                 
+                android.util.Log.d("HouseCard", "[PARTNER] HouseTopSection rendered, rendering HouseBottomSection")
                 // Phần dưới - Grid shortcuts
                 HouseBottomSection(
                     shortcuts = shortcuts,
                     onShortcutClick = onShortcutClick
                 )
+                android.util.Log.d("HouseCard", "[PARTNER] HouseBottomSection rendered")
             }
         }
     }
@@ -95,6 +104,7 @@ private fun HouseTopSection(
     partnerLocation: String,
     onChatClick: () -> Unit
 ) {
+    android.util.Log.d("HouseTopSection", "[PARTNER] Composing HouseTopSection for: ${partner?.name}")
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -171,9 +181,11 @@ private fun HouseBottomSection(
     shortcuts: List<PartnerShortcut>,
     onShortcutClick: (String) -> Unit
 ) {
+    android.util.Log.d("HouseBottomSection", "[PARTNER] Composing HouseBottomSection, shortcuts: ${shortcuts.size}")
     // Chia shortcuts: 4 đầu bo tròn, 4 sau vuông
     val roundedShortcuts = shortcuts.take(4) // store, calendar, quest, garden
     val squareShortcuts = shortcuts.drop(4).take(4) // sleep, locket, missing, distance
+    android.util.Log.d("HouseBottomSection", "[PARTNER] Rounded: ${roundedShortcuts.size}, Square: ${squareShortcuts.size}")
     
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -187,27 +199,37 @@ private fun HouseBottomSection(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Hàng 1: 4 shortcuts bo tròn (giống trang chủ)
+            android.util.Log.d("HouseBottomSection", "[PARTNER] Rendering rounded shortcuts row")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                roundedShortcuts.forEach { shortcut ->
+                roundedShortcuts.forEachIndexed { index, shortcut ->
+                    android.util.Log.d("HouseBottomSection", "[PARTNER] Rendering rounded shortcut $index: ${shortcut.name}")
                     RoundedShortcutItem(
                         shortcut = shortcut,
-                        onClick = { onShortcutClick(shortcut.route) }
+                        onClick = { 
+                            android.util.Log.d("HouseBottomSection", "[PARTNER] Rounded shortcut clicked: ${shortcut.name}")
+                            onShortcutClick(shortcut.route) 
+                        }
                     )
                 }
             }
             
             // Hàng 2: 4 shortcuts vuông
+            android.util.Log.d("HouseBottomSection", "[PARTNER] Rendering square shortcuts row")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                squareShortcuts.forEach { shortcut ->
+                squareShortcuts.forEachIndexed { index, shortcut ->
+                    android.util.Log.d("HouseBottomSection", "[PARTNER] Rendering square shortcut $index: ${shortcut.name}")
                     SquareShortcutItem(
                         shortcut = shortcut,
-                        onClick = { onShortcutClick(shortcut.route) }
+                        onClick = { 
+                            android.util.Log.d("HouseBottomSection", "[PARTNER] Square shortcut clicked: ${shortcut.name}")
+                            onShortcutClick(shortcut.route) 
+                        }
                     )
                 }
             }
@@ -247,8 +269,10 @@ private fun RoundedShortcutItem(
     ) {
         // Icon circular
         val iconRes = getDrawableForShortcut(shortcut.id)
+        android.util.Log.d("RoundedShortcutItem", "[PARTNER] Rendering shortcut ${shortcut.name}, iconRes: $iconRes")
         
         if (iconRes != 0) {
+            android.util.Log.d("RoundedShortcutItem", "[PARTNER] Loading image from resource")
             Image(
                 painter = painterResource(id = iconRes),
                 contentDescription = shortcut.name,
@@ -259,6 +283,7 @@ private fun RoundedShortcutItem(
             )
         } else {
             // Fallback
+            android.util.Log.d("RoundedShortcutItem", "[PARTNER] Using fallback icon")
             Box(
                 modifier = Modifier
                     .size(56.dp)
@@ -438,7 +463,8 @@ private fun ChatButton(
  * Lấy drawable resource cho shortcut
  */
 private fun getDrawableForShortcut(shortcutId: String): Int {
-    return when (shortcutId) {
+    android.util.Log.d("HouseCard", "[PARTNER] Getting drawable for shortcut: $shortcutId")
+    val result = when (shortcutId) {
         "sleep" -> R.drawable.sleep_tracker
         "locket" -> R.drawable.locket
         "missing" -> R.drawable.missing
@@ -449,6 +475,8 @@ private fun getDrawableForShortcut(shortcutId: String): Int {
         "store" -> R.drawable.store
         else -> 0
     }
+    android.util.Log.d("HouseCard", "[PARTNER] Drawable resource ID: $result")
+    return result
 }
 
 /**

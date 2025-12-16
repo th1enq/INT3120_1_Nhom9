@@ -100,27 +100,33 @@ class PartnerHubViewModelFirebase : ViewModel() {
     val qaQuestions: StateFlow<List<QAQuestion>> = _qaQuestions.asStateFlow()
 
     init {
-        Log.d(TAG, "PartnerHubViewModelFirebase initialized")
-        loadData()
-        loadPendingRequests()
+        Log.d(TAG, "[PARTNER] PartnerHubViewModelFirebase initialized")
+        try {
+            loadData()
+            loadPendingRequests()
+        } catch (e: Exception) {
+            Log.e(TAG, "[PARTNER] ❌ Error in init", e)
+        }
     }
 
     private fun loadData() {
         viewModelScope.launch {
+            Log.d(TAG, "[PARTNER] loadData() started")
             _uiState.update { it.copy(isLoading = true) }
 
             try {
                 val firebaseUser = authRepository.currentUser
                 if (firebaseUser == null) {
-                    Log.e(TAG, "User not logged in")
+                    Log.e(TAG, "[PARTNER] ❌ User not logged in")
                     _uiState.update { it.copy(isLoading = false, linkStatus = LinkStatus.NOT_LINKED) }
                     return@launch
                 }
 
                 val userId = firebaseUser.uid
-                Log.d(TAG, "Loading data for user: $userId")
+                Log.d(TAG, "[PARTNER] Loading data for user: $userId")
 
                 // Load current user data
+                Log.d(TAG, "[PARTNER] Fetching user document: $userId")
                 val currentUserResult = firestoreRepository.getDocument(
                     "users", 
                     userId, 
@@ -128,24 +134,24 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 )
                 
                 if (currentUserResult.isFailure) {
-                    Log.e(TAG, "Failed to load user document", currentUserResult.exceptionOrNull())
+                    Log.e(TAG, "[PARTNER] ❌ Failed to load user document", currentUserResult.exceptionOrNull())
                     _uiState.update { it.copy(isLoading = false, linkStatus = LinkStatus.NOT_LINKED) }
                     return@launch
                 }
 
                 val currentUser = currentUserResult.getOrNull()
                 if (currentUser == null) {
-                    Log.e(TAG, "User document is null")
+                    Log.e(TAG, "[PARTNER] ❌ User document is null")
                     _uiState.update { it.copy(isLoading = false, linkStatus = LinkStatus.NOT_LINKED) }
                     return@launch
                 }
 
-                Log.d(TAG, "Current user loaded: ${currentUser.displayName}, partnerId: ${currentUser.partnerId}")
+                Log.d(TAG, "[PARTNER] ✅ Current user loaded: ${currentUser.displayName}, partnerId: ${currentUser.partnerId}")
 
                 // Check if user has partner
                 val partnerId = currentUser.partnerId
                 if (partnerId.isNullOrEmpty()) {
-                    Log.d(TAG, "User has no partner")
+                    Log.d(TAG, "[PARTNER] User has no partner")
                     _uiState.update {
                         it.copy(
                             currentUser = currentUser,
@@ -159,7 +165,7 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 }
 
                 // Load partner data
-                Log.d(TAG, "Loading partner: $partnerId")
+                Log.d(TAG, "[PARTNER] Loading partner: $partnerId")
                 val partnerResult = firestoreRepository.getDocument(
                     "users", 
                     partnerId, 
@@ -168,7 +174,7 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 val partner = partnerResult.getOrNull()
 
                 if (partner != null) {
-                    Log.d(TAG, "Partner loaded: ${partner.displayName}")
+                    Log.d(TAG, "[PARTNER] ✅ Partner loaded: ${partner.displayName}")
                     _uiState.update {
                         it.copy(
                             currentUser = currentUser,
@@ -178,8 +184,17 @@ class PartnerHubViewModelFirebase : ViewModel() {
                             myLinkCode = currentUser.linkCode ?: ""
                         )
                     }
+                    Log.d(TAG, "[PARTNER] UI state updated with partner")
+                    
+                    // Load Q&A questions after partner is loaded
+                    Log.d(TAG, "[PARTNER] Loading Q&A questions...")
+                    try {
+                        loadQAQuestions()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[PARTNER] ❌ Error loading Q&A questions", e)
+                    }
                 } else {
-                    Log.e(TAG, "Partner document not found")
+                    Log.e(TAG, "[PARTNER] ❌ Partner document not found")
                     _uiState.update {
                         it.copy(
                             currentUser = currentUser,
@@ -192,7 +207,8 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading data", e)
+                Log.e(TAG, "[PARTNER] ❌ Error loading data", e)
+                e.printStackTrace()
                 _uiState.update { it.copy(isLoading = false, linkStatus = LinkStatus.NOT_LINKED) }
             }
         }
@@ -201,34 +217,180 @@ class PartnerHubViewModelFirebase : ViewModel() {
     fun refreshData() {
         Log.d(TAG, "Refreshing data")
         loadData()
+        loadQAQuestions()
     }
 
-    // Q&A Functions (sẽ implement sau khi có Firestore collection cho Q&A)
+    /**
+     * Load Q&A questions from Firebase
+     */
+    private fun loadQAQuestions() {
+        viewModelScope.launch {
+            try {
+                val firebaseUser = authRepository.currentUser
+                val currentUser = _uiState.value.currentUser
+                
+                if (firebaseUser == null || currentUser == null) {
+                    Log.e(TAG, "Cannot load Q&A: user not logged in")
+                    return@launch
+                }
+                
+                val coupleId = currentUser.coupleId
+                if (coupleId.isNullOrEmpty()) {
+                    Log.d(TAG, "No coupleId, cannot load Q&A questions")
+                    _qaQuestions.value = emptyList()
+                    return@launch
+                }
+                
+                Log.d(TAG, "[QA] Loading questions for coupleId: $coupleId")
+                
+                // Listen to Q&A questions realtime
+                // Temporarily without orderBy to avoid index requirement
+                viewModelScope.launch {
+                    firestoreRepository.listenToQuery(
+                        collection = "qa_questions",
+                        field = "coupleId",
+                        value = coupleId,
+                        clazz = FirebaseQAQuestion::class.java,
+                        orderBy = null,
+                        descending = false
+                    ).collect { firebaseQuestions ->
+                        Log.d(TAG, "[QA] Loaded ${firebaseQuestions.size} questions")
+                        // Sort in code instead of Firestore query
+                        _qaQuestions.value = firebaseQuestions
+                            .sortedByDescending { it.createdAt }
+                            .map { it.toQAQuestion() }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[QA] Error loading questions", e)
+            }
+        }
+    }
+
+    /**
+     * Create a new Q&A question
+     */
     fun createQuestion(question: String) {
         viewModelScope.launch {
-            // TODO: Implement create question in Firestore
-            Log.d(TAG, "Create question: $question")
+            try {
+                val firebaseUser = authRepository.currentUser
+                val currentUser = _uiState.value.currentUser
+                val partner = _uiState.value.partner
+                
+                if (firebaseUser == null || currentUser == null || partner == null) {
+                    Log.e(TAG, "[QA] Cannot create question: missing user or partner")
+                    return@launch
+                }
+                
+                val coupleId = currentUser.coupleId
+                if (coupleId.isNullOrEmpty()) {
+                    Log.e(TAG, "[QA] Cannot create question: no coupleId")
+                    return@launch
+                }
+                
+                Log.d(TAG, "[QA] Creating question: $question")
+                
+                val qaQuestion = FirebaseQAQuestion(
+                    coupleId = coupleId,
+                    askerId = currentUser.id,
+                    askerName = currentUser.displayName,
+                    responderId = partner.id,
+                    responderName = partner.displayName,
+                    question = question,
+                    status = "pending"
+                )
+                
+                val result = firestoreRepository.addDocument("qa_questions", qaQuestion)
+                
+                if (result.isSuccess) {
+                    Log.d(TAG, "[QA] ✅ Question created successfully")
+                } else {
+                    Log.e(TAG, "[QA] ❌ Failed to create question", result.exceptionOrNull())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[QA] Error creating question", e)
+            }
         }
     }
 
+    /**
+     * Answer a Q&A question
+     */
     fun answerQuestion(questionId: String, answer: String) {
         viewModelScope.launch {
-            // TODO: Implement answer question in Firestore
-            Log.d(TAG, "Answer question $questionId: $answer")
+            try {
+                Log.d(TAG, "[QA] Answering question $questionId: $answer")
+                
+                val updates = mapOf(
+                    "answer" to answer,
+                    "status" to "answered",
+                    "answeredAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+                
+                val result = firestoreRepository.updateDocument("qa_questions", questionId, updates)
+                
+                if (result.isSuccess) {
+                    Log.d(TAG, "[QA] ✅ Question answered successfully")
+                } else {
+                    Log.e(TAG, "[QA] ❌ Failed to answer question", result.exceptionOrNull())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[QA] Error answering question", e)
+            }
         }
     }
 
+    /**
+     * Approve answer
+     */
     fun approveAnswer(questionId: String) {
         viewModelScope.launch {
-            // TODO: Implement approve answer in Firestore
-            Log.d(TAG, "Approve answer: $questionId")
+            try {
+                Log.d(TAG, "[QA] Approving answer: $questionId")
+                
+                val updates = mapOf(
+                    "status" to "approved",
+                    "isApproved" to true,
+                    "approvedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+                
+                val result = firestoreRepository.updateDocument("qa_questions", questionId, updates)
+                
+                if (result.isSuccess) {
+                    Log.d(TAG, "[QA] ✅ Answer approved successfully")
+                } else {
+                    Log.e(TAG, "[QA] ❌ Failed to approve answer", result.exceptionOrNull())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[QA] Error approving answer", e)
+            }
         }
     }
 
+    /**
+     * Reject answer
+     */
     fun rejectAnswer(questionId: String, comment: String = "") {
         viewModelScope.launch {
-            // TODO: Implement reject answer in Firestore
-            Log.d(TAG, "Reject answer $questionId: $comment")
+            try {
+                Log.d(TAG, "[QA] Rejecting answer: $questionId")
+                
+                val updates = mapOf(
+                    "status" to "rejected",
+                    "isApproved" to false,
+                    "approvedAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                )
+                
+                val result = firestoreRepository.updateDocument("qa_questions", questionId, updates)
+                
+                if (result.isSuccess) {
+                    Log.d(TAG, "[QA] ✅ Answer rejected successfully")
+                } else {
+                    Log.e(TAG, "[QA] ❌ Failed to reject answer", result.exceptionOrNull())
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[QA] Error rejecting answer", e)
+            }
         }
     }
 
