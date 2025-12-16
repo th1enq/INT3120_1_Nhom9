@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,23 +66,59 @@ fun LocationHistoryTimeline(
             )
         }
         
-        // Timeline items
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 400.dp),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
-        ) {
-            itemsIndexed(
-                items = locationHistory,
-                key = { _, item -> item.id }
-            ) { index, location ->
-                TimelineItem(
-                    location = location,
-                    isFirst = index == 0,
-                    isLast = index == locationHistory.lastIndex,
-                    animationDelay = index * 100
-                )
+        if (locationHistory.isEmpty()) {
+            // Empty state
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.LocationOff,
+                        contentDescription = null,
+                        tint = TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Text(
+                        text = "No location history yet",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                    Text(
+                        text = "Locations will appear after staying\n5+ minutes at a place",
+                        fontSize = 12.sp,
+                        color = TextSecondary.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            // Timeline items
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                itemsIndexed(
+                    items = locationHistory,
+                    key = { index, item -> 
+                        // Use ID if not empty, otherwise use index to avoid duplicate key error
+                        if (item.id.isNotEmpty()) item.id else "history_$index"
+                    }
+                ) { index, location ->
+                    TimelineItem(
+                        location = location,
+                        isFirst = index == 0,
+                        isLast = index == locationHistory.lastIndex,
+                        animationDelay = index * 100
+                    )
+                }
             }
         }
     }

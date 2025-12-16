@@ -115,6 +115,12 @@ dependencies {
     
     // Firebase Cloud Messaging (for notifications)
     implementation("com.google.firebase:firebase-messaging-ktx")
+    
+    // WorkManager for background photo sync
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    
+    // ExifInterface for reading photo GPS data
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

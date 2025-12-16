@@ -1,6 +1,7 @@
 package com.example.coupleapp.ui.screens.distance
 
 import android.Manifest
+import android.app.Application
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -19,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.data.model.UserLocation
+import com.example.coupleapp.service.LocationTrackingService
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.distance.*
 import com.example.coupleapp.ui.components.home.BottomNavItem
@@ -51,7 +54,9 @@ fun DistanceScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     targetPlaceId: String? = null,
-    viewModel: DistanceViewModel = viewModel(),
+    viewModel: DistanceViewModel = viewModel(
+        factory = DistanceViewModel.Factory(LocalContext.current.applicationContext as Application)
+    ),
     questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -127,8 +132,10 @@ fun DistanceScreen(
     }
     
     // Request permissions on first launch
+    var permissionsRequested by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        if (!locationPermissions.allPermissionsGranted) {
+        if (!locationPermissions.allPermissionsGranted && !permissionsRequested) {
+            permissionsRequested = true
             locationPermissions.launchMultiplePermissionRequest()
         }
     }
@@ -138,6 +145,18 @@ fun DistanceScreen(
         if (locationPermissions.allPermissionsGranted && !uiState.isLoading) {
             // User has shared location by granting permissions and viewing distance screen
             questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SHARE_LOCATION, 1)
+        }
+    }
+    
+    // Adaptive tracking - switch to active mode when on this screen
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        // Enter active tracking mode for faster updates
+        LocationTrackingService.updateTrackingMode(context, LocationTrackingService.TRACKING_MODE_ACTIVE)
+        
+        onDispose {
+            // Return to foreground mode when leaving screen
+            LocationTrackingService.updateTrackingMode(context, LocationTrackingService.TRACKING_MODE_FOREGROUND)
         }
     }
     
@@ -235,7 +254,9 @@ fun DistanceScreen(
                 ) {
                     DistanceInfoBubble(
                         distanceText = uiState.distanceText,
-                        lastSync = uiState.lastSyncTime
+                        lastSync = uiState.lastSyncTime,
+                        isColocationActive = uiState.isColocationActive,
+                        colocationDurationMinutes = uiState.colocationDurationMinutes
                     )
                 }
                 
@@ -299,8 +320,11 @@ fun DistanceScreen(
             
             // User Info Bottom Sheet with improved animation
             if (uiState.showUserInfoSheet && uiState.selectedUser != null) {
-                val isMe = uiState.selectedUser?.userId == "user_me"
+                // Compare with actual currentUserId from Firebase, not hardcoded value
+                val isMe = uiState.selectedUser?.userId == uiState.currentUserId
                 val history = if (isMe) uiState.myLocationHistory else uiState.partnerLocationHistory
+                
+                android.util.Log.d("DistanceScreen", "UserInfoBottomSheet - selectedUserId: ${uiState.selectedUser?.userId}, currentUserId: ${uiState.currentUserId}, isMe: $isMe")
                 
                 UserInfoBottomSheet(
                     user = uiState.selectedUser,

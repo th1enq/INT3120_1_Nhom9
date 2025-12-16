@@ -97,7 +97,13 @@ data class DistanceUiState(
     val selectedUser: UserLocation? = null,
     val showUserInfoSheet: Boolean = false,
     val showSettingsDialog: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // Colocation status - when both users are together
+    val isColocationActive: Boolean = false,
+    val colocationStartTime: LocalDateTime? = null,
+    val colocationDurationMinutes: Int = 0,
+    // Current user ID for avatar comparison
+    val currentUserId: String = ""
 )
 
 /**
@@ -107,5 +113,6 @@ data class SharedPlacePhotosState(
     val isLoading: Boolean = true,
     val place: SharedPlace? = null,
     val photos: List<SharedPlacePhoto> = emptyList(),
-    val isAddingPhoto: Boolean = false
+    val isAddingPhoto: Boolean = false,
+    val error: String? = null
 )

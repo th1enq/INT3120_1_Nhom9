@@ -21,11 +21,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.coupleapp.data.model.LocationHistory
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.ui.theme.*
@@ -123,7 +125,7 @@ private fun UserProfileHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Avatar
+        // Avatar - show real image if available
         Box(
             modifier = Modifier
                 .size(64.dp)
@@ -133,10 +135,21 @@ private fun UserProfileHeader(
                 .border(3.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = if (isMe) "🌸" else "🍋",
-                fontSize = 28.sp
-            )
+            if (user.avatarUrl.isNotEmpty() && user.avatarUrl.startsWith("http")) {
+                AsyncImage(
+                    model = user.avatarUrl,
+                    contentDescription = "Avatar of ${user.userName}",
+                    modifier = Modifier
+                        .size(58.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = if (isMe) "🌸" else "🍋",
+                    fontSize = 28.sp
+                )
+            }
         }
         
         // User info

@@ -1,5 +1,10 @@
 package com.example.coupleapp.ui.screens.distance
 
+import android.Manifest
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -28,23 +33,33 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.Coil
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.SharedPlacePhoto
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.Base64ImageDecoder
 import com.example.coupleapp.util.LocationUtils
 import com.example.coupleapp.viewmodel.DistanceViewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import java.io.File
 import java.time.format.DateTimeFormatter
 
 /**
  * Screen showing photos from a specific shared place
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun PlacePhotosScreen(
     placeId: String,
@@ -52,10 +67,74 @@ fun PlacePhotosScreen(
     viewModel: DistanceViewModel = viewModel()
 ) {
     val photosState by viewModel.photosState.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+    val currentUserId = uiState.currentUserId
+    val context = LocalContext.current
     var visible by remember { mutableStateOf(false) }
     var showAddPhotoDialog by remember { mutableStateOf(false) }
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    
+    android.util.Log.d("PlacePhotosScreen", "=== Screen rendered for placeId: $placeId ===")
+    android.util.Log.d("PlacePhotosScreen", "Photos count: ${photosState.photos.size}")
+    android.util.Log.d("PlacePhotosScreen", "Is loading: ${photosState.isLoading}")
+    
+    // Camera permission
+    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    
+    // Gallery launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.addPhotoToPlace(placeId, it.toString())
+            showAddPhotoDialog = false
+        }
+    }
+    
+    // Camera launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success && tempCameraUri != null) {
+            viewModel.addPhotoToPlace(placeId, tempCameraUri.toString())
+            showAddPhotoDialog = false
+        }
+    }
+    
+    // Function to create temp file for camera
+    fun createTempImageUri(): Uri {
+        val tempFile = File.createTempFile(
+            "place_photo_${System.currentTimeMillis()}",
+            ".jpg",
+            context.cacheDir
+        ).apply {
+            createNewFile()
+            deleteOnExit()
+        }
+        return FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            tempFile
+        )
+    }
+    
+    // Function to launch camera
+    fun launchCamera() {
+        if (cameraPermissionState.status.isGranted) {
+            tempCameraUri = createTempImageUri()
+            cameraLauncher.launch(tempCameraUri!!)
+        } else {
+            cameraPermissionState.launchPermissionRequest()
+        }
+    }
+    
+    // Function to launch gallery
+    fun launchGallery() {
+        galleryLauncher.launch("image/*")
+    }
     
     LaunchedEffect(placeId) {
+        android.util.Log.d("PlacePhotosScreen", "LaunchedEffect - Loading photos for placeId: $placeId")
         viewModel.loadPlacePhotos(placeId)
         kotlinx.coroutines.delay(200)
         visible = true
@@ -127,6 +206,11 @@ fun PlacePhotosScreen(
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
+                        android.util.Log.d("PlacePhotosScreen", "Photos list size: ${photosState.photos.size}")
+                        photosState.photos.forEachIndexed { index, photo ->
+                            android.util.Log.d("PlacePhotosScreen", "Photo $index: id=${photo.id}, url=${photo.photoUrl}")
+                        }
+                        
                         if (photosState.photos.isEmpty()) {
                             // Empty state
                             EmptyPhotosState(
@@ -143,10 +227,43 @@ fun PlacePhotosScreen(
                             ) {
                                 PhotosGrid(
                                     photos = photosState.photos,
+                                    currentUserId = currentUserId,
+                                    placeId = placeId,
+                                    onDeletePhoto = { photoId ->
+                                        viewModel.deletePhotoFromPlace(photoId, placeId)
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .weight(1f)
                                 )
+                            }
+                        }
+                    }
+                    
+                    // Loading overlay when adding photo
+                    if (photosState.isAddingPhoto) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Color.White,
+                                shadowElevation = 8.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(color = SoftPink)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Adding photo...",
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
                     }
@@ -159,11 +276,22 @@ fun PlacePhotosScreen(
     if (showAddPhotoDialog) {
         AddPhotoDialog(
             onDismiss = { showAddPhotoDialog = false },
-            onPhotoSelected = { photoUrl ->
-                viewModel.addPhotoToPlace(placeId, photoUrl)
+            onTakePhoto = {
                 showAddPhotoDialog = false
+                launchCamera()
+            },
+            onChooseFromGallery = {
+                showAddPhotoDialog = false
+                launchGallery()
             }
         )
+    }
+    
+    // Show error toast
+    LaunchedEffect(photosState.error) {
+        photosState.error?.let { error ->
+            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+        }
     }
 }
 
@@ -347,8 +475,13 @@ private fun PlaceInfoHeader(
 @Composable
 private fun PhotosGrid(
     photos: List<SharedPlacePhoto>,
+    currentUserId: String,
+    placeId: String,
+    onDeletePhoto: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    android.util.Log.d("PhotosGrid", "Rendering grid with ${photos.size} photos, currentUserId: $currentUserId")
+    
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = modifier,
@@ -360,9 +493,12 @@ private fun PhotosGrid(
             items = photos,
             key = { _, photo -> photo.id }
         ) { index, photo ->
+            android.util.Log.d("PhotosGrid", "Rendering item $index: ${photo.photoUrl}")
             PhotoCard(
                 photo = photo,
-                animationDelay = index * 80
+                currentUserId = currentUserId,
+                animationDelay = index * 80,
+                onDeleteClick = { onDeletePhoto(photo.id) }
             )
         }
     }
@@ -371,9 +507,12 @@ private fun PhotosGrid(
 @Composable
 private fun PhotoCard(
     photo: SharedPlacePhoto,
-    animationDelay: Int
+    currentUserId: String,
+    animationDelay: Int,
+    onDeleteClick: () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
@@ -390,6 +529,67 @@ private fun PhotoCard(
         ),
         label = "photoScale"
     )
+    
+    // Delete confirmation dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = Color.White,
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFE5E5)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "Delete Photo?",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = "This photo will be permanently removed from this memory. This action cannot be undone.",
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteClick()
+                        showDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFE53935)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteDialog = false }
+                ) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
     
     AnimatedVisibility(
         visible = visible,
@@ -408,40 +608,75 @@ private fun PhotoCard(
             shadowElevation = 4.dp
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Photo placeholder
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    PastelPink.copy(alpha = 0.5f),
-                                    PastelBlue.copy(alpha = 0.3f)
+                // Display actual photo if URL exists, otherwise show placeholder
+                val isValidUrl = Base64ImageDecoder.isValidImageUrl(photo.photoUrl)
+                val context = LocalContext.current
+                
+                android.util.Log.d("PhotoCard", "=== Photo Debug ===")
+                android.util.Log.d("PhotoCard", "Photo ID: ${photo.id}")
+                android.util.Log.d("PhotoCard", "Photo URL preview: ${photo.photoUrl.take(100)}...")
+                android.util.Log.d("PhotoCard", "Is valid URL: $isValidUrl")
+                
+                if (isValidUrl) {
+                    // Use AsyncImage with custom ImageLoader from Coil singleton
+                    val imageLoader = Coil.imageLoader(context)
+                    
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(photo.photoUrl)
+                            .crossfade(true)
+                            .memoryCacheKey(photo.id) // Use photo ID as cache key
+                            .build(),
+                        contentDescription = "Photo",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        imageLoader = imageLoader, // Explicitly use custom loader
+                        onError = { error ->
+                            android.util.Log.e("PhotoCard", "!!! Error loading image !!!")
+                            android.util.Log.e("PhotoCard", "Error: ${error.result.throwable.message}")
+                            android.util.Log.e("PhotoCard", "URL: ${photo.photoUrl.take(200)}")
+                            error.result.throwable.printStackTrace()
+                        },
+                        onSuccess = {
+                            android.util.Log.d("PhotoCard", "✓ Image loaded successfully")
+                        }
+                    )
+                } else {
+                    // Placeholder for photos without valid URL
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        PastelPink.copy(alpha = 0.5f),
+                                        PastelBlue.copy(alpha = 0.3f)
+                                    )
                                 )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Placeholder icon
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Image,
-                            contentDescription = null,
-                            tint = SoftPink.copy(alpha = 0.6f),
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Text(
-                            text = "Photo ${photo.id.takeLast(1)}",
-                            fontSize = 10.sp,
-                            color = TextSecondary
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Image,
+                                contentDescription = null,
+                                tint = SoftPink.copy(alpha = 0.6f),
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Text(
+                                text = "Photo",
+                                fontSize = 10.sp,
+                                color = TextSecondary
+                            )
+                        }
                     }
                 }
                 
-                // User indicator
+                // User indicator - compare with actual currentUserId
+                val isMyPhoto = photo.takenByUserId == currentUserId
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -450,17 +685,17 @@ private fun PhotoCard(
                         .shadow(2.dp, CircleShape)
                         .clip(CircleShape)
                         .background(
-                            if (photo.takenByUserId == "user_me") PastelPink else PastelGreen
+                            if (isMyPhoto) PastelPink else PastelGreen
                         )
                         .border(
                             1.5.dp,
-                            if (photo.takenByUserId == "user_me") SoftPink else Color(0xFF98E4C8),
+                            if (isMyPhoto) SoftPink else Color(0xFF98E4C8),
                             CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (photo.takenByUserId == "user_me") "🌸" else "🍋",
+                        text = if (isMyPhoto) "🌸" else "🍋",
                         fontSize = 10.sp
                     )
                 }
@@ -506,6 +741,26 @@ private fun PhotoCard(
                         text = photo.takenAt.format(DateTimeFormatter.ofPattern("HH:mm")),
                         fontSize = 9.sp,
                         color = Color.White
+                    )
+                }
+                
+                // Delete button (bottom right)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(28.dp)
+                        .shadow(2.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.9f))
+                        .clickable { showDeleteDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete photo",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -587,7 +842,8 @@ private fun EmptyPhotosState(
 @Composable
 private fun AddPhotoDialog(
     onDismiss: () -> Unit,
-    onPhotoSelected: (String) -> Unit
+    onTakePhoto: () -> Unit,
+    onChooseFromGallery: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -620,9 +876,7 @@ private fun AddPhotoDialog(
                     icon = Icons.Outlined.CameraAlt,
                     title = "Take Photo",
                     subtitle = "Use camera to capture",
-                    onClick = {
-                        onPhotoSelected("camera_photo_${System.currentTimeMillis()}")
-                    }
+                    onClick = onTakePhoto
                 )
                 
                 // Gallery option
@@ -630,9 +884,7 @@ private fun AddPhotoDialog(
                     icon = Icons.Outlined.PhotoLibrary,
                     title = "From Gallery",
                     subtitle = "Choose from album",
-                    onClick = {
-                        onPhotoSelected("gallery_photo_${System.currentTimeMillis()}")
-                    }
+                    onClick = onChooseFromGallery
                 )
             }
         },

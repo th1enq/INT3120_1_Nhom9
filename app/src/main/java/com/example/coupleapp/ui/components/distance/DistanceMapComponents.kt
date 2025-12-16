@@ -2,6 +2,7 @@ package com.example.coupleapp.ui.components.distance
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,16 +29,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.ui.theme.*
 
 /**
  * Custom avatar marker for map display with kawaii style and arrow pointing down
+ * Now displays actual user avatar from URL
  */
 @Composable
 fun AvatarMapMarkerWithArrow(
@@ -129,26 +134,37 @@ fun AvatarMapMarkerWithArrow(
                     .border(3.dp, borderColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                // Avatar image placeholder
-                Box(
-                    modifier = Modifier
-                        .size(size - 8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    backgroundColor,
-                                    borderColor.copy(alpha = 0.5f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Kawaii face emoji placeholder
-                    Text(
-                        text = if (isMe) "🌸" else "🍋",
-                        fontSize = (size.value * 0.45f).sp
+                // Avatar image - display actual avatar if URL exists, otherwise show emoji
+                if (user.avatarUrl.isNotEmpty() && user.avatarUrl.startsWith("http")) {
+                    AsyncImage(
+                        model = user.avatarUrl,
+                        contentDescription = "Avatar of ${user.userName}",
+                        modifier = Modifier
+                            .size(size - 8.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
                     )
+                } else {
+                    // Fallback to emoji placeholder
+                    Box(
+                        modifier = Modifier
+                            .size(size - 8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        backgroundColor,
+                                        borderColor.copy(alpha = 0.5f)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isMe) "🌸" else "🍋",
+                            fontSize = (size.value * 0.45f).sp
+                        )
+                    }
                 }
             }
             
@@ -362,26 +378,37 @@ fun AvatarMapMarker(
                 .border(3.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            // Avatar image placeholder (would be actual image in production)
-            Box(
-                modifier = Modifier
-                    .size(size - 8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                backgroundColor,
-                                borderColor.copy(alpha = 0.5f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // Kawaii face emoji placeholder
-                Text(
-                    text = if (isMe) "🌸" else "🍋",
-                    fontSize = (size.value * 0.45f).sp
+            // Avatar image - display actual avatar if URL exists, otherwise show emoji
+            if (user.avatarUrl.isNotEmpty() && user.avatarUrl.startsWith("http")) {
+                AsyncImage(
+                    model = user.avatarUrl,
+                    contentDescription = "Avatar of ${user.userName}",
+                    modifier = Modifier
+                        .size(size - 8.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
                 )
+            } else {
+                // Fallback to emoji placeholder
+                Box(
+                    modifier = Modifier
+                        .size(size - 8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    backgroundColor,
+                                    borderColor.copy(alpha = 0.5f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isMe) "🌸" else "🍋",
+                        fontSize = (size.value * 0.45f).sp
+                    )
+                }
             }
         }
         
@@ -428,11 +455,14 @@ fun AvatarMapMarker(
 
 /**
  * Distance info bubble showing distance between users
+ * Also shows colocation status when both users are together
  */
 @Composable
 fun DistanceInfoBubble(
     distanceText: String,
     lastSync: String,
+    isColocationActive: Boolean = false,
+    colocationDurationMinutes: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "heart")
@@ -446,11 +476,28 @@ fun DistanceInfoBubble(
         label = "heartScale"
     )
     
+    // Rainbow animation for colocation
+    val colocationColorShift by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "colorShift"
+    )
+    
+    val containerColor = if (isColocationActive) {
+        Color(0xFFFFF0F5) // Light pink for together
+    } else {
+        Color.White
+    }
+    
     Surface(
         modifier = modifier
             .shadow(8.dp, RoundedCornerShape(24.dp)),
         shape = RoundedCornerShape(24.dp),
-        color = Color.White
+        color = containerColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -459,23 +506,41 @@ fun DistanceInfoBubble(
         ) {
             // Animated heart icon
             Text(
-                text = "💕",
+                text = if (isColocationActive) "💑" else "💕",
                 fontSize = 18.sp,
                 modifier = Modifier.scale(heartScale)
             )
             
             Column {
-                Text(
-                    text = distanceText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Text(
-                    text = lastSync,
-                    fontSize = 10.sp,
-                    color = TextSecondary
-                )
+                if (isColocationActive) {
+                    Text(
+                        text = "Together! 🎉",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SoftPink
+                    )
+                    Text(
+                        text = if (colocationDurationMinutes >= 5) {
+                            "📸 New place created! Photos being saved..."
+                        } else {
+                            "📍 ${5 - colocationDurationMinutes} min until place is saved"
+                        },
+                        fontSize = 10.sp,
+                        color = TextSecondary
+                    )
+                } else {
+                    Text(
+                        text = distanceText,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = lastSync,
+                        fontSize = 10.sp,
+                        color = TextSecondary
+                    )
+                }
             }
         }
     }
@@ -559,6 +624,7 @@ fun DistanceFloatingButtons(
             // My avatar button
             FloatingAvatarButton(
                 emoji = "🌸",
+                avatarUrl = myUser?.avatarUrl,
                 backgroundColor = PastelPink,
                 borderColor = SoftPink,
                 onClick = onMyAvatarClick,
@@ -568,6 +634,7 @@ fun DistanceFloatingButtons(
             // Partner avatar button  
             FloatingAvatarButton(
                 emoji = "🍋",
+                avatarUrl = partnerUser?.avatarUrl,
                 backgroundColor = PastelGreen,
                 borderColor = Color(0xFF98E4C8),
                 onClick = onPartnerAvatarClick,
@@ -577,6 +644,7 @@ fun DistanceFloatingButtons(
             // Shared places button
             FloatingAvatarButton(
                 emoji = "📍",
+                avatarUrl = null,
                 backgroundColor = PastelPurple,
                 borderColor = SoftLavender,
                 onClick = onSharedPlacesClick,
@@ -590,6 +658,7 @@ fun DistanceFloatingButtons(
 @Composable
 private fun FloatingAvatarButton(
     emoji: String,
+    avatarUrl: String?,
     backgroundColor: Color,
     borderColor: Color,
     onClick: () -> Unit,
@@ -624,7 +693,19 @@ private fun FloatingAvatarButton(
                 .border(2.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = emoji, fontSize = 22.sp)
+            // Show avatar image if available, otherwise show emoji
+            if (!avatarUrl.isNullOrEmpty() && avatarUrl.startsWith("http")) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = "User avatar",
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(text = emoji, fontSize = 22.sp)
+            }
         }
         
         // Notification badge

@@ -1,19 +1,40 @@
 package com.example.coupleapp.viewmodel
 
+import android.app.Application
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
+import com.example.coupleapp.data.repository.FirebaseStorageRepository
+import com.example.coupleapp.data.repository.LocationRepository
+import com.example.coupleapp.service.LocationTrackingService
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import kotlin.math.*    
+import kotlin.math.*
 
-class DistanceViewModel : ViewModel() {
+/**
+ * ViewModel for the Distance/Location feature
+ * Handles real-time location tracking, location history, and shared places
+ */
+class DistanceViewModel(application: Application) : AndroidViewModel(application) {
+    
+    private val context: Context = application.applicationContext
+    private val locationRepository = LocationRepository(context)
+    private val storageRepository = FirebaseStorageRepository()
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
     
     private val _uiState = MutableStateFlow(DistanceUiState())
     val uiState: StateFlow<DistanceUiState> = _uiState.asStateFlow()
@@ -21,61 +42,482 @@ class DistanceViewModel : ViewModel() {
     private val _photosState = MutableStateFlow(SharedPlacePhotosState())
     val photosState: StateFlow<SharedPlacePhotosState> = _photosState.asStateFlow()
     
+    // User info
+    private var userId: String = ""
+    private var userName: String = ""
+    private var avatarUrl: String = ""
+    private var coupleId: String = ""
+    private var partnerId: String = ""
+    
     init {
-        loadInitialData()
+        loadUserInfo()
+        // Fix any photosCount inconsistencies in background
+        viewModelScope.launch {
+            delay(2000) // Wait 2 seconds to avoid blocking initial load
+            fixPhotosCountForAllPlaces()
+        }
     }
     
-    private fun loadInitialData() {
+    /**
+     * Load current user info and couple info from Firebase
+     */
+    private fun loadUserInfo() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             
-            // Simulate API call delay
-            delay(1000)
-            
-            val myLocation = getMockMyLocation()
-            val partnerLocation = getMockPartnerLocation()
-            val distance = calculateDistance(
-                myLocation.coordinate,
-                partnerLocation.coordinate
-            )
-            
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    myLocation = myLocation,
-                    partnerLocation = partnerLocation,
-                    distanceInMeters = distance,
-                    distanceText = formatDistance(distance),
-                    lastSyncTime = formatLastSync(LocalDateTime.now()),
-                    myLocationHistory = getMockMyLocationHistory(),
-                    partnerLocationHistory = getMockPartnerLocationHistory(),
-                    sharedPlaces = getMockSharedPlaces()
-                )
+            try {
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    userId = currentUser.uid
+                    
+                    // Get user data from Firestore
+                    val userDoc = db.collection("users").document(userId).get().await()
+                    userName = userDoc.getString("displayName") ?: "Me"
+                    avatarUrl = userDoc.getString("profileImageUrl") ?: ""
+                    coupleId = userDoc.getString("coupleId") ?: ""
+                    partnerId = userDoc.getString("partnerId") ?: ""
+                    
+                    // If partnerId exists but coupleId is empty, generate coupleId
+                    // This handles cases where users paired before coupleId was being set
+                    if (partnerId.isNotEmpty() && coupleId.isEmpty()) {
+                        val sortedIds = listOf(userId, partnerId).sorted()
+                        coupleId = "${sortedIds[0]}_${sortedIds[1]}"
+                        android.util.Log.d("DistanceViewModel", "Generated coupleId from partnerId: $coupleId")
+                        
+                        // Update Firestore with the generated coupleId for BOTH users
+                        try {
+                            // Update current user
+                            db.collection("users").document(userId)
+                                .update("coupleId", coupleId)
+                                .await()
+                            android.util.Log.d("DistanceViewModel", "Updated user's coupleId in Firestore")
+                            
+                            // Also update partner's coupleId so they use the same ID
+                            db.collection("users").document(partnerId)
+                                .update("coupleId", coupleId)
+                                .await()
+                            android.util.Log.d("DistanceViewModel", "Updated partner's coupleId in Firestore")
+                        } catch (e: Exception) {
+                            android.util.Log.e("DistanceViewModel", "Failed to update coupleId in Firestore", e)
+                        }
+                    }
+                    
+                    android.util.Log.d("DistanceViewModel", "User loaded - userId: $userId, partnerId: $partnerId, coupleId: $coupleId")
+                    
+                    // Always load real data - no more mock data fallback
+                    loadRealData()
+                    startLocationTracking()
+                } else {
+                    // Not logged in - show empty state
+                    _uiState.update { 
+                        it.copy(
+                            isLoading = false,
+                            error = "Please log in to use location features"
+                        ) 
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        error = "Failed to load user info: ${e.message}"
+                    ) 
+                }
             }
         }
     }
     
+    /**
+     * Load real location data from Firebase with Pub/Sub pattern
+     * Both users can see each other's location in real-time
+     */
+    private fun loadRealData() {
+        android.util.Log.d("DistanceViewModel", ">>> loadRealData() called - coupleId: $coupleId, partnerId: $partnerId")
+        
+        // Also load shared places directly as a backup
+        if (coupleId.isNotEmpty()) {
+            loadSharedPlacesDirectly()
+        }
+        
+        viewModelScope.launch {
+            try {
+                // Load my current location and upload to Firebase if paired
+                val myLocationResult = locationRepository.getCurrentLocation(
+                    userId = userId, 
+                    userName = userName, 
+                    avatarUrl = avatarUrl,
+                    coupleId = coupleId.ifEmpty { null }
+                )
+                val myLocation = myLocationResult.getOrNull()
+                
+                // Check if user is paired with someone
+                if (coupleId.isEmpty()) {
+                    android.util.Log.d("DistanceViewModel", "User is not paired - showing only own location")
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            myLocation = myLocation,
+                            partnerLocation = null,
+                            distanceInMeters = 0.0,
+                            distanceText = "Not paired yet",
+                            lastSyncTime = formatLastSync(LocalDateTime.now()),
+                            currentUserId = userId,
+                            error = if (myLocation == null) "Could not get your location" else null
+                        )
+                    }
+                    return@launch
+                }
+                
+                // Set currentUserId in state for avatar comparison
+                _uiState.update { it.copy(currentUserId = userId) }
+                
+                // ===== PUB/SUB PATTERN: Listen to both locations in real-time =====
+                
+                // Listen to MY location from Firebase (so I see my own synced location)
+                launch {
+                    try {
+                        android.util.Log.d("DistanceViewModel", "Setting up MY location listener (Pub/Sub) - userId: $userId, coupleId: $coupleId")
+                        locationRepository.listenToMyLocation(userId, coupleId).collect { myLocationUpdate ->
+                            android.util.Log.d("DistanceViewModel", "My location update received from Firebase: $myLocationUpdate")
+                            myLocationUpdate?.let { updateMyLocation(it) }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("DistanceViewModel", "Error listening to my location", e)
+                    }
+                }
+                
+                // Listen to PARTNER's location from Firebase (so I see partner's synced location)
+                if (partnerId.isNotEmpty()) {
+                    android.util.Log.d("DistanceViewModel", "Setting up PARTNER location listener (Pub/Sub) - partnerId: $partnerId, coupleId: $coupleId")
+                    android.util.Log.d("DistanceViewModel", "Expected document path: ${coupleId}_${partnerId}")
+                    
+                    launch {
+                        try {
+                            locationRepository.listenToPartnerLocation(partnerId, coupleId).collect { partnerLocation ->
+                                android.util.Log.d("DistanceViewModel", "Partner location update received from Firebase: $partnerLocation")
+                                updatePartnerLocation(partnerLocation)
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("DistanceViewModel", "Error listening to partner location", e)
+                        }
+                    }
+                    
+                    // Load location histories
+                    launch {
+                        try {
+                            locationRepository.loadLocationHistory(userId, coupleId)
+                            locationRepository.myLocationHistory.collect { history ->
+                                _uiState.update { it.copy(myLocationHistory = history) }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("DistanceViewModel", "Error loading my location history", e)
+                        }
+                    }
+                    
+                    launch {
+                        try {
+                            locationRepository.loadLocationHistory(partnerId, coupleId)
+                            locationRepository.partnerLocationHistory.collect { history ->
+                                _uiState.update { it.copy(partnerLocationHistory = history) }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("DistanceViewModel", "Error loading partner location history", e)
+                        }
+                    }
+                    
+                    // Load shared places (real-time listener)
+                    launch {
+                        try {
+                            android.util.Log.d("DistanceViewModel", ">>> Starting shared places listener for coupleId: $coupleId")
+                            locationRepository.loadSharedPlaces(coupleId).collect { places ->
+                                android.util.Log.d("DistanceViewModel", ">>> Received ${places.size} shared places")
+                                _uiState.update { it.copy(sharedPlaces = places) }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("DistanceViewModel", "Error loading shared places", e)
+                            // On error, try to load directly without listener
+                            loadSharedPlacesDirectly()
+                        }
+                    }
+                } else {
+                    android.util.Log.w("DistanceViewModel", "Couple ID exists but partnerId is empty")
+                }
+                
+                // Update UI with initial data
+                val partnerLocation = locationRepository.partnerCurrentLocation.value
+                
+                if (myLocation != null) {
+                    val distance = if (partnerLocation != null) {
+                        calculateDistance(myLocation.coordinate, partnerLocation.coordinate)
+                    } else {
+                        0.0
+                    }
+                    
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            myLocation = myLocation,
+                            partnerLocation = partnerLocation,
+                            distanceInMeters = distance,
+                            distanceText = formatDistance(distance),
+                            lastSyncTime = formatLastSync(LocalDateTime.now())
+                        )
+                    }
+                } else {
+                    // Could not get location - show error
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "Could not get your current location. Please enable location services."
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Failed to load location data: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+    
+    /**
+     * Start the location tracking service
+     */
+    private fun startLocationTracking() {
+        android.util.Log.d("DistanceViewModel", ">>> startLocationTracking called")
+        android.util.Log.d("DistanceViewModel", "   userId: $userId")
+        android.util.Log.d("DistanceViewModel", "   coupleId: $coupleId") 
+        android.util.Log.d("DistanceViewModel", "   partnerId: $partnerId")
+        android.util.Log.d("DistanceViewModel", "   hasLocationPermission: ${locationRepository.hasLocationPermission()}")
+        
+        // Validate that we have the necessary data before starting the service
+        if (!locationRepository.hasLocationPermission()) {
+            android.util.Log.w("DistanceViewModel", "Cannot start location tracking: no location permission")
+            return
+        }
+        
+        if (userId.isEmpty()) {
+            android.util.Log.w("DistanceViewModel", "Cannot start location tracking: userId is empty")
+            return
+        }
+        
+        if (coupleId.isEmpty()) {
+            android.util.Log.w("DistanceViewModel", "Cannot start location tracking: user is not paired yet")
+            _uiState.update { 
+                it.copy(
+                    error = null // Don't show error, just don't start tracking
+                )
+            }
+            return
+        }
+        
+        android.util.Log.d("DistanceViewModel", ">>> Starting LocationTrackingService...")
+        
+        val serviceStarted = LocationTrackingService.startService(
+            context = context,
+            userId = userId,
+            userName = userName,
+            avatarUrl = avatarUrl,
+            coupleId = coupleId,
+            partnerId = partnerId
+        )
+        
+        android.util.Log.d("DistanceViewModel", ">>> Service start result: $serviceStarted")
+        
+        if (!serviceStarted) {
+            android.util.Log.w("DistanceViewModel", "Location tracking service failed to start")
+            return
+        }
+        
+        // Listen to my location updates from the service (via StateFlow)
+        // The service uploads to Firebase, we just observe the local state
+        viewModelScope.launch {
+            LocationTrackingService.lastKnownLocation.collect { coordinate ->
+                coordinate?.let {
+                    val location = UserLocation(
+                        userId = userId,
+                        userName = userName,
+                        avatarUrl = avatarUrl,
+                        coordinate = it,
+                        address = "",
+                        lastUpdated = LocalDateTime.now(),
+                        batteryLevel = 100,
+                        isOnline = true
+                    )
+                    updateMyLocation(location)
+                }
+            }
+        }
+        
+        // Track colocation status from service
+        viewModelScope.launch {
+            LocationTrackingService.isColocationActive.collect { isActive ->
+                val startTime = LocationTrackingService.colocationStartTime.value
+                val durationMinutes = if (isActive && startTime != null) {
+                    ((System.currentTimeMillis() - startTime) / 60_000).toInt()
+                } else {
+                    0
+                }
+                
+                _uiState.update {
+                    it.copy(
+                        isColocationActive = isActive,
+                        colocationDurationMinutes = durationMinutes
+                    )
+                }
+            }
+        }
+        
+        // Track colocation session from repository
+        viewModelScope.launch {
+            locationRepository.activeColocationSession.collect { session ->
+                if (session != null) {
+                    val durationMinutes = java.time.Duration.between(
+                        session.startTime,
+                        LocalDateTime.now()
+                    ).toMinutes().toInt()
+                    
+                    _uiState.update {
+                        it.copy(
+                            isColocationActive = true,
+                            colocationStartTime = session.startTime,
+                            colocationDurationMinutes = durationMinutes
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isColocationActive = false,
+                            colocationStartTime = null,
+                            colocationDurationMinutes = 0
+                        )
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Stop location tracking service
+     */
+    fun stopLocationTracking() {
+        LocationTrackingService.stopService(context)
+    }
+    
+    /**
+     * Update my location and recalculate distance
+     * Also checks if users are within colocation range (200m)
+     */
+    private fun updateMyLocation(location: UserLocation) {
+        val partnerLocation = _uiState.value.partnerLocation
+        val distance = if (partnerLocation != null) {
+            calculateDistance(location.coordinate, partnerLocation.coordinate)
+        } else {
+            0.0
+        }
+        
+        // Check if within colocation range (200 meters for same location)
+        val isNearPartner = partnerLocation != null && distance <= 200.0
+        
+        // Format distance text based on whether partner location is available
+        val distanceText = when {
+            partnerLocation == null -> "Waiting for partner..."
+            isNearPartner -> "Together 💕"
+            else -> formatDistance(distance)
+        }
+        
+        _uiState.update {
+            it.copy(
+                myLocation = location,
+                distanceInMeters = distance,
+                distanceText = distanceText,
+                lastSyncTime = formatLastSync(LocalDateTime.now())
+            )
+        }
+    }
+    
+    /**
+     * Update partner location and recalculate distance
+     * Also checks if users are within colocation range (200m)
+     */
+    private fun updatePartnerLocation(location: UserLocation?) {
+        val myLocation = _uiState.value.myLocation
+        val distance = if (myLocation != null && location != null) {
+            calculateDistance(myLocation.coordinate, location.coordinate)
+        } else {
+            0.0
+        }
+        
+        // Check if within colocation range (200 meters for same location)
+        val isNearPartner = myLocation != null && location != null && distance <= 200.0
+        
+        // Format distance text based on whether both locations are available
+        val distanceText = when {
+            location == null -> "Waiting for partner..."
+            myLocation == null -> "Getting your location..."
+            isNearPartner -> "Together 💕"
+            else -> formatDistance(distance)
+        }
+        
+        _uiState.update {
+            it.copy(
+                partnerLocation = location,
+                distanceInMeters = distance,
+                distanceText = distanceText,
+                lastSyncTime = formatLastSync(LocalDateTime.now())
+            )
+        }
+    }
+    
+    /**
+     * Refresh locations manually
+     */
     fun refreshLocations() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            delay(800)
             
-            val myLocation = getMockMyLocation()
-            val partnerLocation = getMockPartnerLocation()
-            val distance = calculateDistance(
-                myLocation.coordinate,
-                partnerLocation.coordinate
-            )
-            
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    myLocation = myLocation,
-                    partnerLocation = partnerLocation,
-                    distanceInMeters = distance,
-                    distanceText = formatDistance(distance),
-                    lastSyncTime = formatLastSync(LocalDateTime.now())
-                )
+            try {
+                if (userId.isNotEmpty()) {
+                    // Get fresh location and upload to Firebase if paired
+                    val result = locationRepository.getCurrentLocation(
+                        userId = userId, 
+                        userName = userName, 
+                        avatarUrl = avatarUrl,
+                        coupleId = coupleId.ifEmpty { null }
+                    )
+                    result.getOrNull()?.let { location ->
+                        updateMyLocation(location)
+                    }
+                    
+                    // Reload histories if coupleId is available
+                    if (coupleId.isNotEmpty()) {
+                        locationRepository.loadLocationHistory(userId, coupleId)
+                        if (partnerId.isNotEmpty()) {
+                            locationRepository.loadLocationHistory(partnerId, coupleId)
+                        }
+                    }
+                    
+                    _uiState.update { it.copy(isLoading = false) }
+                } else {
+                    _uiState.update { 
+                        it.copy(
+                            isLoading = false,
+                            error = "Please log in to refresh locations"
+                        ) 
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        error = e.message
+                    ) 
+                }
             }
         }
     }
@@ -87,6 +529,68 @@ class DistanceViewModel : ViewModel() {
                 showUserInfoSheet = user != null
             )
         }
+    }
+    
+    /**
+     * Load shared places directly from Firestore (fallback when Flow fails)
+     */
+    private fun loadSharedPlacesDirectly() {
+        viewModelScope.launch {
+            try {
+                android.util.Log.d("DistanceViewModel", ">>> Loading shared places directly (fallback)")
+                
+                val snapshot = db.collection("shared_places")
+                    .whereEqualTo("coupleId", coupleId)
+                    .get()
+                    .await()
+                
+                android.util.Log.d("DistanceViewModel", ">>> Direct query returned ${snapshot.documents.size} documents")
+                
+                val places = snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val data = doc.data
+                        android.util.Log.d("DistanceViewModel", ">>> Place doc: ${doc.id}, data: $data")
+                        
+                        SharedPlace(
+                            id = doc.id,
+                            placeName = doc.getString("placeName") ?: "Unknown",
+                            address = doc.getString("address") ?: "",
+                            coordinate = LocationCoordinate(
+                                doc.getDouble("latitude") ?: 0.0,
+                                doc.getDouble("longitude") ?: 0.0
+                            ),
+                            representativePhotoUrl = doc.getString("representativePhotoUrl") ?: "",
+                            visitDate = doc.getDate("visitDate")?.toInstant()
+                                ?.atZone(java.time.ZoneId.systemDefault())?.toLocalDateTime() 
+                                ?: LocalDateTime.now(),
+                            durationMinutes = doc.getLong("durationMinutes")?.toInt() ?: 0,
+                            photosCount = doc.getLong("photosCount")?.toInt() ?: 0,
+                            locationType = try { 
+                                LocationType.valueOf(doc.getString("locationType") ?: "OTHER") 
+                            } catch (e: Exception) { 
+                                LocationType.OTHER 
+                            }
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("DistanceViewModel", "Error parsing place ${doc.id}", e)
+                        null
+                    }
+                }.sortedByDescending { it.visitDate }
+                
+                android.util.Log.d("DistanceViewModel", ">>> Parsed ${places.size} shared places")
+                _uiState.update { it.copy(sharedPlaces = places) }
+                
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error loading shared places directly", e)
+            }
+        }
+    }
+    
+    /**
+     * Manually refresh shared places
+     */
+    fun refreshSharedPlaces() {
+        loadSharedPlacesDirectly()
     }
     
     fun dismissUserInfoSheet() {
@@ -106,42 +610,327 @@ class DistanceViewModel : ViewModel() {
         _uiState.update { it.copy(showSettingsDialog = false) }
     }
     
+    /**
+     * Load photos for a shared place
+     */
     fun loadPlacePhotos(placeId: String) {
         viewModelScope.launch {
+            android.util.Log.d("DistanceViewModel", "=== loadPlacePhotos called for placeId: $placeId ===")
             _photosState.update { it.copy(isLoading = true) }
-            delay(600)
             
-            val place = _uiState.value.sharedPlaces.find { it.id == placeId }
-            val photos = getMockPhotosForPlace(placeId)
-            
-            _photosState.update {
-                it.copy(
-                    isLoading = false,
-                    place = place,
-                    photos = photos
-                )
+            try {
+                val place = _uiState.value.sharedPlaces.find { it.id == placeId }
+                android.util.Log.d("DistanceViewModel", "Found place: ${place?.placeName}")
+                
+                android.util.Log.d("DistanceViewModel", "Calling getSharedPlacePhotos...")
+                val photosResult = locationRepository.getSharedPlacePhotos(placeId)
+                
+                val photos = photosResult.getOrElse { 
+                    android.util.Log.e("DistanceViewModel", "Error getting photos: ${photosResult.exceptionOrNull()}")
+                    emptyList() 
+                }
+                
+                android.util.Log.d("DistanceViewModel", "Loaded ${photos.size} photos")
+                photos.forEachIndexed { index, photo ->
+                    android.util.Log.d("DistanceViewModel", "Photo $index: id=${photo.id}, url=${photo.photoUrl}")
+                }
+                
+                _photosState.update {
+                    it.copy(
+                        isLoading = false,
+                        place = place,
+                        photos = photos
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Exception loading photos", e)
+                _photosState.update {
+                    it.copy(
+                        isLoading = false,
+                        photos = emptyList(),
+                        error = "Failed to load photos: ${e.message}"
+                    )
+                }
             }
         }
     }
     
-    fun addPhotoToPlace(placeId: String, photoUrl: String) {
+    /**
+     * Add a photo to a shared place
+     * Flow: Upload to Firebase Storage -> Save metadata to Firestore -> Refresh UI
+     */
+    fun addPhotoToPlace(placeId: String, photoUriString: String) {
         viewModelScope.launch {
-            _photosState.update { it.copy(isAddingPhoto = true) }
-            delay(500)
+            _photosState.update { it.copy(isAddingPhoto = true, error = null) }
             
-            val newPhoto = SharedPlacePhoto(
-                id = "photo_${System.currentTimeMillis()}",
-                photoUrl = photoUrl,
-                takenAt = LocalDateTime.now(),
-                takenByUserId = "user_me",
-                caption = null
-            )
-            
-            _photosState.update {
-                it.copy(
-                    isAddingPhoto = false,
-                    photos = it.photos + newPhoto
+            try {
+                if (userId.isEmpty()) {
+                    throw Exception("User not logged in")
+                }
+                
+                android.util.Log.d("DistanceViewModel", "Adding photo to place: $placeId")
+                android.util.Log.d("DistanceViewModel", "Photo URI string: $photoUriString")
+                
+                // Parse the URI
+                val photoUri = Uri.parse(photoUriString)
+                android.util.Log.d("DistanceViewModel", "Parsed URI: $photoUri, scheme: ${photoUri.scheme}")
+                
+                // Step 1: Upload photo to Firebase Storage using context for content:// URIs
+                val filename = "place_${placeId}_${userId}_${System.currentTimeMillis()}.jpg"
+                android.util.Log.d("DistanceViewModel", "Uploading photo to Storage: $filename")
+                
+                // Use uploadImageWithContext for content:// URIs (from gallery/camera)
+                val uploadResult = storageRepository.uploadImageWithContext(
+                    context = context,
+                    uri = photoUri,
+                    path = FirebaseStorageRepository.PLACE_IMAGES_PATH,
+                    filename = filename
                 )
+                
+                if (uploadResult.isSuccess) {
+                    val downloadUrl = uploadResult.getOrNull()!!
+                    android.util.Log.d("DistanceViewModel", "Photo uploaded successfully: $downloadUrl")
+                    
+                    // Step 2: Save photo metadata to Firestore
+                    val result = locationRepository.addPhotoToSharedPlace(
+                        placeId = placeId,
+                        photoUrl = downloadUrl,
+                        userId = userId,
+                        caption = null
+                    )
+                    
+                    if (result.isSuccess) {
+                        android.util.Log.d("DistanceViewModel", "Photo metadata saved to Firestore")
+                        
+                        // Step 3: Update shared place's photo count and representative photo
+                        updateSharedPlacePhotoInfo(placeId, downloadUrl)
+                        
+                        // Step 4: Reload photos to show the new one
+                        loadPlacePhotos(placeId)
+                    } else {
+                        throw result.exceptionOrNull() ?: Exception("Failed to save photo metadata")
+                    }
+                } else {
+                    throw uploadResult.exceptionOrNull() ?: Exception("Failed to upload photo")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error adding photo", e)
+                _photosState.update { 
+                    it.copy(error = "Failed to add photo: ${e.message}") 
+                }
+            } finally {
+                _photosState.update { it.copy(isAddingPhoto = false) }
+            }
+        }
+    }
+    
+    /**
+     * Update shared place's photo count and representative photo
+     */
+    private suspend fun updateSharedPlacePhotoInfo(placeId: String, newPhotoUrl: String) {
+        try {
+            val placeRef = db.collection("shared_places").document(placeId)
+            db.runTransaction { transaction ->
+                val placeSnapshot = transaction.get(placeRef)
+                val currentCount = placeSnapshot.getLong("photosCount") ?: 0
+                val currentRepPhoto = placeSnapshot.getString("representativePhotoUrl") ?: ""
+                
+                val updates = mutableMapOf<String, Any>(
+                    "photosCount" to (currentCount + 1)
+                )
+                
+                // Set representative photo if empty
+                if (currentRepPhoto.isEmpty()) {
+                    updates["representativePhotoUrl"] = newPhotoUrl
+                }
+                
+                transaction.update(placeRef, updates)
+            }.await()
+        } catch (e: Exception) {
+            android.util.Log.e("DistanceViewModel", "Error updating shared place info", e)
+        }
+    }
+    
+    /**
+     * Delete a photo from a shared place
+     */
+    fun deletePhotoFromPlace(photoId: String, placeId: String) {
+        viewModelScope.launch {
+            _photosState.update { it.copy(isAddingPhoto = true) } // Reuse loading state
+            
+            try {
+                android.util.Log.d("DistanceViewModel", "Deleting photo: $photoId from place: $placeId")
+                
+                val result = locationRepository.deletePhotoFromSharedPlace(photoId, placeId)
+                
+                if (result.isSuccess) {
+                    android.util.Log.d("DistanceViewModel", "Photo deleted successfully")
+                    // Reload photos to update the UI
+                    loadPlacePhotos(placeId)
+                } else {
+                    throw result.exceptionOrNull() ?: Exception("Failed to delete photo")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error deleting photo", e)
+                _photosState.update { 
+                    it.copy(error = "Failed to delete photo: ${e.message}") 
+                }
+            } finally {
+                _photosState.update { it.copy(isAddingPhoto = false) }
+            }
+        }
+    }
+    
+    /**
+     * Add photo to current colocation session (if both users are together)
+     */
+    fun addPhotoToCurrentColocation(photoUrl: String) {
+        locationRepository.addPhotoToColocationSession(photoUrl)
+    }
+    
+    companion object {
+        const val DUPLICATE_PLACE_DISTANCE_METERS = 500.0 // Don't create new place within 500m of existing one
+    }
+    
+    /**
+     * Manually create a shared place at the current location
+     * Useful when users want to mark a place without waiting for the 10-minute timer
+     * Checks for existing places within 500m to avoid duplicates
+     */
+    fun createSharedPlaceManually(placeName: String, photoUri: Uri?) {
+        viewModelScope.launch {
+            try {
+                if (userId.isEmpty() || coupleId.isEmpty()) {
+                    _uiState.update { it.copy(error = "User not logged in or not paired") }
+                    return@launch
+                }
+                
+                val myLocation = _uiState.value.myLocation ?: run {
+                    _uiState.update { it.copy(error = "Could not get your location") }
+                    return@launch
+                }
+                
+                android.util.Log.d("DistanceViewModel", "Creating shared place manually: $placeName")
+                
+                // Check for existing place within 500m
+                val existingPlaceId = checkForExistingPlaceNearby(
+                    myLocation.coordinate.latitude,
+                    myLocation.coordinate.longitude
+                )
+                
+                if (existingPlaceId != null) {
+                    // Place already exists nearby - show error or navigate to existing place
+                    android.util.Log.d("DistanceViewModel", "Found existing place within 500m: $existingPlaceId")
+                    _uiState.update { 
+                        it.copy(error = "A shared place already exists nearby. Adding photos to existing place.") 
+                    }
+                    
+                    // Upload photo and add to existing place
+                    if (photoUri != null) {
+                        val filename = "place_${existingPlaceId}_${userId}_${System.currentTimeMillis()}.jpg"
+                        val uploadResult = storageRepository.uploadImageWithContext(
+                            context = context,
+                            uri = photoUri,
+                            path = FirebaseStorageRepository.PLACE_IMAGES_PATH,
+                            filename = filename
+                        )
+                        uploadResult.getOrNull()?.let { url ->
+                            locationRepository.addPhotoToSharedPlace(existingPlaceId, url, userId)
+                        }
+                    }
+                    return@launch
+                }
+                
+                // No existing place nearby - create new one
+                // Upload photo if provided
+                var photoUrl = ""
+                if (photoUri != null) {
+                    val filename = "place_manual_${coupleId}_${System.currentTimeMillis()}.jpg"
+                    val uploadResult = storageRepository.uploadImageWithContext(
+                        context = context,
+                        uri = photoUri,
+                        path = FirebaseStorageRepository.PLACE_IMAGES_PATH,
+                        filename = filename
+                    )
+                    photoUrl = uploadResult.getOrDefault("")
+                }
+                
+                // Create shared place
+                val sharedPlaceData = mapOf(
+                    "coupleId" to coupleId,
+                    "placeName" to placeName,
+                    "address" to myLocation.address,
+                    "latitude" to myLocation.coordinate.latitude,
+                    "longitude" to myLocation.coordinate.longitude,
+                    "representativePhotoUrl" to photoUrl,
+                    "visitDate" to java.util.Date(),
+                    "durationMinutes" to 0,
+                    "photosCount" to if (photoUrl.isNotEmpty()) 1 else 0,
+                    "locationType" to "OTHER",
+                    "photoUrls" to if (photoUrl.isNotEmpty()) listOf(photoUrl) else emptyList<String>()
+                )
+                
+                db.collection("shared_places")
+                    .add(sharedPlaceData)
+                    .addOnSuccessListener { docRef ->
+                        android.util.Log.d("DistanceViewModel", "Created manual shared place: ${docRef.id}")
+                        
+                        // Add photo to shared_place_photos if uploaded
+                        if (photoUrl.isNotEmpty()) {
+                            val photoData = mapOf(
+                                "placeId" to docRef.id,
+                                "photoUrl" to photoUrl,
+                                "takenAt" to java.util.Date(),
+                                "takenByUserId" to userId,
+                                "caption" to null
+                            )
+                            db.collection("shared_place_photos").add(photoData)
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        android.util.Log.e("DistanceViewModel", "Failed to create shared place", e)
+                        _uiState.update { it.copy(error = "Failed to create place: ${e.message}") }
+                    }
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error creating shared place", e)
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+    
+    /**
+     * Delete a shared place
+     */
+    fun deleteSharedPlace(placeId: String) {
+        viewModelScope.launch {
+            try {
+                // Delete photos from the place first
+                val photosQuery = db.collection("shared_place_photos")
+                    .whereEqualTo("placeId", placeId)
+                    .get()
+                    .await()
+                
+                photosQuery.documents.forEach { doc ->
+                    // Delete from Storage if it's a Firebase URL
+                    val photoUrl = doc.getString("photoUrl") ?: ""
+                    if (photoUrl.contains("firebasestorage")) {
+                        try {
+                            storageRepository.deleteFile(photoUrl)
+                        } catch (e: Exception) {
+                            android.util.Log.w("DistanceViewModel", "Failed to delete photo from storage: ${e.message}")
+                        }
+                    }
+                    // Delete photo document
+                    doc.reference.delete()
+                }
+                
+                // Delete the shared place
+                db.collection("shared_places").document(placeId).delete().await()
+                android.util.Log.d("DistanceViewModel", "Deleted shared place: $placeId")
+                
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error deleting shared place", e)
+                _uiState.update { it.copy(error = "Failed to delete place: ${e.message}") }
             }
         }
     }
@@ -162,6 +951,42 @@ class DistanceViewModel : ViewModel() {
         return earthRadius * c
     }
     
+    /**
+     * Check if there's an existing shared place within 500m of the given location
+     * Returns the place ID if found, null otherwise
+     */
+    private suspend fun checkForExistingPlaceNearby(latitude: Double, longitude: Double): String? {
+        return try {
+            val snapshot = db.collection("shared_places")
+                .whereEqualTo("coupleId", coupleId)
+                .get()
+                .await()
+            
+            var nearestPlaceId: String? = null
+            var nearestDistance = Double.MAX_VALUE
+            
+            for (doc in snapshot.documents) {
+                val placeLat = doc.getDouble("latitude") ?: continue
+                val placeLng = doc.getDouble("longitude") ?: continue
+                
+                val distance = calculateDistance(
+                    LocationCoordinate(latitude, longitude),
+                    LocationCoordinate(placeLat, placeLng)
+                )
+                
+                if (distance <= DUPLICATE_PLACE_DISTANCE_METERS && distance < nearestDistance) {
+                    nearestDistance = distance
+                    nearestPlaceId = doc.id
+                }
+            }
+            
+            nearestPlaceId
+        } catch (e: Exception) {
+            android.util.Log.e("DistanceViewModel", "Error checking nearby places: ${e.message}")
+            null
+        }
+    }
+    
     private fun formatDistance(meters: Double): String {
         return when {
             meters < 1000 -> "${meters.toInt()} m"
@@ -175,246 +1000,69 @@ class DistanceViewModel : ViewModel() {
         return "Updated ${dateTime.format(formatter)}"
     }
     
-    // Mock Data
-    private fun getMockMyLocation(): UserLocation {
-        return UserLocation(
-            userId = "user_me",
-            userName = "Anh 🌸",
-            avatarUrl = "avatar_me",
-            coordinate = LocationCoordinate(
-                latitude = 21.0285,  // Near Keangnam Landmark
-                longitude = 105.7823
-            ),
-            address = "Keangnam Landmark 72, Phạm Hùng, Mễ Trì, Nam Từ Liêm",
-            lastUpdated = LocalDateTime.now().minusMinutes(5),
-            batteryLevel = 82,
-            isOnline = true
-        )
+    /**
+     * Fix photosCount for all shared places by counting actual photos in shared_place_photos
+     * Call this once to fix any inconsistencies in existing data
+     */
+    fun fixPhotosCountForAllPlaces() {
+        viewModelScope.launch {
+            try {
+                android.util.Log.d("DistanceViewModel", "Starting photosCount fix for all places")
+                
+                // Get all shared places
+                val placesSnapshot = db.collection("shared_places")
+                    .whereEqualTo("coupleId", coupleId)
+                    .get()
+                    .await()
+                
+                for (placeDoc in placesSnapshot.documents) {
+                    val placeId = placeDoc.id
+                    
+                    // Count actual photos for this place
+                    val photosSnapshot = db.collection("shared_place_photos")
+                        .whereEqualTo("placeId", placeId)
+                        .get()
+                        .await()
+                    
+                    val actualCount = photosSnapshot.size()
+                    val storedCount = placeDoc.getLong("photosCount")?.toInt() ?: 0
+                    
+                    if (actualCount != storedCount) {
+                        android.util.Log.d("DistanceViewModel", 
+                            "Fixing place $placeId: stored=$storedCount, actual=$actualCount")
+                        
+                        // Update the photosCount
+                        db.collection("shared_places").document(placeId)
+                            .update("photosCount", actualCount)
+                            .await()
+                    }
+                }
+                
+                android.util.Log.d("DistanceViewModel", "Finished fixing photosCount")
+                
+                // Reload shared places to reflect changes
+                loadSharedPlacesDirectly()
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error fixing photosCount", e)
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Don't stop service when ViewModel is cleared - let it run in background
     }
     
-    private fun getMockPartnerLocation(): UserLocation {
-        return UserLocation(
-            userId = "user_partner",
-            userName = "Em 🍋",
-            avatarUrl = "avatar_partner",
-            coordinate = LocationCoordinate(
-                latitude = 21.0380,  // Dịch Vọng area
-                longitude = 105.7880
-            ),
-            address = "Dịch Vọng, Cầu Giấy, Hà Nội",
-            lastUpdated = LocalDateTime.now().minusMinutes(2),
-            batteryLevel = 65,
-            isOnline = true
-        )
-    }
-    
-    private fun getMockMyLocationHistory(): List<LocationHistory> {
-        val now = LocalDateTime.now()
-        return listOf(
-            LocationHistory(
-                id = "loc_1",
-                locationName = "Home",
-                address = "123 Nguyễn Trãi, Thanh Xuân",
-                coordinate = LocationCoordinate(21.0033, 105.8000),
-                arrivalTime = now.minusHours(10),
-                departureTime = now.minusHours(8),
-                durationMinutes = 120,
-                locationType = LocationType.HOME
-            ),
-            LocationHistory(
-                id = "loc_2",
-                locationName = "The Coffee House",
-                address = "30 Láng Hạ, Đống Đa",
-                coordinate = LocationCoordinate(21.0178, 105.8199),
-                arrivalTime = now.minusHours(7),
-                departureTime = now.minusHours(6),
-                durationMinutes = 60,
-                locationType = LocationType.CAFE
-            ),
-            LocationHistory(
-                id = "loc_3",
-                locationName = "Vincom Center",
-                address = "191 Bà Triệu, Hai Bà Trưng",
-                coordinate = LocationCoordinate(21.0122, 105.8498),
-                arrivalTime = now.minusHours(5),
-                departureTime = now.minusHours(3),
-                durationMinutes = 120,
-                locationType = LocationType.SHOPPING
-            ),
-            LocationHistory(
-                id = "loc_4",
-                locationName = "Công viên Cầu Giấy",
-                address = "Dịch Vọng, Cầu Giấy",
-                coordinate = LocationCoordinate(21.0350, 105.7950),
-                arrivalTime = now.minusHours(2),
-                departureTime = now.minusHours(1),
-                durationMinutes = 60,
-                locationType = LocationType.PARK
-            ),
-            LocationHistory(
-                id = "loc_5",
-                locationName = "Keangnam Landmark",
-                address = "Phạm Hùng, Mễ Trì",
-                coordinate = LocationCoordinate(21.0285, 105.7823),
-                arrivalTime = now.minusMinutes(30),
-                departureTime = null,
-                durationMinutes = 30,
-                locationType = LocationType.WORK
-            )
-        )
-    }
-    
-    private fun getMockPartnerLocationHistory(): List<LocationHistory> {
-        val now = LocalDateTime.now()
-        return listOf(
-            LocationHistory(
-                id = "ploc_1",
-                locationName = "Home",
-                address = "45 Kim Mã, Ba Đình",
-                coordinate = LocationCoordinate(21.0305, 105.8270),
-                arrivalTime = now.minusHours(12),
-                departureTime = now.minusHours(9),
-                durationMinutes = 180,
-                locationType = LocationType.HOME
-            ),
-            LocationHistory(
-                id = "ploc_2",
-                locationName = "Đại học Bách khoa",
-                address = "1 Đại Cồ Việt, Hai Bà Trưng",
-                coordinate = LocationCoordinate(21.0053, 105.8428),
-                arrivalTime = now.minusHours(8),
-                departureTime = now.minusHours(4),
-                durationMinutes = 240,
-                locationType = LocationType.SCHOOL
-            ),
-            LocationHistory(
-                id = "ploc_3",
-                locationName = "Highlands Coffee",
-                address = "Tầng 1, Vincom Bà Triệu",
-                coordinate = LocationCoordinate(21.0125, 105.8495),
-                arrivalTime = now.minusHours(3),
-                departureTime = now.minusHours(2),
-                durationMinutes = 60,
-                locationType = LocationType.CAFE
-            ),
-            LocationHistory(
-                id = "ploc_4",
-                locationName = "Dịch Vọng",
-                address = "Dịch Vọng, Cầu Giấy, Hà Nội",
-                coordinate = LocationCoordinate(21.0380, 105.7880),
-                arrivalTime = now.minusMinutes(45),
-                departureTime = null,
-                durationMinutes = 45,
-                locationType = LocationType.OTHER
-            )
-        )
-    }
-    
-    private fun getMockSharedPlaces(): List<SharedPlace> {
-        return listOf(
-            SharedPlace(
-                id = "shared_1",
-                placeName = "Lotte Center Hà Nội",
-                address = "54 Liễu Giai, Ba Đình",
-                coordinate = LocationCoordinate(21.0296, 105.8132),
-                representativePhotoUrl = "shared_place_1",
-                visitDate = LocalDateTime.now().minusDays(3),
-                durationMinutes = 180,
-                photosCount = 12,
-                locationType = LocationType.SHOPPING
-            ),
-            SharedPlace(
-                id = "shared_2",
-                placeName = "Hồ Tây",
-                address = "Hồ Tây, Tây Hồ",
-                coordinate = LocationCoordinate(21.0533, 105.8210),
-                representativePhotoUrl = "shared_place_2",
-                visitDate = LocalDateTime.now().minusDays(5),
-                durationMinutes = 120,
-                photosCount = 8,
-                locationType = LocationType.PARK
-            ),
-            SharedPlace(
-                id = "shared_3",
-                placeName = "CGV Vincom Royal City",
-                address = "72A Nguyễn Trãi, Thanh Xuân",
-                coordinate = LocationCoordinate(21.0010, 105.8156),
-                representativePhotoUrl = "shared_place_3",
-                visitDate = LocalDateTime.now().minusDays(7),
-                durationMinutes = 150,
-                photosCount = 5,
-                locationType = LocationType.ENTERTAINMENT
-            ),
-            SharedPlace(
-                id = "shared_4",
-                placeName = "Phố đi bộ Hồ Gươm",
-                address = "Hoàn Kiếm, Hà Nội",
-                coordinate = LocationCoordinate(21.0288, 105.8525),
-                representativePhotoUrl = "shared_place_4",
-                visitDate = LocalDateTime.now().minusDays(10),
-                durationMinutes = 240,
-                photosCount = 24,
-                locationType = LocationType.PARK
-            ),
-            SharedPlace(
-                id = "shared_5",
-                placeName = "Pizza 4P's",
-                address = "24 Lý Quốc Sư, Hoàn Kiếm",
-                coordinate = LocationCoordinate(21.0305, 105.8485),
-                representativePhotoUrl = "shared_place_5",
-                visitDate = LocalDateTime.now().minusDays(14),
-                durationMinutes = 90,
-                photosCount = 6,
-                locationType = LocationType.RESTAURANT
-            )
-        )
-    }
-    
-    private fun getMockPhotosForPlace(placeId: String): List<SharedPlacePhoto> {
-        val now = LocalDateTime.now()
-        return listOf(
-            SharedPlacePhoto(
-                id = "photo_1",
-                photoUrl = "photo_couple_1",
-                takenAt = now.minusDays(3).minusHours(2),
-                takenByUserId = "user_me",
-                caption = "Beautiful day! 💕"
-            ),
-            SharedPlacePhoto(
-                id = "photo_2",
-                photoUrl = "photo_couple_2",
-                takenAt = now.minusDays(3).minusHours(1).minusMinutes(30),
-                takenByUserId = "user_partner",
-                caption = "Yummy food 🍕"
-            ),
-            SharedPlacePhoto(
-                id = "photo_3",
-                photoUrl = "photo_couple_3",
-                takenAt = now.minusDays(3).minusHours(1),
-                takenByUserId = "user_me",
-                caption = null
-            ),
-            SharedPlacePhoto(
-                id = "photo_4",
-                photoUrl = "photo_couple_4",
-                takenAt = now.minusDays(3).minusMinutes(45),
-                takenByUserId = "user_partner",
-                caption = "Love this place! 🌸"
-            ),
-            SharedPlacePhoto(
-                id = "photo_5",
-                photoUrl = "photo_couple_5",
-                takenAt = now.minusDays(3).minusMinutes(30),
-                takenByUserId = "user_me",
-                caption = null
-            ),
-            SharedPlacePhoto(
-                id = "photo_6",
-                photoUrl = "photo_couple_6",
-                takenAt = now.minusDays(3).minusMinutes(15),
-                takenByUserId = "user_partner",
-                caption = "See you next time! 👋"
-            )
-        )
+    /**
+     * Factory for creating DistanceViewModel with Application context
+     */
+    class Factory(private val application: Application) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            if (modelClass.isAssignableFrom(DistanceViewModel::class.java)) {
+                return DistanceViewModel(application) as T
+            }
+            throw IllegalArgumentException("Unknown ViewModel class")
+        }
     }
 }

@@ -29,14 +29,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.Coil
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.LocationType
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.Base64ImageDecoder
 import com.example.coupleapp.util.LocationUtils
 import java.time.format.DateTimeFormatter
 
@@ -179,50 +184,72 @@ private fun SharedPlaceCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.3f),
-                                    LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.1f)
-                                )
-                            )
-                        ),
+                        .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Representative emoji/icon
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = LocationUtils.getLocationTypeEmoji(place.locationType),
-                            fontSize = 40.sp
+                    // Show representative photo if available
+                    val context = LocalContext.current
+                    if (Base64ImageDecoder.isValidImageUrl(place.representativePhotoUrl)) {
+                        AsyncImage(
+                            model = place.representativePhotoUrl,
+                            contentDescription = place.placeName,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            imageLoader = Coil.imageLoader(context)
                         )
-                        
-                        // Photos count badge
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color.White.copy(alpha = 0.9f)
+                    } else {
+                        // Fallback to gradient with emoji
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.3f),
+                                            LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.1f)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            // Representative emoji/icon
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.PhotoLibrary,
-                                    contentDescription = null,
-                                    tint = SoftPink,
-                                    modifier = Modifier.size(14.dp)
-                                )
                                 Text(
-                                    text = "${place.photosCount}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TextPrimary
+                                    text = LocationUtils.getLocationTypeEmoji(place.locationType),
+                                    fontSize = 40.sp
                                 )
                             }
+                        }
+                    }
+                    
+                    // Photos count badge
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = 0.9f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PhotoLibrary,
+                                contentDescription = null,
+                                tint = SoftPink,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "${place.photosCount}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
                         }
                     }
                     
@@ -522,25 +549,42 @@ private fun SharedPlaceHeader(place: SharedPlace) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Place icon
+        // Place icon or representative photo
         Box(
             modifier = Modifier
                 .size(56.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.4f),
-                            LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.2f)
-                        )
-                    )
-                ),
+                .clip(RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = LocationUtils.getLocationTypeEmoji(place.locationType),
-                fontSize = 26.sp
-            )
+            val context = LocalContext.current
+            if (Base64ImageDecoder.isValidImageUrl(place.representativePhotoUrl)) {
+                AsyncImage(
+                    model = place.representativePhotoUrl,
+                    contentDescription = place.placeName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    imageLoader = Coil.imageLoader(context)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.4f),
+                                    LocationUtils.getLocationTypeColor(place.locationType).copy(alpha = 0.2f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = LocationUtils.getLocationTypeEmoji(place.locationType),
+                        fontSize = 26.sp
+                    )
+                }
+            }
         }
         
         // Place info

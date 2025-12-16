@@ -406,17 +406,23 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 if (userId != null && partnerId != null) {
                     Log.d(TAG, "Unlinking partner: $partnerId")
 
-                    // Remove partnerId from both users
+                    // Remove partnerId AND coupleId from both users
                     firestoreRepository.updateDocument(
                         "users",
                         userId,
-                        mapOf("partnerId" to "")
+                        mapOf(
+                            "partnerId" to "",
+                            "coupleId" to ""
+                        )
                     )
 
                     firestoreRepository.updateDocument(
                         "users",
                         partnerId,
-                        mapOf("partnerId" to "")
+                        mapOf(
+                            "partnerId" to "",
+                            "coupleId" to ""
+                        )
                     )
 
                     Log.d(TAG, "Partner unlinked successfully")
@@ -478,14 +484,15 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 Log.d(TAG, "Accepting link request from ${request.fromUserId}")
 
                 // Create coupleId (sorted userIds to ensure consistency)
-                val coupleId = listOf(request.fromUserId, request.toUserId).sorted().joinToString("_")
+                val sortedIds = listOf(request.fromUserId, request.toUserId).sorted()
+                val coupleId = sortedIds.joinToString("_")
                 Log.d(TAG, "Creating couple with coupleId: $coupleId")
 
                 // Create couple document
                 val couple = FirebaseCouple(
                     id = coupleId,
-                    user1Id = listOf(request.fromUserId, request.toUserId).sorted()[0],
-                    user2Id = listOf(request.fromUserId, request.toUserId).sorted()[1],
+                    user1Id = sortedIds[0],
+                    user2Id = sortedIds[1],
                     anniversaryDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()),
                     relationshipStatus = "dating",
                     sharedGardenLevel = 1,

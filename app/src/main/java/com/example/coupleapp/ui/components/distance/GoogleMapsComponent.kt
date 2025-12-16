@@ -138,6 +138,42 @@ fun CoupleGoogleMap(
         }
     }
     
+    // Track if this is the first load to animate camera to locations
+    var hasInitializedCamera by remember { mutableStateOf(false) }
+    
+    // Update camera when locations are first loaded (e.g., from mock data)
+    LaunchedEffect(myLocation, partnerLocation) {
+        if (!hasInitializedCamera && (myLocation != null || partnerLocation != null)) {
+            hasInitializedCamera = true
+            
+            val targetLat = if (myLocation != null && partnerLocation != null) {
+                (myLocation.coordinate.latitude + partnerLocation.coordinate.latitude) / 2
+            } else {
+                myLocation?.coordinate?.latitude ?: partnerLocation?.coordinate?.latitude ?: return@LaunchedEffect
+            }
+            
+            val targetLng = if (myLocation != null && partnerLocation != null) {
+                (myLocation.coordinate.longitude + partnerLocation.coordinate.longitude) / 2
+            } else {
+                myLocation?.coordinate?.longitude ?: partnerLocation?.coordinate?.longitude ?: return@LaunchedEffect
+            }
+            
+            val targetZoom = if (myLocation != null && partnerLocation != null) {
+                calculateZoomLevel(myLocation.coordinate, partnerLocation.coordinate)
+            } else {
+                14f
+            }
+            
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(targetLat, targetLng),
+                    targetZoom
+                ),
+                durationMs = 800
+            )
+        }
+    }
+    
     // Map UI settings
     val uiSettings = remember {
         MapUiSettings(
