@@ -39,13 +39,14 @@ fun SpecialQuestCard(
         Color(0xFFE8B5FF)
     )
     
-    val isClickable = quest.status != QuestStatus.CLAIMED && quest.status != QuestStatus.COMPLETED
+    // Only clickable for navigation when NOT completed and NOT claimed
+    val canNavigate = quest.status != QuestStatus.CLAIMED && quest.status != QuestStatus.COMPLETED
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (isClickable) Modifier.clickable { onGoClick() }
+                if (canNavigate) Modifier.clickable { onGoClick() }
                 else Modifier
             ),
         shape = RoundedCornerShape(20.dp),

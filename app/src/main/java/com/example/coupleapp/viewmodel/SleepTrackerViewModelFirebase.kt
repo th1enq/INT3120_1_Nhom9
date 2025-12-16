@@ -21,8 +21,10 @@ import java.util.Date
 /**
  * Sleep Tracker ViewModel with Firebase integration
  */
-class SleepTrackerViewModelFirebase : ViewModel() {
-    private val sleepRepository = SleepFirebaseRepository()
+class SleepTrackerViewModelFirebase(
+    private val context: Context? = null
+) : ViewModel() {
+    private val sleepRepository = SleepFirebaseRepository(context)
     private val auth = FirebaseAuth.getInstance()
 
     companion object {
@@ -43,6 +45,7 @@ class SleepTrackerViewModelFirebase : ViewModel() {
     init {
         Log.d(TAG, "SleepTrackerViewModelFirebase initialized")
         loadInitialData()
+        checkAndAutoSync()
     }
 
     private fun loadInitialData() {
@@ -59,6 +62,9 @@ class SleepTrackerViewModelFirebase : ViewModel() {
 
                 val userId = currentUser.uid
                 Log.d(TAG, "Loading data for user: $userId")
+                
+                // Check and perform auto-sync if needed
+                tryAutoSync(userId)
 
                 // Load current user profile
                 val currentUserResult = sleepRepository.getUserProfile(userId)
@@ -141,18 +147,26 @@ class SleepTrackerViewModelFirebase : ViewModel() {
                 // Load today's sleep record
                 val todayRecordResult = sleepRepository.getTodaySleepRecord(userId)
                 val firebaseRecord = todayRecordResult.getOrNull()
-                val sleepRecord = firebaseRecord?.let { sleepRepository.convertToSleepRecord(it) }
+                var sleepRecord = firebaseRecord?.let { sleepRepository.convertToSleepRecord(it) }
+                Log.d(TAG, "loadUserData: Today's record = ${sleepRecord?.id}")
 
                 // Load sleep history
                 val historyResult = sleepRepository.getSleepHistory(userId, 7)
                 val firebaseHistory = historyResult.getOrElse { emptyList() }
                 val sleepHistory = firebaseHistory.map { sleepRepository.convertToSleepRecord(it) }
-                    .take(3)
+                
+                Log.d(TAG, "loadUserData: Found ${sleepHistory.size} history records")
+                
+                // If no today's record, use most recent record from history for display
+                if (sleepRecord == null && sleepHistory.isNotEmpty()) {
+                    sleepRecord = sleepHistory.first()
+                    Log.d(TAG, "loadUserData: Using most recent record from history: ${sleepRecord.id}")
+                }
 
                 _uiState.update { currentState ->
                     currentState.copy(
                         sleepRecord = sleepRecord,
-                        sleepHistory = sleepHistory,
+                        sleepHistory = sleepHistory.take(3),
                         settings = settings,
                         isLoading = false
                     )
@@ -408,6 +422,180 @@ class SleepTrackerViewModelFirebase : ViewModel() {
         // TODO: Implement widget update if needed
         Log.d(TAG, "Widget update requested")
     }
+    
+    /**
+     * Insert mock sleep data for testing (includes current user and partner)
+     */
+    fun insertMockSleepData() {
+        viewModelScope.launch {
+            try {
+                val currentUserId = _uiState.value.currentUser.id
+                val partnerId = _uiState.value.partnerUser.id.takeIf { it.isNotEmpty() }
+                
+                Log.d(TAG, "insertMockSleepData: Current user=$currentUserId, Partner=$partnerId")
+                
+                _uiState.update { it.copy(
+                    isLoading = true,
+                    healthConnectSyncStatus = "Inserting mock data..."
+                ) }
+                
+                val result = sleepRepository.insertMockSleepData(currentUserId, partnerId)
+                
+                if (result.isSuccess) {
+                    Log.d(TAG, "insertMockSleepData: Success! Reloading data...")
+                    
+                    val partnerText = if (partnerId != null) " and partner" else ""
+                    _uiState.update { it.copy(
+                        healthConnectSyncStatus = "Mock data inserted for you${partnerText}! (7 days)"
+                    ) }
+                    
+                    // Reload data after insertion
+                    loadUserData(getActiveUser().id, false)
+                } else {
+                    val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                    Log.e(TAG, "insertMockSleepData: Failed - $error")
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        healthConnectSyncStatus = "Failed to insert mock data: $error"
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "insertMockSleepData: Error", e)
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    healthConnectSyncStatus = "Error: ${e.message}"
+                ) }
+            }
+        }
+    }
+    
+    /**
+     * Check if Health Connect is available
+     */
+    suspend fun checkHealthConnectAvailability(): Boolean {
+        return try {
+            sleepRepository.isHealthConnectAvailable()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking Health Connect availability", e)
+            false
+        }
+    }
+    
+    /**
+     * Get Health Connect permission contract for activity result launcher
+     */
+    fun getHealthConnectPermissionContract(): androidx.activity.result.contract.ActivityResultContract<Set<String>, Set<String>> {
+        return sleepRepository.getHealthConnectPermissionContract()
+    }
+    
+    /**
+     * Get required Health Connect permissions
+     */
+    fun getRequiredHealthConnectPermissions(): Set<String> {
+        return sleepRepository.getRequiredHealthConnectPermissions()
+    }
+    
+    /**
+     * Check if Health Connect permissions are granted
+     */
+    suspend fun hasHealthConnectPermissions(): Boolean {
+        return try {
+            sleepRepository.hasHealthConnectPermissions()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking Health Connect permissions", e)
+            false
+        }
+    }
+    
+    /**
+     * Sync sleep data from Health Connect to Firebase
+     */
+    fun syncFromHealthConnect() {
+        viewModelScope.launch {
+            try {
+                val userId = getActiveUser().id
+                Log.d(TAG, "syncFromHealthConnect: Starting sync for user=$userId")
+                
+                _uiState.update { it.copy(isLoading = true, healthConnectSyncStatus = "Syncing...") }
+                
+                val result = sleepRepository.syncSleepDataFromHealthConnect(userId)
+                
+                if (result.isSuccess) {
+                    val syncCount = result.getOrNull() ?: 0
+                    Log.d(TAG, "syncFromHealthConnect: Successfully synced $syncCount records")
+                    _uiState.update { it.copy(healthConnectSyncStatus = "Synced $syncCount records") }
+                    
+                    // Reload data after sync
+                    loadUserData(userId, false)
+                } else {
+                    val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                    Log.e(TAG, "syncFromHealthConnect: Failed - $error")
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        healthConnectSyncStatus = "Sync failed: $error"
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "syncFromHealthConnect: Error", e)
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    healthConnectSyncStatus = "Sync error: ${e.message}"
+                ) }
+            }
+        }
+    }
+    
+    /**
+     * Clear Health Connect sync status message
+     */
+    fun clearSyncStatus() {
+        _uiState.update { it.copy(healthConnectSyncStatus = null) }
+    }
+    
+    /**
+     * Check and perform auto-sync daily
+     */
+    private fun checkAndAutoSync() {
+        viewModelScope.launch {
+            val currentUser = auth.currentUser ?: return@launch
+            tryAutoSync(currentUser.uid)
+        }
+    }
+
+    /**
+     * Try to auto-sync yesterday's sleep data if needed
+     */
+    private suspend fun tryAutoSync(userId: String) {
+        try {
+            val ctx = context ?: run {
+                Log.w(TAG, "tryAutoSync: Context is null")
+                return
+            }
+            
+            val shouldSync = sleepRepository.shouldAutoSync(userId)
+            
+            if (shouldSync) {
+                Log.d(TAG, "tryAutoSync: Attempting auto-sync for yesterday's data")
+                
+                val healthManager = com.example.coupleapp.data.health.HealthConnectManager(ctx)
+                val result = sleepRepository.autoSyncYesterdaySleepData(userId, healthManager)
+                
+                if (result.isSuccess && result.getOrNull() == true) {
+                    sleepRepository.updateLastAutoSyncTime(userId)
+                    Log.d(TAG, "tryAutoSync: Auto-sync completed successfully")
+                    
+                    // Refresh UI to show new data
+                    loadUserData(userId, false)
+                } else {
+                    Log.d(TAG, "tryAutoSync: No data to sync or sync skipped")
+                }
+            } else {
+                Log.d(TAG, "tryAutoSync: Auto-sync not needed (already synced today)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "tryAutoSync: Error during auto-sync", e)
+        }
+    }
 }
 
 enum class TimeEditorType {
@@ -429,7 +617,8 @@ data class SleepTrackerUiState(
     val showTimeEditor: Boolean = false,
     val timeEditorType: TimeEditorType = TimeEditorType.NONE,
     val showBedtimeReminder: Boolean = false,
-    val showWidgetInstructions: Boolean = false
+    val showWidgetInstructions: Boolean = false,
+    val healthConnectSyncStatus: String? = null
 ) {
     val isContentReady: Boolean
         get() = !isLoading && sleepRecord != null

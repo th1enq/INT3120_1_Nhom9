@@ -75,6 +75,8 @@ fun QuestScreen(
         if (!uiState.isLoading) {
             visible = true
         }
+        // Refresh quest data when screen is opened
+        viewModel.refreshQuests()
     }
 
     // Navigate to quest location

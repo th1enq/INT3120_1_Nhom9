@@ -1,5 +1,6 @@
 package com.example.coupleapp.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
@@ -56,13 +57,37 @@ class GardenViewModelFirebase : ViewModel() {
             }
 
             try {
-                // Load plant
-                val plantResult = firestoreRepository.queryDocuments(
-                    collection = "garden_plants",
-                    field = "userId",
-                    value = userId,
-                    clazz = FirebaseGardenPlant::class.java
+                // Load user to get coupleId
+                Log.d("GardenViewModel", "[GARDEN] ▶️ Loading garden for userId: $userId")
+                val userResult = firestoreRepository.getDocument(
+                    collection = "users",
+                    documentId = userId,
+                    clazz = FirebaseUser::class.java
                 )
+
+                val userData = userResult.getOrNull()
+                val coupleId = userData?.coupleId
+                val partnerId = userData?.partnerId
+                Log.d("GardenViewModel", "[GARDEN] User data: coupleId=$coupleId, partnerId=$partnerId")
+
+                // Load plant - if user has coupleId, load shared plant, otherwise load by userId
+                val plantResult = if (!coupleId.isNullOrEmpty()) {
+                    Log.d("GardenViewModel", "[GARDEN] Loading shared plant by coupleId: $coupleId")
+                    firestoreRepository.queryDocuments(
+                        collection = "garden_plants",
+                        field = "coupleId",
+                        value = coupleId,
+                        clazz = FirebaseGardenPlant::class.java
+                    )
+                } else {
+                    Log.d("GardenViewModel", "[GARDEN] Loading personal plant by userId: $userId")
+                    firestoreRepository.queryDocuments(
+                        collection = "garden_plants",
+                        field = "userId",
+                        value = userId,
+                        clazz = FirebaseGardenPlant::class.java
+                    )
+                }
 
                 // Load inventory from Store purchases
                 val inventoryResult = firestoreRepository.getDocument(
@@ -81,7 +106,16 @@ class GardenViewModelFirebase : ViewModel() {
 
                 plantResult.fold(
                     onSuccess = { plants ->
+                        Log.d("GardenViewModel", "[GARDEN] ✅ Found ${plants.size} plant(s) in Firebase")
+                        plants.forEachIndexed { index, fbPlant ->
+                            Log.d("GardenViewModel", "[GARDEN]   Plant #$index: id=${fbPlant.id}, coupleId=${fbPlant.coupleId}, userId=${fbPlant.userId}, stage=${fbPlant.stage}, water=${fbPlant.water}, sun=${fbPlant.sunlight}, health=${fbPlant.health}")
+                        }
                         val plant = plants.firstOrNull()?.toPlant()
+                        if (plant != null) {
+                            Log.d("GardenViewModel", "[GARDEN] ✓ Using plant: id=${plant.id}, stage=${plant.stage}, water=${plant.status.water}, sun=${plant.status.sunlight}")
+                        } else {
+                            Log.d("GardenViewModel", "[GARDEN] ⚠️ No plant found - user needs to plant seed")
+                        }
                         
                         inventoryResult.fold(
                             onSuccess = { firebaseInventory ->
@@ -149,6 +183,10 @@ class GardenViewModelFirebase : ViewModel() {
      * Convert Firebase plant to domain model
      */
     private fun FirebaseGardenPlant.toPlant(): Plant {
+        android.util.Log.d("GardenViewModel", "[GARDEN] 🌱 Converting Firebase plant to domain model:")
+        android.util.Log.d("GardenViewModel", "[GARDEN]    id=${this.id}, coupleId=${this.coupleId}, userId=${this.userId}")
+        android.util.Log.d("GardenViewModel", "[GARDEN]    stage=${this.stage}, rarity=${this.rarity}, color=${this.flowerColor}")
+        android.util.Log.d("GardenViewModel", "[GARDEN]    water=${this.water}, sunlight=${this.sunlight}, health=${this.health}")
         val stage = when (this.stage.lowercase()) {
             "seed" -> PlantStage.SEED
             "sprout" -> PlantStage.SPROUT
@@ -170,7 +208,7 @@ class GardenViewModelFirebase : ViewModel() {
             it.name.lowercase() == this.flowerColor.lowercase() 
         } ?: PlantFlowerColor.PINK
 
-        return Plant(
+        val plant = Plant(
             id = this.id,
             name = this.plantName,
             stage = stage,
@@ -185,6 +223,8 @@ class GardenViewModelFirebase : ViewModel() {
             isInGreenhouse = this.isInGreenhouse,
             stageStartedAt = this.createdAt?.time ?: System.currentTimeMillis()
         )
+        android.util.Log.d("GardenViewModel", "[GARDEN] ✓ Plant converted successfully: ${plant.id}")
+        return plant
     }
 
     /**
@@ -192,31 +232,51 @@ class GardenViewModelFirebase : ViewModel() {
      */
     private fun FirebaseGardenInventory.toGardenInventory(): GardenInventory {
         val items = mutableMapOf<CareItemType, CareItem>()
+        Log.d("GardenViewModel", "[GARDEN] Converting Firebase inventory to domain: seeds=${this.seeds}, fert4h=${this.fertilizer4h}, fert8h=${this.fertilizer8h}, fert12h=${this.fertilizer12h}, water=${this.wateringCan}, sun=${this.sunlightBottle}, pesticide=${this.pesticide}, scissors=${this.scissors}")
 
         if (this.seeds > 0) {
             items[CareItemType.SEED_NORMAL] = createDefaultItem(CareItemType.SEED_NORMAL)
                 .copy(quantity = this.seeds)
+            Log.d("GardenViewModel", "[GARDEN] Added SEED_NORMAL: quantity=${this.seeds}")
         }
         if (this.fertilizer4h > 0) {
             items[CareItemType.FERTILIZER_4H] = createDefaultItem(CareItemType.FERTILIZER_4H)
                 .copy(quantity = this.fertilizer4h)
+            Log.d("GardenViewModel", "[GARDEN] Added FERTILIZER_4H: quantity=${this.fertilizer4h}")
         }
         if (this.fertilizer8h > 0) {
             items[CareItemType.FERTILIZER_8H] = createDefaultItem(CareItemType.FERTILIZER_8H)
                 .copy(quantity = this.fertilizer8h)
+            Log.d("GardenViewModel", "[GARDEN] Added FERTILIZER_8H: quantity=${this.fertilizer8h}")
         }
         if (this.fertilizer12h > 0) {
             items[CareItemType.FERTILIZER_24H] = createDefaultItem(CareItemType.FERTILIZER_24H)
                 .copy(quantity = this.fertilizer12h)
+            Log.d("GardenViewModel", "[GARDEN] Added FERTILIZER_24H (from fertilizer12h field): quantity=${this.fertilizer12h}")
         }
         if (this.wateringCan > 0) {
             items[CareItemType.WATER] = createDefaultItem(CareItemType.WATER)
                 .copy(quantity = this.wateringCan)
+            Log.d("GardenViewModel", "[GARDEN] Added WATER: quantity=${this.wateringCan}")
         }
         if (this.sunlightBottle > 0) {
             items[CareItemType.SUNLIGHT] = createDefaultItem(CareItemType.SUNLIGHT)
                 .copy(quantity = this.sunlightBottle)
+            Log.d("GardenViewModel", "[GARDEN] Added SUNLIGHT: quantity=${this.sunlightBottle}")
         }
+        
+        if (this.pesticide > 0) {
+            items[CareItemType.PESTICIDE] = createDefaultItem(CareItemType.PESTICIDE)
+                .copy(quantity = this.pesticide)
+            Log.d("GardenViewModel", "[GARDEN] Added PESTICIDE: quantity=${this.pesticide}")
+        }
+        if (this.scissors > 0) {
+            items[CareItemType.SCISSORS] = createDefaultItem(CareItemType.SCISSORS)
+                .copy(quantity = this.scissors)
+            Log.d("GardenViewModel", "[GARDEN] Added SCISSORS: quantity=${this.scissors}")
+        }
+        
+        Log.d("GardenViewModel", "[GARDEN] Final inventory has ${items.size} item types")
 
         return GardenInventory(
             items = items,
@@ -451,6 +511,8 @@ class GardenViewModelFirebase : ViewModel() {
     fun checkPlantEvolution() {
         val plant = _uiState.value.plant ?: return
         
+        android.util.Log.d("GardenViewModel", "[GARDEN] Checking plant evolution: stage=${plant.stage}, canEvolve=${plant.canEvolve}, timeToNextStage=${plant.timeToNextStage}ms, isAlive=${plant.status.isAlive}")
+        
         if (plant.canEvolve) {
             val nextStage = PlantStage.values().getOrNull(plant.stage.ordinal + 1)
             if (nextStage != null) {
@@ -538,10 +600,19 @@ class GardenViewModelFirebase : ViewModel() {
         )
 
         viewModelScope.launch {
+            // Get user's coupleId for shared garden
+            val userResult = firestoreRepository.getDocument(
+                collection = "users",
+                documentId = userId,
+                clazz = FirebaseUser::class.java
+            )
+            val coupleId = userResult.getOrNull()?.coupleId ?: ""
+            Log.d("GardenViewModel", "[GARDEN] Planting seed with coupleId: $coupleId")
+
             // Save to Firebase
             val firebasePlant = FirebaseGardenPlant(
                 id = newPlant.id,
-                coupleId = "",
+                coupleId = coupleId,
                 userId = userId,
                 plantName = newPlant.name,
                 stage = newPlant.stage.name.lowercase(),
@@ -666,6 +737,7 @@ class GardenViewModelFirebase : ViewModel() {
                 "updatedAt" to Timestamp(Date())
             )
 
+            Log.d("GardenViewModel", "[GARDEN] Saving plant status to Firebase: plantId=${plant.id}, stage=${plant.stage}, water=${plant.status.water}, sun=${plant.status.sunlight}, health=${plant.status.health}")
             firestoreRepository.updateDocument(
                 collection = "garden_plants",
                 documentId = plant.id,
@@ -688,6 +760,8 @@ class GardenViewModelFirebase : ViewModel() {
                 "fertilizer12h" to (inventory.getItem(CareItemType.FERTILIZER_24H)?.quantity ?: 0),
                 "wateringCan" to (inventory.getItem(CareItemType.WATER)?.quantity ?: 0),
                 "sunlightBottle" to (inventory.getItem(CareItemType.SUNLIGHT)?.quantity ?: 0),
+                "pesticide" to (inventory.getItem(CareItemType.PESTICIDE)?.quantity ?: 0),
+                "scissors" to (inventory.getItem(CareItemType.SCISSORS)?.quantity ?: 0),
                 "updatedAt" to Timestamp(Date())
             )
 

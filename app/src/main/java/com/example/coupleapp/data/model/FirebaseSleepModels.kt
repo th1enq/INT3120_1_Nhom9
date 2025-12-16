@@ -17,7 +17,8 @@ data class FirebaseSleepSettings(
     val idealWakeUpTimeHour: Int = 6,
     val idealWakeUpTimeMinute: Int = 0,
     @ServerTimestamp
-    val updatedAt: Timestamp? = null
+    val updatedAt: Timestamp? = null,
+    val lastAutoSync: Timestamp? = null // Last auto-sync timestamp
 )
 
 /**

@@ -24,9 +24,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -52,13 +55,34 @@ fun SleepTrackerScreen(
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
     onNavigateToHistory: (String) -> Unit = {},
-    viewModel: SleepTrackerViewModelFirebase = viewModel()
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-
+    val viewModel: SleepTrackerViewModelFirebase = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                SleepTrackerViewModelFirebase(context)
+            }
+        }
+    )
+    val uiState by viewModel.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    
+    var showHealthConnectPermissionDialog by remember { mutableStateOf(false) }
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
+    
+    // Show sync status snackbar
+    LaunchedEffect(uiState.healthConnectSyncStatus) {
+        uiState.healthConnectSyncStatus?.let { status ->
+            snackbarHostState.showSnackbar(
+                message = status,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.clearSyncStatus()
+        }
+    }
     
     // Handle navigation
     LaunchedEffect(selectedBottomNavItem) {
@@ -84,7 +108,6 @@ fun SleepTrackerScreen(
 
     val scrollState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(uiState.isLoading) {
         if (uiState.isLoading) {
@@ -104,6 +127,7 @@ fun SleepTrackerScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             CoupleBottomNavigation(
                 selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
@@ -195,6 +219,31 @@ fun SleepTrackerScreen(
                                                 achievementPercentage = record.achievementPercentage,
                                                 quality = record.quality
                                             )
+                                        } ?: run {
+                                            // Empty state
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                modifier = Modifier.padding(vertical = 48.dp)
+                                            ) {
+                                                Text(
+                                                    text = "😴",
+                                                    fontSize = 64.sp
+                                                )
+                                                Spacer(modifier = Modifier.height(16.dp))
+                                                Text(
+                                                    text = "No sleep data yet",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = Color(0xFF757575)
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Text(
+                                                    text = "Click menu to insert mock data or sync from Health Connect",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = Color(0xFFB0B0B0),
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.padding(horizontal = 32.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -353,11 +402,38 @@ fun SleepTrackerScreen(
                             onNavigateToHistory(viewModel.getActiveUser().id)
                         }
                     },
+                    onSyncHealthConnectClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            viewModel.showBottomSheet(false)
+                            
+                            // Check if Health Connect is available
+                            val isAvailable = viewModel.checkHealthConnectAvailability()
+                            if (!isAvailable) {
+                                snackbarHostState.showSnackbar("Health Connect is not available on this device")
+                                return@launch
+                            }
+                            
+                            // Check if permissions are granted
+                            val hasPermissions = viewModel.hasHealthConnectPermissions()
+                            if (!hasPermissions) {
+                                // Show guide dialog to manually enable permissions in Health Connect
+                                showHealthConnectPermissionDialog = true
+                            } else {
+                                // Already have permissions, sync directly
+                                viewModel.syncFromHealthConnect()
+                                // Update quest progress when syncing sleep data
+                                questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SLEEP_TRACKING, 1)
+                            }
+                        }
+                    },
                     onInsertMockDataClick = {
                         scope.launch {
                             sheetState.hide()
                             viewModel.showBottomSheet(false)
-                            // Mock data not needed with Firebase
+                            viewModel.insertMockSleepData()
+                            // Update quest progress when inserting mock sleep data
+                            questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SLEEP_TRACKING, 1)
                         }
                     },
                     onDismiss = {
@@ -420,6 +496,14 @@ fun SleepTrackerScreen(
         }
 
         // Widget instructions removed - not needed with Firebase implementation
+        
+        // Health Connect permission guide dialog
+        if (showHealthConnectPermissionDialog) {
+            HealthConnectPermissionDialog(
+                onDismiss = { showHealthConnectPermissionDialog = false },
+                onOpenSettings = { showHealthConnectPermissionDialog = false }
+            )
+        }
         
         // TODO: Remove after testing - Temporary dialog for testing BedtimeReminderDialog
         if (showTestBedtimeDialog) {

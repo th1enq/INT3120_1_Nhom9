@@ -81,7 +81,7 @@ data class UserWallet(
  * Purchase result
  */
 sealed class PurchaseResult {
-    data class Success(val item: StoreItem, val newBalance: Int) : PurchaseResult()
+    data class Success(val item: StoreItem, val newBalance: Int, val quantity: Int = 1) : PurchaseResult()
     data class InsufficientFunds(val required: Int, val current: Int) : PurchaseResult()
     object OnCooldown : PurchaseResult()
     object AdNotAvailable : PurchaseResult()

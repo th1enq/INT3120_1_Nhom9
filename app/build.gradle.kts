@@ -92,6 +92,9 @@ dependencies {
     // Core library desugaring for Java 8 Time API support on older Android versions
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     
+    // Health Connect for Sleep Tracking
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
+    
     // Firebase BOM
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     

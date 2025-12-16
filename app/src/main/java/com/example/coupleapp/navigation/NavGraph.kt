@@ -21,6 +21,7 @@ import com.example.coupleapp.ui.screens.LoginWithFirebaseScreen
 import com.example.coupleapp.ui.screens.RegisterWithFirebaseScreen
 import com.example.coupleapp.ui.screens.WelcomeScreen
 import com.example.coupleapp.viewmodel.AuthViewModel
+import com.example.coupleapp.viewmodel.QuestViewModelFirebase
 import com.example.coupleapp.ui.screens.SleepTrackerScreen
 import com.example.coupleapp.ui.screens.SleepCalendarHistoryScreen
 import com.example.coupleapp.ui.screens.MissingScreen
@@ -49,6 +50,9 @@ fun NavGraph(
     navController: NavHostController,
     startDestination: String? = null
 ) {
+    // Shared QuestViewModel across all screens
+    val questViewModel: QuestViewModelFirebase = viewModel()
+    
     NavHost(
         navController = navController,
         startDestination = startDestination ?: Screen.Welcome.route
@@ -453,7 +457,8 @@ fun NavGraph(
                     navController.navigate(Screen.SleepHistory.createRoute(userId)) {
                         launchSingleTop = true
                     }
-                }
+                },
+                questViewModel = questViewModel
             )
         }
         
@@ -784,7 +789,8 @@ fun NavGraph(
                     navController.navigate(Screen.Profile.route) {
                         popUpTo(Screen.Missing.route) { inclusive = true }
                     }
-                }
+                },
+                questViewModel = questViewModel
             )
         }
         
@@ -853,7 +859,8 @@ fun NavGraph(
                     navController.navigate(Screen.Profile.route) {
                         popUpTo(Screen.Distance.route) { inclusive = true }
                     }
-                }
+                },
+                questViewModel = questViewModel
             )
         }
         
@@ -969,7 +976,8 @@ fun NavGraph(
             StoreScreen(
                 onBackClick = {
                     navController.popBackStack()
-                }
+                },
+                questViewModel = questViewModel
             )
         }
         
@@ -1025,7 +1033,8 @@ fun NavGraph(
                     navController.navigate(Screen.Profile.route) {
                         launchSingleTop = true
                     }
-                }
+                },
+                questViewModel = questViewModel
             )
         }
         

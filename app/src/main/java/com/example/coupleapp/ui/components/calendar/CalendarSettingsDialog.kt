@@ -22,6 +22,7 @@ import com.example.coupleapp.data.model.CalendarSettings
 import com.example.coupleapp.data.model.CoupleProfile
 import com.example.coupleapp.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarSettingsDialog(
     settings: CalendarSettings,
@@ -30,12 +31,14 @@ fun CalendarSettingsDialog(
     onUpdateNickname: (String, String) -> Unit,
     onUpdateBackground: (String) -> Unit,
     onToggleHeartbeat: (Boolean) -> Unit,
+    onUpdateAnniversaryDate: (java.time.LocalDate) -> Unit = {},
     onInsertMockData: () -> Unit = {}
 ) {
     var user1Nickname by remember { mutableStateOf(coupleProfile?.user1?.nickname ?: "") }
     var user2Nickname by remember { mutableStateOf(coupleProfile?.user2?.nickname ?: "") }
     var showHeartbeat by remember { mutableStateOf(settings.showHeartbeatAnimation) }
     var useDefaultBackground by remember { mutableStateOf(settings.useDefaultBackground) }
+    var showDatePicker by remember { mutableStateOf(false) }
     
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -255,15 +258,63 @@ fun CalendarSettingsDialog(
                                     val formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
                                     SettingItem(
                                         icon = Icons.Default.DateRange,
-                                        title = "Ngày bắt đầu",
+                                        title = "Ngày bắt đầu yêu nhau",
                                         subtitle = profile.relationshipStartDate.format(formatter),
-                                        onClick = { }
+                                        onClick = { showDatePicker = true },
+                                        trailing = {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Chỉnh sửa",
+                                                tint = AccentPink,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     )
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+        
+        // Date Picker Dialog
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = coupleProfile?.relationshipStartDate?.let {
+                    it.toLocalDate().toEpochDay() * 24 * 60 * 60 * 1000
+                } ?: System.currentTimeMillis()
+            )
+            
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            datePickerState.selectedDateMillis?.let { millis ->
+                                val selectedDate = java.time.LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000))
+                                onUpdateAnniversaryDate(selectedDate)
+                            }
+                            showDatePicker = false
+                        }
+                    ) {
+                        Text("Xác nhận", color = AccentPink)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text("Hủy")
+                    }
+                }
+            ) {
+                DatePicker(
+                    state = datePickerState,
+                    colors = DatePickerDefaults.colors(
+                        selectedDayContainerColor = AccentPink,
+                        todayContentColor = AccentPink,
+                        todayDateBorderColor = AccentPink
+                    )
+                )
             }
         }
     }

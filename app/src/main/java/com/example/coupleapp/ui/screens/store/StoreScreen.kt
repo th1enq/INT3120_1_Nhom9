@@ -23,7 +23,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun StoreScreen(
     onBackClick: () -> Unit,
-    viewModel: StoreViewModelFirebase = viewModel()
+    viewModel: StoreViewModelFirebase = viewModel(),
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
@@ -57,8 +58,18 @@ fun StoreScreen(
             cooldownDays = uiState.freeGiftCooldownDays,
             onDismiss = { viewModel.dismissPurchaseDialog() },
             onQuantityChange = { viewModel.updatePurchaseQuantity(it) },
-            onPurchaseCoins = { viewModel.purchaseWithCoins(it, uiState.purchaseQuantity) },
-            onClaimFree = { viewModel.claimFreeGift(it) },
+            onPurchaseCoins = { item -> 
+                viewModel.purchaseWithCoins(item, uiState.purchaseQuantity)
+                // Update quest progress when purchasing care items (fertilizer, watering can, etc.)
+                if (item.type == com.example.coupleapp.data.model.StoreItemType.FERTILIZER || 
+                    item.type == com.example.coupleapp.data.model.StoreItemType.TOOL) {
+                    questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.CARE_PLANT, 1)
+                }
+            },
+            onClaimFree = { item -> 
+                viewModel.claimFreeGift(item)
+                questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.CARE_PLANT, 1)
+            },
             onWatchAd = { viewModel.watchAdForReward(it) },
             onPurchaseReal = { viewModel.purchaseWithRealMoney(it) }
         )

@@ -315,17 +315,45 @@ class PartnerHubViewModelFirebase : ViewModel() {
             try {
                 Log.d(TAG, "Accepting link request from ${request.fromUserId}")
 
-                // Update both users' partnerId
+                // Create coupleId (sorted userIds to ensure consistency)
+                val coupleId = listOf(request.fromUserId, request.toUserId).sorted().joinToString("_")
+                Log.d(TAG, "Creating couple with coupleId: $coupleId")
+
+                // Create couple document
+                val couple = FirebaseCouple(
+                    id = coupleId,
+                    user1Id = listOf(request.fromUserId, request.toUserId).sorted()[0],
+                    user2Id = listOf(request.fromUserId, request.toUserId).sorted()[1],
+                    anniversaryDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()),
+                    relationshipStatus = "dating",
+                    sharedGardenLevel = 1,
+                    sharedPoints = 0,
+                    createdAt = java.util.Date()
+                )
+
+                firestoreRepository.setDocument(
+                    "couples",
+                    coupleId,
+                    couple
+                )
+
+                // Update both users' partnerId AND coupleId
                 firestoreRepository.updateDocument(
                     "users",
                     request.toUserId,
-                    mapOf("partnerId" to request.fromUserId)
+                    mapOf(
+                        "partnerId" to request.fromUserId,
+                        "coupleId" to coupleId
+                    )
                 )
 
                 firestoreRepository.updateDocument(
                     "users",
                     request.fromUserId,
-                    mapOf("partnerId" to request.toUserId)
+                    mapOf(
+                        "partnerId" to request.toUserId,
+                        "coupleId" to coupleId
+                    )
                 )
 
                 // Update request status
@@ -335,7 +363,7 @@ class PartnerHubViewModelFirebase : ViewModel() {
                     mapOf("status" to "accepted")
                 )
 
-                Log.d(TAG, "Link request accepted successfully")
+                Log.d(TAG, "Link request accepted successfully - coupleId: $coupleId")
                 
                 // Reload data to show linked state
                 loadData()

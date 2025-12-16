@@ -35,6 +35,8 @@ data class FirebaseCouple(
     val id: String = "",
     val user1Id: String = "",
     val user2Id: String = "",
+    val user1Nickname: String = "",
+    val user2Nickname: String = "",
     val anniversaryDate: String = "",
     val relationshipStatus: String = "dating",
     val sharedGardenLevel: Int = 1,
@@ -245,6 +247,7 @@ data class FirebasePurchaseHistory(
     val itemType: String = "",
     val price: Int = 0,
     val purchaseType: String = "", // coin, free, ad
+    val quantity: Int = 1,
     @ServerTimestamp
     val purchaseDate: Date? = null
 )
@@ -286,6 +289,8 @@ data class FirebaseGardenInventory(
     val fertilizer12h: Int = 0,
     val wateringCan: Int = 0,
     val sunlightBottle: Int = 0,
+    val pesticide: Int = 0,
+    val scissors: Int = 0,
     @ServerTimestamp
     val updatedAt: Date? = null
 )
