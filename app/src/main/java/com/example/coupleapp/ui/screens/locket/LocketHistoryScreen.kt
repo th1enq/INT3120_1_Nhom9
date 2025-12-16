@@ -33,6 +33,7 @@ import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.viewmodel.LocketViewModel
+import com.example.coupleapp.viewmodel.LocketViewModelFirebase
 import kotlinx.coroutines.delay
 import java.time.format.DateTimeFormatter
 
@@ -45,8 +46,12 @@ fun LocketHistoryScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: LocketViewModel = viewModel()
+    viewModel: LocketViewModelFirebase = viewModel()
 ) {
+    // Load all lockets for history view
+    LaunchedEffect(Unit) {
+        viewModel.loadAllLockets()
+    }
     val uiState by viewModel.uiState.collectAsState()
     
     var visible by remember { mutableStateOf(false) }
@@ -385,13 +390,23 @@ private fun HistoryGridItem(
         ) {
             when (post.type) {
                 LocketType.PHOTO -> {
-                    // Placeholder for photo
-                    Icon(
-                        imageVector = Icons.Default.Image,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.size(48.dp)
-                    )
+                    // Load photo from Firebase (Base64 or URL)
+                    if (post.content.isNotEmpty()) {
+                        com.example.coupleapp.ui.components.locket.LocketImageFromUrl(
+                            imageUrl = post.content,
+                            contentDescription = "Photo from ${post.senderName}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // Placeholder for photo
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
                 }
                 
                 LocketType.EMOJI -> {
@@ -402,12 +417,22 @@ private fun HistoryGridItem(
                 }
                 
                 LocketType.DRAWING -> {
-                    Icon(
-                        imageVector = Icons.Default.Brush,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(48.dp)
-                    )
+                    // Load drawing from Firebase (Base64 or URL)
+                    if (post.content.isNotEmpty()) {
+                        com.example.coupleapp.ui.components.locket.LocketImageFromUrl(
+                            imageUrl = post.content,
+                            contentDescription = "Drawing from ${post.senderName}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Brush,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
                 }
                 
                 LocketType.TEXT -> {
@@ -521,8 +546,44 @@ fun LocketPostDetailDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     when (post.type) {
+                        LocketType.PHOTO -> {
+                            // Load photo from Firebase (Base64 or URL)
+                            if (post.content.isNotEmpty()) {
+                                com.example.coupleapp.ui.components.locket.LocketImageFromUrl(
+                                    imageUrl = post.content,
+                                    contentDescription = "Photo from ${post.senderName}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(64.dp)
+                                )
+                            }
+                        }
                         LocketType.EMOJI -> {
                             Text(text = post.content, fontSize = 80.sp)
+                        }
+                        LocketType.DRAWING -> {
+                            // Load drawing from Firebase (Base64 or URL)
+                            if (post.content.isNotEmpty()) {
+                                com.example.coupleapp.ui.components.locket.LocketImageFromUrl(
+                                    imageUrl = post.content,
+                                    contentDescription = "Drawing from ${post.senderName}",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Brush,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(64.dp)
+                                )
+                            }
                         }
                         LocketType.TEXT -> {
                             Text(
@@ -532,15 +593,6 @@ fun LocketPostDetailDialog(
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(24.dp)
-                            )
-                        }
-                        else -> {
-                            Icon(
-                                imageVector = if (post.type == LocketType.PHOTO) 
-                                    Icons.Default.Image else Icons.Default.Brush,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier.size(64.dp)
                             )
                         }
                     }

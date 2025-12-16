@@ -5,24 +5,25 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
-import com.example.coupleapp.data.repository.FirebaseAuthRepository
-import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.example.coupleapp.widget.SleepWidgetManager
+import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.time.ZoneId
 import java.util.Date
 
 /**
  * Sleep Tracker ViewModel with Firebase integration
  */
 class SleepTrackerViewModelFirebase : ViewModel() {
-    private val authRepository = FirebaseAuthRepository()
-    private val firestoreRepository = FirebaseFirestoreRepository()
+    private val sleepRepository = SleepFirebaseRepository()
+    private val auth = FirebaseAuth.getInstance()
 
     companion object {
         private const val TAG = "SleepTrackerViewModel"
@@ -49,58 +50,36 @@ class SleepTrackerViewModelFirebase : ViewModel() {
             _uiState.update { it.copy(isLoading = true) }
 
             try {
-                val firebaseUser = authRepository.currentUser
-                if (firebaseUser == null) {
+                val currentUser = auth.currentUser
+                if (currentUser == null) {
                     Log.e(TAG, "User not logged in")
                     _uiState.update { it.copy(isLoading = false) }
                     return@launch
                 }
 
-                val userId = firebaseUser.uid
+                val userId = currentUser.uid
                 Log.d(TAG, "Loading data for user: $userId")
 
-                // Load current user
-                val currentUserResult = firestoreRepository.getDocument(
-                    "users",
-                    userId,
-                    FirebaseUser::class.java
-                )
-
-                val currentUser = currentUserResult.getOrNull()
-                if (currentUser == null) {
-                    Log.e(TAG, "Failed to load current user")
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
+                // Load current user profile
+                val currentUserResult = sleepRepository.getUserProfile(userId)
+                val currentUserProfile = currentUserResult.getOrElse {
+                    UserProfile(userId, "User", null)
                 }
 
-                val currentUserProfile = UserProfile(
-                    id = currentUser.id,
-                    name = currentUser.displayName,
-                    avatarUrl = currentUser.profileImageUrl.takeIf { it.isNotEmpty() }
-                )
-
-                // Load partner if exists
-                val partnerId = currentUser.partnerId
-                var partnerProfile = UserProfile("", "", null)
-
-                if (!partnerId.isNullOrEmpty()) {
-                    val partnerResult = firestoreRepository.getDocument(
-                        "users",
-                        partnerId,
-                        FirebaseUser::class.java
-                    )
-                    val partner = partnerResult.getOrNull()
-                    if (partner != null) {
-                        partnerProfile = UserProfile(
-                            id = partner.id,
-                            name = partner.displayName,
-                            avatarUrl = partner.profileImageUrl.takeIf { it.isNotEmpty() }
-                        )
+                // Load partner profile
+                val partnerIdResult = sleepRepository.getPartnerId()
+                val partnerId = partnerIdResult.getOrNull()
+                
+                var partnerProfile = UserProfile("", "Partner", null)
+                if (partnerId != null) {
+                    val partnerResult = sleepRepository.getUserProfile(partnerId)
+                    partnerProfile = partnerResult.getOrElse {
+                        UserProfile(partnerId, "Partner", null)
                     }
                 }
 
-                _uiState.update {
-                    it.copy(
+                _uiState.update { currentState ->
+                    currentState.copy(
                         currentUser = currentUserProfile,
                         partnerUser = partnerProfile,
                         isCurrentUser = true
@@ -108,7 +87,7 @@ class SleepTrackerViewModelFirebase : ViewModel() {
                 }
 
                 // Load current user's sleep data
-                loadUserData(currentUserProfile.id, isInitialLoad = true)
+                loadUserData(userId, isInitialLoad = true)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading initial data", e)
@@ -137,29 +116,41 @@ class SleepTrackerViewModelFirebase : ViewModel() {
 
         loadDataJob = viewModelScope.launch {
             try {
+                if (isInitialLoad) {
+                    kotlinx.coroutines.delay(500)
+                } else {
+                    kotlinx.coroutines.delay(200)
+                }
+
                 Log.d(TAG, "Loading sleep data for user: $userId")
 
-                // Load today's sleep record
-                val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-                val recordId = "${userId}_$today"
+                // Load settings
+                val settingsResult = sleepRepository.getSleepSettings(userId)
+                val firebaseSettings = settingsResult.getOrNull()
+                Log.d(TAG, "loadUserData: Firebase settings = $firebaseSettings")
                 
-                val sleepRecordResult = firestoreRepository.getDocument(
-                    "sleep_records",
-                    recordId,
-                    FirebaseSleepRecord::class.java
-                )
+                val settings = firebaseSettings?.let { sleepRepository.convertToSleepSettings(it) }
+                    ?: SleepSettings(
+                        targetSleepDuration = 480,
+                        idealBedTime = LocalTime.of(22, 0),
+                        idealWakeUpTime = LocalTime.of(6, 0),
+                        userId = userId
+                    )
+                Log.d(TAG, "loadUserData: Converted settings - bedTime=${settings.idealBedTime}, wakeTime=${settings.idealWakeUpTime}, duration=${settings.targetSleepDuration}")
 
-                val firebaseSleepRecord = sleepRecordResult.getOrNull()
-                val sleepRecord = firebaseSleepRecord?.toSleepRecord()
+                // Load today's sleep record
+                val todayRecordResult = sleepRepository.getTodaySleepRecord(userId)
+                val firebaseRecord = todayRecordResult.getOrNull()
+                val sleepRecord = firebaseRecord?.let { sleepRepository.convertToSleepRecord(it) }
 
-                // Load last 3 days history
-                val sleepHistory = loadSleepHistory(userId, 3)
+                // Load sleep history
+                val historyResult = sleepRepository.getSleepHistory(userId, 7)
+                val firebaseHistory = historyResult.getOrElse { emptyList() }
+                val sleepHistory = firebaseHistory.map { sleepRepository.convertToSleepRecord(it) }
+                    .take(3)
 
-                // Load or create settings
-                val settings = loadSleepSettings(userId)
-
-                _uiState.update {
-                    it.copy(
+                _uiState.update { currentState ->
+                    currentState.copy(
                         sleepRecord = sleepRecord,
                         sleepHistory = sleepHistory,
                         settings = settings,
@@ -167,7 +158,8 @@ class SleepTrackerViewModelFirebase : ViewModel() {
                     )
                 }
 
-                settings.idealBedTime?.let { checkBedtimeReminder(it) }
+                // Check bedtime reminder
+                checkBedtimeReminder(settings.idealBedTime)
 
                 Log.d(TAG, "Sleep data loaded successfully")
 
@@ -178,105 +170,215 @@ class SleepTrackerViewModelFirebase : ViewModel() {
         }
     }
 
-    private suspend fun loadSleepHistory(userId: String, days: Int): List<SleepRecord> {
-        val history = mutableListOf<SleepRecord>()
-        val today = LocalDate.now()
-
-        for (i in 1..days) {
-            val date = today.minusDays(i.toLong())
-            val dateString = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val recordId = "${userId}_$dateString"
-
-            val result = firestoreRepository.getDocument(
-                "sleep_records",
-                recordId,
-                FirebaseSleepRecord::class.java
-            )
-
-            result.getOrNull()?.toSleepRecord()?.let {
-                history.add(it)
-            }
-        }
-
-        return history
-    }
-
-    private suspend fun loadSleepSettings(userId: String): SleepSettings {
-        // For now, return default settings
-        // In production, you might want to store these in Firestore too
-        return SleepSettings(
-            targetSleepDuration = 480, // 8 hours
-            idealBedTime = LocalTime.of(22, 0),
-            idealWakeUpTime = LocalTime.of(6, 0),
-            userId = userId
-        )
-    }
-
     private fun checkBedtimeReminder(bedTime: LocalTime) {
-        val now = LocalTime.now()
-        val reminderStart = bedTime.minusMinutes(15)
-        val reminderEnd = bedTime.plusMinutes(30)
-
-        val shouldShowReminder = now.isAfter(reminderStart) && now.isBefore(reminderEnd)
-
-        if (shouldShowReminder) {
+        val (isTimeToSleep, message) = sleepRepository.checkTimeToSleep(bedTime)
+        
+        if (isTimeToSleep) {
             _uiState.update { it.copy(showBedtimeReminder = true) }
         }
     }
 
-    fun dismissBedtimeReminder() {
-        _uiState.update { it.copy(showBedtimeReminder = false) }
-    }
-
-    fun updateBedTime(newTime: LocalTime, context: Context? = null) {
-        val currentSettings = _uiState.value.settings
-        val updatedSettings = currentSettings.copy(idealBedTime = newTime)
-
-        // Optimistic update
-        _uiState.update { it.copy(settings = updatedSettings) }
-
+    /**
+     * Update when to sleep (bedtime)
+     */
+    fun updateBedTime(newBedTime: LocalTime) {
         viewModelScope.launch {
             try {
-                // TODO: Save settings to Firestore if needed
-                context?.let { SleepWidgetManager.onBedtimeSettingsChanged(it) }
+                val userId = getActiveUser().id
+                val currentSettings = _uiState.value.settings ?: return@launch
+                
+                Log.d(TAG, "updateBedTime: Old bedtime = ${currentSettings.idealBedTime}, New bedtime = $newBedTime")
+                
+                val firebaseSettings = FirebaseSleepSettings(
+                    id = userId,
+                    userId = userId,
+                    targetSleepDurationMinutes = currentSettings.targetSleepDuration,
+                    idealBedTimeHour = newBedTime.hour,
+                    idealBedTimeMinute = newBedTime.minute,
+                    idealWakeUpTimeHour = currentSettings.idealWakeUpTime.hour,
+                    idealWakeUpTimeMinute = currentSettings.idealWakeUpTime.minute
+                )
+                
+                val result = sleepRepository.updateSleepSettings(firebaseSettings)
+                if (result.isSuccess) {
+                    Log.d(TAG, "Bedtime updated successfully in Firebase")
+                    // Update local state immediately
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            settings = currentSettings.copy(idealBedTime = newBedTime)
+                        )
+                    }
+                    Log.d(TAG, "Local state updated: idealBedTime = ${_uiState.value.settings?.idealBedTime}")
+                    checkBedtimeReminder(newBedTime)
+                } else {
+                    Log.e(TAG, "Failed to update bedtime: ${result.exceptionOrNull()?.message}")
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating bed time", e)
-                _uiState.update { it.copy(settings = currentSettings) }
+                Log.e(TAG, "Error updating bedtime", e)
             }
         }
     }
 
-    fun updateSleepGoal(minutes: Int, context: Context? = null) {
-        val currentSettings = _uiState.value.settings
-        val updatedSettings = currentSettings.copy(targetSleepDuration = minutes)
-
-        _uiState.update { it.copy(settings = updatedSettings) }
-
+    /**
+     * Update wake up time
+     */
+    fun updateWakeUpTime(newWakeUpTime: LocalTime) {
         viewModelScope.launch {
             try {
-                // TODO: Save settings to Firestore if needed
-                context?.let { SleepWidgetManager.onSleepDataChanged(it) }
+                val userId = getActiveUser().id
+                val currentSettings = _uiState.value.settings ?: return@launch
+                
+                val firebaseSettings = FirebaseSleepSettings(
+                    id = userId,
+                    userId = userId,
+                    targetSleepDurationMinutes = currentSettings.targetSleepDuration,
+                    idealBedTimeHour = currentSettings.idealBedTime.hour,
+                    idealBedTimeMinute = currentSettings.idealBedTime.minute,
+                    idealWakeUpTimeHour = newWakeUpTime.hour,
+                    idealWakeUpTimeMinute = newWakeUpTime.minute
+                )
+                
+                val result = sleepRepository.updateSleepSettings(firebaseSettings)
+                if (result.isSuccess) {
+                    Log.d(TAG, "Wake up time updated successfully")
+                    // Update local state immediately
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            settings = currentSettings.copy(idealWakeUpTime = newWakeUpTime)
+                        )
+                    }
+                } else {
+                    Log.e(TAG, "Failed to update wake up time: ${result.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating wake up time", e)
+            }
+        }
+    }
+
+    /**
+     * Update sleep goal (target duration)
+     */
+    fun updateSleepGoal(durationMinutes: Int) {
+        viewModelScope.launch {
+            try {
+                val userId = getActiveUser().id
+                val currentSettings = _uiState.value.settings ?: return@launch
+                
+                Log.d(TAG, "updateSleepGoal: Old duration = ${currentSettings.targetSleepDuration} mins, New duration = $durationMinutes mins")
+                
+                val firebaseSettings = FirebaseSleepSettings(
+                    id = userId,
+                    userId = userId,
+                    targetSleepDurationMinutes = durationMinutes,
+                    idealBedTimeHour = currentSettings.idealBedTime.hour,
+                    idealBedTimeMinute = currentSettings.idealBedTime.minute,
+                    idealWakeUpTimeHour = currentSettings.idealWakeUpTime.hour,
+                    idealWakeUpTimeMinute = currentSettings.idealWakeUpTime.minute
+                )
+                
+                val result = sleepRepository.updateSleepSettings(firebaseSettings)
+                if (result.isSuccess) {
+                    Log.d(TAG, "Sleep goal updated successfully in Firebase")
+                    // Update local state immediately
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            settings = currentSettings.copy(targetSleepDuration = durationMinutes)
+                        )
+                    }
+                    Log.d(TAG, "Local state updated: targetSleepDuration = ${_uiState.value.settings?.targetSleepDuration} mins")
+                } else {
+                    Log.e(TAG, "Failed to update sleep goal: ${result.exceptionOrNull()?.message}")
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error updating sleep goal", e)
-                _uiState.update { it.copy(settings = currentSettings) }
             }
         }
     }
 
-    fun showBottomSheet(show: Boolean) {
-        _uiState.update { it.copy(showBottomSheet = show) }
+    /**
+     * Start sleep tracking
+     */
+    fun startSleepTracking() {
+        viewModelScope.launch {
+            try {
+                val userId = getActiveUser().id
+                val currentSettings = _uiState.value.settings ?: return@launch
+                val now = LocalTime.now()
+                
+                val firebaseRecord = FirebaseSleepRecord(
+                    userId = userId,
+                    coupleId = "", // Will be filled by repository if needed
+                    date = Timestamp(Date.from(LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant())),
+                    bedTimeHour = now.hour,
+                    bedTimeMinute = now.minute,
+                    wakeUpTimeHour = 0,
+                    wakeUpTimeMinute = 0,
+                    actualSleepDurationMinutes = 0,
+                    targetSleepDurationMinutes = currentSettings.targetSleepDuration,
+                    awakeDurationMinutes = 0,
+                    sleepDurationMinutes = 0,
+                    quality = "GOOD",
+                    achievementPercentage = 0f
+                )
+                
+                val result = sleepRepository.saveSleepRecord(firebaseRecord)
+                if (result.isSuccess) {
+                    Log.d(TAG, "Sleep tracking started")
+                    loadUserData(userId, false)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting sleep tracking", e)
+            }
+        }
     }
 
-    fun showTimeEditor(show: Boolean, type: TimeEditorType = TimeEditorType.NONE) {
-        _uiState.update { it.copy(showTimeEditor = show, timeEditorType = type) }
-    }
-
-    fun showWidgetInstructions() {
-        _uiState.update { it.copy(showWidgetInstructions = true) }
-    }
-
-    fun dismissWidgetInstructions() {
-        _uiState.update { it.copy(showWidgetInstructions = false) }
+    /**
+     * End sleep tracking
+     */
+    fun endSleepTracking() {
+        viewModelScope.launch {
+            try {
+                val userId = getActiveUser().id
+                val currentRecord = _uiState.value.sleepRecord ?: return@launch
+                val now = LocalTime.now()
+                
+                // Calculate duration
+                val bedTime = currentRecord.bedTime
+                val duration = java.time.Duration.between(bedTime, now).toMinutes().toInt()
+                
+                // Calculate quality
+                val (quality, percentage) = sleepRepository.calculateSleepQuality(
+                    duration,
+                    currentRecord.targetSleepDuration
+                )
+                
+                val updatedRecord = FirebaseSleepRecord(
+                    id = currentRecord.id,
+                    userId = userId,
+                    coupleId = "",
+                    date = Timestamp(Date.from(currentRecord.date.atZone(ZoneId.systemDefault()).toInstant())),
+                    bedTimeHour = bedTime.hour,
+                    bedTimeMinute = bedTime.minute,
+                    wakeUpTimeHour = now.hour,
+                    wakeUpTimeMinute = now.minute,
+                    actualSleepDurationMinutes = duration,
+                    targetSleepDurationMinutes = currentRecord.targetSleepDuration,
+                    awakeDurationMinutes = currentRecord.sleepStages.awakeDurationMinutes,
+                    sleepDurationMinutes = duration - currentRecord.sleepStages.awakeDurationMinutes,
+                    quality = quality.name,
+                    achievementPercentage = percentage
+                )
+                
+                val result = sleepRepository.saveSleepRecord(updatedRecord)
+                if (result.isSuccess) {
+                    Log.d(TAG, "Sleep tracking ended")
+                    loadUserData(userId, false)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error ending sleep tracking", e)
+            }
+        }
     }
 
     fun getActiveUser(): UserProfile {
@@ -287,126 +389,56 @@ class SleepTrackerViewModelFirebase : ViewModel() {
         }
     }
 
-    /**
-     * Insert mock sleep data into Firebase for testing
-     */
-    fun insertMockSleepData() {
-        viewModelScope.launch {
-            try {
-                val userId = authRepository.currentUser?.uid ?: return@launch
-                Log.d(TAG, "Inserting mock sleep data for user: $userId")
-
-                // Create mock data for the last 7 days
-                val today = LocalDate.now()
-                val mockData = listOf(
-                    // Today
-                    Triple("22:30", "06:15", "excellent"),
-                    // Yesterday
-                    Triple("23:00", "07:00", "good"),
-                    // 2 days ago
-                    Triple("22:15", "06:30", "excellent"),
-                    // 3 days ago
-                    Triple("23:30", "05:45", "fair"),
-                    // 4 days ago
-                    Triple("22:00", "06:00", "good"),
-                    // 5 days ago
-                    Triple("00:00", "07:30", "poor"),
-                    // 6 days ago
-                    Triple("22:45", "06:45", "excellent")
-                )
-
-                mockData.forEachIndexed { index, (sleepTime, wakeTime, quality) ->
-                    val date = today.minusDays(index.toLong())
-                    val dateString = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                    val recordId = "${userId}_$dateString"
-
-                    val sleepRecord = FirebaseSleepRecord(
-                        id = recordId,
-                        userId = userId,
-                        coupleId = "",
-                        date = dateString,
-                        sleepTime = sleepTime,
-                        wakeTime = wakeTime,
-                        quality = quality,
-                        notes = if (index == 0) "Ngủ rất ngon!" else "",
-                        createdAt = Date()
-                    )
-
-                    firestoreRepository.setDocument(
-                        collection = "sleep_records",
-                        documentId = recordId,
-                        data = sleepRecord
-                    ).fold(
-                        onSuccess = {
-                            Log.d(TAG, "Mock sleep record inserted: $recordId")
-                        },
-                        onFailure = { error ->
-                            Log.e(TAG, "Error inserting mock record: $recordId", error)
-                        }
-                    )
-                }
-
-                // Reload data after inserting
-                val activeUserId = getActiveUser().id
-                loadUserData(activeUserId, isInitialLoad = false)
-
-                Log.d(TAG, "Mock sleep data inserted successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error inserting mock sleep data", e)
-            }
-        }
+    fun showBottomSheet(show: Boolean) {
+        _uiState.update { it.copy(showBottomSheet = show) }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        loadDataJob?.cancel()
+    fun showTimeEditor(show: Boolean, type: TimeEditorType? = null) {
+        _uiState.update { it.copy(
+            showTimeEditor = show,
+            timeEditorType = type ?: TimeEditorType.NONE
+        )}
+    }
+
+    fun dismissBedtimeReminder() {
+        _uiState.update { it.copy(showBedtimeReminder = false) }
+    }
+
+    fun updateWidgets(context: Context) {
+        // TODO: Implement widget update if needed
+        Log.d(TAG, "Widget update requested")
     }
 }
 
-/**
- * Convert FirebaseSleepRecord to SleepRecord
- */
-private fun FirebaseSleepRecord.toSleepRecord(): SleepRecord {
-    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-    
-    val dateTime = LocalDate.parse(this.date, dateFormatter).atStartOfDay()
-    val bedTime = LocalTime.parse(this.sleepTime, timeFormatter)
-    val wakeUpTime = LocalTime.parse(this.wakeTime, timeFormatter)
-    
-    // Calculate sleep duration
-    val sleepDuration = if (wakeUpTime.isAfter(bedTime)) {
-        java.time.Duration.between(bedTime, wakeUpTime).toMinutes().toInt()
-    } else {
-        // Handle overnight sleep
-        java.time.Duration.between(bedTime, LocalTime.MAX).toMinutes().toInt() +
-        java.time.Duration.between(LocalTime.MIN, wakeUpTime).toMinutes().toInt()
-    }
-    
-    // Parse quality enum
-    val qualityEnum = when(this.quality.uppercase()) {
-        "EXCELLENT" -> SleepQuality.EXCELLENT
-        "GOOD" -> SleepQuality.GOOD
-        else -> SleepQuality.POOR
-    }
-    
-    // Calculate achievement percentage
-    val targetDuration = 480 // 8 hours default
-    val achievementPercentage = (sleepDuration.toFloat() / targetDuration) * 100f
-    
-    return SleepRecord(
-        id = "${this.userId}_${this.date}",
-        date = dateTime,
-        bedTime = bedTime,
-        wakeUpTime = wakeUpTime,
-        actualSleepDuration = sleepDuration,
-        targetSleepDuration = targetDuration,
-        sleepStages = SleepStage(
-            awakeDurationMinutes = (sleepDuration * 0.1).toInt(), // Estimate 10% awake
-            sleepDurationMinutes = (sleepDuration * 0.9).toInt() // Estimate 90% asleep
-        ),
-        quality = qualityEnum,
-        achievementPercentage = achievementPercentage,
-        userId = this.userId
-    )
+enum class TimeEditorType {
+    NONE,
+    BED_TIME,
+    WAKE_UP_TIME,
+    SLEEP_GOAL
+}
+
+data class SleepTrackerUiState(
+    val isLoading: Boolean = false,
+    val currentUser: UserProfile = UserProfile("", "", null),
+    val partnerUser: UserProfile = UserProfile("", "", null),
+    val isCurrentUser: Boolean = true,
+    val sleepRecord: SleepRecord? = null,
+    val sleepHistory: List<SleepRecord> = emptyList(),
+    val settings: SleepSettings? = null,
+    val showBottomSheet: Boolean = false,
+    val showTimeEditor: Boolean = false,
+    val timeEditorType: TimeEditorType = TimeEditorType.NONE,
+    val showBedtimeReminder: Boolean = false,
+    val showWidgetInstructions: Boolean = false
+) {
+    val isContentReady: Boolean
+        get() = !isLoading && sleepRecord != null
+}
+
+fun SleepTrackerUiState.getActiveUserProfile(): UserProfile {
+    return if (isCurrentUser) currentUser else partnerUser
+}
+
+fun SleepTrackerUiState.hasData(): Boolean {
+    return sleepRecord != null && sleepHistory.isNotEmpty()
 }

@@ -319,12 +319,17 @@ fun SleepTrackerScreen(
                 dragHandle = null
             ) {
                 SleepSettingsBottomSheet(
+                    bedTime = uiState.settings?.idealBedTime?.let { String.format("%02d:%02d", it.hour, it.minute) } ?: "22:00",
+                    sleepGoal = uiState.settings?.targetSleepDuration?.let { 
+                        val hours = it / 60
+                        val minutes = it % 60
+                        "${hours}h ${minutes}m"
+                    } ?: "8h 0m",
                     onAddWidgetClick = {
                         scope.launch {
                             sheetState.hide()
                             viewModel.showBottomSheet(false)
-                            // Show instruction to add widget
-                            viewModel.showWidgetInstructions()
+                            // TODO: Implement widget instructions
                         }
                     },
                     onWhenToSleepClick = {
@@ -352,7 +357,7 @@ fun SleepTrackerScreen(
                         scope.launch {
                             sheetState.hide()
                             viewModel.showBottomSheet(false)
-                            viewModel.insertMockSleepData()
+                            // Mock data not needed with Firebase
                         }
                     },
                     onDismiss = {
@@ -370,32 +375,33 @@ fun SleepTrackerScreen(
                 TimeEditorType.BED_TIME -> {
                     TimeEditorDialog(
                         title = "Bed Time",
-                        initialTime = uiState.sleepRecord?.bedTime ?: LocalTime.of(22, 0),
-                        onDismiss = { viewModel.showTimeEditor(false, TimeEditorType.NONE) },
+                        initialTime = uiState.settings?.idealBedTime ?: LocalTime.of(22, 0),
+                        onDismiss = { viewModel.showTimeEditor(false, null) },
                         onConfirm = { newTime ->
-                            viewModel.updateBedTime(newTime, context)
-                            viewModel.showTimeEditor(false, TimeEditorType.NONE)
+                            viewModel.updateBedTime(newTime)
+                            viewModel.showTimeEditor(false, null)
                         }
                     )
                 }
                 TimeEditorType.WAKE_UP_TIME -> {
                     TimeEditorDialog(
                         title = "Wake Up Time",
-                        initialTime = uiState.sleepRecord?.wakeUpTime ?: LocalTime.of(7, 0),
-                        onDismiss = { viewModel.showTimeEditor(false, TimeEditorType.NONE) },
+                        initialTime = uiState.settings?.idealWakeUpTime ?: LocalTime.of(7, 0),
+                        onDismiss = { viewModel.showTimeEditor(false, null) },
                         onConfirm = { newTime ->
-                            viewModel.showTimeEditor(false, TimeEditorType.NONE)
+                            viewModel.updateWakeUpTime(newTime)
+                            viewModel.showTimeEditor(false, null)
                         }
                     )
                 }
                 TimeEditorType.SLEEP_GOAL -> {
                     DurationEditorDialog(
                         title = "Sleep Goal",
-                        initialDurationMinutes = uiState.settings.targetSleepDuration,
-                        onDismiss = { viewModel.showTimeEditor(false, TimeEditorType.NONE) },
+                        initialDurationMinutes = uiState.settings?.targetSleepDuration ?: 480,
+                        onDismiss = { viewModel.showTimeEditor(false, null) },
                         onConfirm = { newDuration ->
-                            viewModel.updateSleepGoal(newDuration, context)
-                            viewModel.showTimeEditor(false, TimeEditorType.NONE)
+                            viewModel.updateSleepGoal(newDuration)
+                            viewModel.showTimeEditor(false, null)
                         }
                     )
                 }
@@ -404,18 +410,16 @@ fun SleepTrackerScreen(
         }
 
         if (uiState.showBedtimeReminder) {
-            BedtimeReminderDialog(
-                bedTime = uiState.settings.idealBedTime,
-                onDismiss = { viewModel.dismissBedtimeReminder() },
-                onGoToSleep = { viewModel.dismissBedtimeReminder() }
-            )
+            uiState.settings?.let { settings ->
+                BedtimeReminderDialog(
+                    bedTime = settings.idealBedTime,
+                    onDismiss = { viewModel.dismissBedtimeReminder() },
+                    onGoToSleep = { viewModel.dismissBedtimeReminder() }
+                )
+            }
         }
 
-        if (uiState.showWidgetInstructions) {
-            WidgetInstructionDialog(
-                onDismiss = { viewModel.dismissWidgetInstructions() }
-            )
-        }
+        // Widget instructions removed - not needed with Firebase implementation
         
         // TODO: Remove after testing - Temporary dialog for testing BedtimeReminderDialog
         if (showTestBedtimeDialog) {

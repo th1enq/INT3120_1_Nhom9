@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepSettingsBottomSheet(
+    bedTime: String = "22:00",
+    sleepGoal: String = "8h 0m",
     onAddWidgetClick: () -> Unit,
     onWhenToSleepClick: () -> Unit,
     onSleepGoalClick: () -> Unit,
@@ -83,7 +85,7 @@ fun SleepSettingsBottomSheet(
         SettingsItem(
             icon = Icons.Default.DateRange,
             title = "When to Sleep",
-            currentValue = "22:00",
+            currentValue = bedTime,
             onClick = onWhenToSleepClick
         )
         
@@ -95,7 +97,7 @@ fun SleepSettingsBottomSheet(
         SettingsItem(
             icon = Icons.Default.CheckCircle,
             title = "Sleep Goal",
-            currentValue = "8h 0m",
+            currentValue = sleepGoal,
             onClick = onSleepGoalClick
         )
         

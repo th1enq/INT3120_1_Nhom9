@@ -78,35 +78,35 @@ data class FirebaseMoment(
 )
 
 /**
- * Firebase Sleep Record Model
- */
-data class FirebaseSleepRecord(
-    @DocumentId
-    val id: String = "",
-    val userId: String = "",
-    val coupleId: String = "",
-    val date: String = "", // YYYY-MM-DD format
-    val sleepTime: String = "", // HH:mm format
-    val wakeTime: String = "", // HH:mm format
-    val quality: String = "good", // poor, fair, good, excellent
-    val notes: String = "",
-    @ServerTimestamp
-    val createdAt: Date? = null
-)
-
-/**
  * Firebase Locket Post Model
+ * Supports: photo (from camera/gallery), emoji, drawing, text
  */
 data class FirebaseLocketPost(
     @DocumentId
     val id: String = "",
     val coupleId: String = "",
     val senderId: String = "",
+    val senderName: String = "",
+    val senderAvatarUrl: String = "",
     val receiverId: String = "",
-    val type: String = "photo", // photo, drawing
-    val imageUrl: String = "",
+    val receiverName: String = "",
+    val type: String = "photo", // photo, emoji, drawing, text
+    
+    // For photo type
+    val photoUrl: String = "",
+    
+    // For emoji type
+    val emoji: String = "",
+    
+    // For drawing type
+    val drawingUrl: String = "",
+    
+    // For text type
+    val textContent: String = "",
+    
+    // Common fields
     val caption: String = "",
-    val isViewed: Boolean = false,
+    val isRead: Boolean = false,
     @ServerTimestamp
     val timestamp: Date? = null
 )

@@ -30,8 +30,10 @@ fun WhenToSleepScreen(
     modifier: Modifier = Modifier
 ) {
     var visible by remember { mutableStateOf(false) }
-    var selectedHour by remember { mutableIntStateOf(currentBedTime.hour) }
-    var selectedMinute by remember { mutableIntStateOf(currentBedTime.minute) }
+    val timePickerState = rememberTimePickerState(
+        initialHour = currentBedTime.hour,
+        initialMinute = currentBedTime.minute
+    )
     
     LaunchedEffect(Unit) {
         delay(50)  // Minimal delay for smooth transition
@@ -134,10 +136,7 @@ fun WhenToSleepScreen(
                             .padding(32.dp)
                     ) {
                         TimeInput(
-                            state = rememberTimePickerState(
-                                initialHour = selectedHour,
-                                initialMinute = selectedMinute
-                            ),
+                            state = timePickerState,
                             modifier = Modifier.padding(16.dp)
                         )
                     }
@@ -147,7 +146,7 @@ fun WhenToSleepScreen(
                     // Save button
                     Button(
                         onClick = {
-                            onSave(LocalTime.of(selectedHour, selectedMinute))
+                            onSave(LocalTime.of(timePickerState.hour, timePickerState.minute))
                             onBackClick()
                         },
                         modifier = Modifier

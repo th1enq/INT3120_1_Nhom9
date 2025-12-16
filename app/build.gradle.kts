@@ -81,6 +81,9 @@ dependencies {
     // Accompanist permissions for camera permission handling
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
     
+    // Coil for image loading (Firebase Storage URLs)
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    
     // Google Maps for Distance feature
     implementation("com.google.maps.android:maps-compose:4.3.0")
     implementation("com.google.android.gms:play-services-maps:18.2.0")

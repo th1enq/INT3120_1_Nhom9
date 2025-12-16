@@ -109,7 +109,7 @@ class SleepTrackerViewModel : ViewModel() {
     }
     
     fun updateBedTime(newTime: LocalTime, context: Context? = null) {
-        val currentSettings = _uiState.value.settings
+        val currentSettings = _uiState.value.settings ?: return
         val updatedSettings = currentSettings.copy(idealBedTime = newTime)
 
         // Optimistic update - Update UI ngay lập tức
@@ -130,7 +130,7 @@ class SleepTrackerViewModel : ViewModel() {
     }
 
     fun updateSleepGoal(minutes: Int, context: Context? = null) {
-        val currentSettings = _uiState.value.settings
+        val currentSettings = _uiState.value.settings ?: return
         val updatedSettings = currentSettings.copy(targetSleepDuration = minutes)
 
         _uiState.update { it.copy(settings = updatedSettings) }
@@ -178,36 +178,4 @@ class SleepTrackerViewModel : ViewModel() {
     }
 }
 
-data class SleepTrackerUiState(
-    val currentUser: UserProfile = UserProfile("", "", null),
-    val partnerUser: UserProfile = UserProfile("", "", null),
-    val isCurrentUser: Boolean = true,
-    val sleepRecord: SleepRecord? = null,
-    val sleepHistory: List<SleepRecord> = emptyList(),
-    val settings: SleepSettings = SleepSettings(480, LocalTime.of(22, 0), LocalTime.of(6, 0), ""),
-    val isLoading: Boolean = true,
-    val showBottomSheet: Boolean = false,
-    val showTimeEditor: Boolean = false,
-    val timeEditorType: TimeEditorType = TimeEditorType.NONE,
-    val showBedtimeReminder: Boolean = false,
-    val showWidgetInstructions: Boolean = false
-) {
-    val isContentReady: Boolean
-        get() = !isLoading && sleepRecord != null
-}
-
-enum class TimeEditorType {
-    NONE,
-    BED_TIME,
-    WAKE_UP_TIME,
-    SLEEP_GOAL
-}
-
-
-fun SleepTrackerUiState.getActiveUserProfile(): UserProfile {
-    return if (isCurrentUser) currentUser else partnerUser
-}
-
-fun SleepTrackerUiState.hasData(): Boolean {
-    return sleepRecord != null && sleepHistory.isNotEmpty()
-}
+// Moved to SleepTrackerViewModelFirebase.kt to avoid duplication
