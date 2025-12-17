@@ -334,6 +334,15 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
             return
         }
         
+        // Also schedule background location worker for when app is closed
+        // This provides battery-efficient background updates
+        try {
+            com.example.coupleapp.worker.BackgroundLocationWorker.schedule(context)
+            android.util.Log.d("DistanceViewModel", "Background location worker scheduled")
+        } catch (e: Exception) {
+            android.util.Log.e("DistanceViewModel", "Failed to schedule background worker", e)
+        }
+        
         // Listen to my location updates from the service (via StateFlow)
         // The service uploads to Firebase, we just observe the local state
         viewModelScope.launch {

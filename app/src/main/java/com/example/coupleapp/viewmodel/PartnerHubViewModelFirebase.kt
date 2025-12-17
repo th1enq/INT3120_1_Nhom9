@@ -441,9 +441,53 @@ class PartnerHubViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Load pending link requests for current user
+     * Load pending link requests for current user with real-time updates
      */
     private fun loadPendingRequests() {
+        viewModelScope.launch {
+            try {
+                val firebaseUser = authRepository.currentUser
+                val userId = firebaseUser?.uid ?: return@launch
+                
+                Log.d(TAG, "Setting up real-time listener for pending requests: $userId")
+                
+                // Set up real-time listener for pending requests
+                Firebase.firestore.collection("link_requests")
+                    .whereEqualTo("toUserId", userId)
+                    .whereEqualTo("status", "pending")
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            Log.e(TAG, "Error listening to pending requests", error)
+                            return@addSnapshotListener
+                        }
+                        
+                        if (snapshot != null) {
+                            val requests = snapshot.documents.mapNotNull { doc ->
+                                try {
+                                    doc.toObject(FirebaseLinkRequest::class.java)?.copy(id = doc.id)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error parsing request: ${doc.id}", e)
+                                    null
+                                }
+                            }
+                            
+                            Log.d(TAG, "Received ${requests.size} pending requests (real-time)")
+                            _pendingRequests.value = requests
+                            
+                            // Update notification count in UI state
+                            _uiState.update { it.copy(pendingRequestCount = requests.size) }
+                        }
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting up pending requests listener", e)
+            }
+        }
+    }
+    
+    /**
+     * Legacy method - kept for backup, but real-time listener is preferred
+     */
+    private fun loadPendingRequestsOnce() {
         viewModelScope.launch {
             try {
                 val firebaseUser = authRepository.currentUser
@@ -463,11 +507,10 @@ class PartnerHubViewModelFirebase : ViewModel() {
                     val pendingRequests = allRequests.filter { it.status == "pending" }
                     _pendingRequests.value = pendingRequests
                     Log.d(TAG, "Found ${pendingRequests.size} pending requests")
-
-                    // Update UI state based on pending requests
-                    if (pendingRequests.isNotEmpty() && _uiState.value.linkStatus == LinkStatus.NOT_LINKED) {
-                        _uiState.update { it.copy(linkStatus = LinkStatus.PENDING_RECEIVED) }
-                    }
+                    
+                    // Just update the count, don't change linkStatus anymore
+                    // The notification dialog handles pending requests now
+                    _uiState.update { it.copy(pendingRequestCount = pendingRequests.size) }
                 }.onFailure { error ->
                     Log.e(TAG, "Failed to load pending requests", error)
                 }
@@ -574,35 +617,46 @@ class PartnerHubViewModelFirebase : ViewModel() {
 
     /**
      * Load partner's latest location and update UI state
+     * Location documents are stored with format: {coupleId}_{userId}
      */
     private fun loadPartnerLocation(partnerId: String) {
         viewModelScope.launch {
             try {
                 val currentUser = authRepository.currentUser ?: return@launch
+                val currentUserData = _uiState.value.currentUser ?: return@launch
+                val coupleId = currentUserData.coupleId
+                
+                if (coupleId.isNullOrEmpty()) {
+                    Log.w(TAG, "Cannot load partner location: coupleId is empty")
+                    return@launch
+                }
+                
                 val firestore = Firebase.firestore
                 
-                // Load partner location
-                val partnerLocationSnapshot = firestore.collection("locations")
-                    .whereEqualTo("userId", partnerId)
-                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                    .limit(1)
+                // Load partner location - documents are stored as {coupleId}_{userId}
+                val partnerDocId = "${coupleId}_${partnerId}"
+                val partnerLocationDoc = firestore.collection("locations")
+                    .document(partnerDocId)
                     .get()
                     .await()
-                val partnerLocationDoc = partnerLocationSnapshot.documents.firstOrNull()
-                val partnerLocationName = partnerLocationDoc?.getString("address") ?: ""
+                
+                val partnerLocationName = if (partnerLocationDoc.exists()) {
+                    partnerLocationDoc.getString("address") ?: ""
+                } else {
+                    Log.d(TAG, "Partner location document not found: $partnerDocId")
+                    ""
+                }
                 
                 // Load current user location
-                val myLocationSnapshot = firestore.collection("locations")
-                    .whereEqualTo("userId", currentUser.uid)
-                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                    .limit(1)
+                val myDocId = "${coupleId}_${currentUser.uid}"
+                val myLocationDoc = firestore.collection("locations")
+                    .document(myDocId)
                     .get()
                     .await()
-                val myLocationDoc = myLocationSnapshot.documents.firstOrNull()
                 
                 // Calculate distance if both locations available
                 var distance: Double? = null
-                if (partnerLocationDoc != null && myLocationDoc != null) {
+                if (partnerLocationDoc.exists() && myLocationDoc.exists()) {
                     val partnerLat = partnerLocationDoc.getDouble("latitude")
                     val partnerLng = partnerLocationDoc.getDouble("longitude")
                     val myLat = myLocationDoc.getDouble("latitude")
@@ -610,8 +664,11 @@ class PartnerHubViewModelFirebase : ViewModel() {
                     
                     if (partnerLat != null && partnerLng != null && myLat != null && myLng != null) {
                         distance = calculateDistance(myLat, myLng, partnerLat, partnerLng)
+                        Log.d(TAG, "Calculated distance: $distance km")
                     }
                 }
+                
+                Log.d(TAG, "Partner location loaded: $partnerLocationName, distance: $distance")
                 
                 _uiState.update { state ->
                     state.copy(
@@ -619,11 +676,69 @@ class PartnerHubViewModelFirebase : ViewModel() {
                         partnerDistance = distance
                     )
                 }
+                
+                // Also set up real-time listener for partner location updates
+                setupPartnerLocationListener(coupleId, partnerId)
+                
             } catch (e: Exception) {
                 // Nếu lỗi thì không cập nhật gì, giữ nguyên
                 Log.e(TAG, "Error loading partner location", e)
             }
         }
+    }
+    
+    /**
+     * Setup real-time listener for partner location updates
+     */
+    private fun setupPartnerLocationListener(coupleId: String, partnerId: String) {
+        val firestore = Firebase.firestore
+        val partnerDocId = "${coupleId}_${partnerId}"
+        
+        firestore.collection("locations")
+            .document(partnerDocId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e(TAG, "Error listening to partner location", error)
+                    return@addSnapshotListener
+                }
+                
+                if (snapshot != null && snapshot.exists()) {
+                    val partnerLocationName = snapshot.getString("address") ?: ""
+                    val partnerLat = snapshot.getDouble("latitude")
+                    val partnerLng = snapshot.getDouble("longitude")
+                    
+                    // Calculate distance with current user location
+                    viewModelScope.launch {
+                        try {
+                            val currentUser = authRepository.currentUser ?: return@launch
+                            val myDocId = "${coupleId}_${currentUser.uid}"
+                            val myLocationDoc = firestore.collection("locations")
+                                .document(myDocId)
+                                .get()
+                                .await()
+                            
+                            var distance: Double? = null
+                            if (myLocationDoc.exists() && partnerLat != null && partnerLng != null) {
+                                val myLat = myLocationDoc.getDouble("latitude")
+                                val myLng = myLocationDoc.getDouble("longitude")
+                                
+                                if (myLat != null && myLng != null) {
+                                    distance = calculateDistance(myLat, myLng, partnerLat, partnerLng)
+                                }
+                            }
+                            
+                            _uiState.update { state ->
+                                state.copy(
+                                    partnerLocationName = partnerLocationName,
+                                    partnerDistance = distance
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error updating partner location from listener", e)
+                        }
+                    }
+                }
+            }
     }
     
     /**
@@ -657,5 +772,6 @@ data class PartnerHubFirebaseState(
     val unreadMessageCount: Int = 0,
     val pendingQACount: Int = 0,
     val partnerDistance: Double? = null,
-    val partnerLocationName: String = ""
+    val partnerLocationName: String = "",
+    val pendingRequestCount: Int = 0
 )

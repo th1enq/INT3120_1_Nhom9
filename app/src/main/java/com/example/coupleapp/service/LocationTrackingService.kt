@@ -444,6 +444,72 @@ class LocationTrackingService : Service() {
             return
         }
         
+        // Smart history merging: Check if there's a recent entry at the same location
+        // This prevents duplicate entries when user opens/closes app at the same place
+        serviceScope.launch {
+            try {
+                val recentHistoryQuery = db.collection("location_history")
+                    .whereEqualTo("userId", userId)
+                    .whereEqualTo("coupleId", coupleId)
+                    .limit(10)
+                    .get()
+                    .await()
+                
+                var mergedWithExisting = false
+                val now = Date(departureTimeMs)
+                
+                for (doc in recentHistoryQuery.documents) {
+                    val historyLat = doc.getDouble("latitude") ?: continue
+                    val historyLng = doc.getDouble("longitude") ?: continue
+                    val historyCoord = LocationCoordinate(historyLat, historyLng)
+                    val historyArrival = doc.getDate("arrivalTime") ?: continue
+                    val historyName = doc.getString("locationName") ?: ""
+                    
+                    val distance = calculateDistance(entry.coordinate, historyCoord)
+                    
+                    // Check if same location (within 200m) or same name
+                    val isSameLocation = distance <= COLOCATION_DISTANCE_METERS
+                    val isSameName = historyName.isNotBlank() && 
+                        detectPlaceName(entry.address).equals(historyName, ignoreCase = true)
+                    
+                    // Check if within last 2 hours (to merge nearby sessions)
+                    val timeDifferenceMs = entry.arrivalTimeMs - historyArrival.time
+                    val isRecentEntry = timeDifferenceMs >= 0 && timeDifferenceMs < 2 * 60 * 60 * 1000 // 2 hours
+                    
+                    if ((isSameLocation || isSameName) && isRecentEntry) {
+                        // Merge: Update the existing entry's departure time and duration
+                        val existingDuration = doc.getLong("durationMinutes")?.toInt() ?: 0
+                        val newDuration = existingDuration + durationMinutes
+                        
+                        doc.reference.update(
+                            mapOf(
+                                "departureTime" to now,
+                                "durationMinutes" to newDuration
+                            )
+                        ).await()
+                        
+                        android.util.Log.d("LocationTrackingService", 
+                            "Merged with existing history: ${doc.id}, new duration: ${newDuration}min")
+                        mergedWithExisting = true
+                        lastSavedHistoryLocation = entry.coordinate
+                        break
+                    }
+                }
+                
+                // Only create new entry if not merged
+                if (!mergedWithExisting) {
+                    createNewHistoryEntry(entry, departureTimeMs, durationMinutes)
+                }
+                
+            } catch (e: Exception) {
+                android.util.Log.e("LocationTrackingService", "Error checking for merge", e)
+                // Fallback: create new entry
+                createNewHistoryEntry(entry, departureTimeMs, durationMinutes)
+            }
+        }
+    }
+    
+    private fun createNewHistoryEntry(entry: LocationHistoryEntry, departureTimeMs: Long, durationMinutes: Int) {
         // Check if this location is at least 500m from the last saved history entry
         val lastSaved = lastSavedHistoryLocation
         if (lastSaved != null) {

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,7 @@ import com.example.coupleapp.ui.theme.*
 import com.example.coupleapp.viewmodel.PartnerHubViewModel
 import com.example.coupleapp.viewmodel.PartnerHubViewModelFirebase
 import kotlinx.coroutines.delay
+
 
 @Composable
 fun PartnerHubScreen(
@@ -62,6 +64,7 @@ fun PartnerHubScreen(
     
     // Dialog states
     var showCreateQuestionDialog by remember { mutableStateOf(false) }
+    var showNotificationDialog by remember { mutableStateOf(false) }
     
     Box(
         modifier = Modifier
@@ -81,25 +84,13 @@ fun PartnerHubScreen(
                 android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing loading state")
                 PartnerHubLoading()
             }
-            uiState.linkStatus == LinkStatus.PENDING_RECEIVED && pendingRequests.isNotEmpty() -> {
-                android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing pending requests screen")
-                PendingRequestsScreenFirebase(
-                    requests = pendingRequests,
-                    onAccept = { 
-                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Accepting request: $it")
-                        viewModel.acceptLinkRequest(it) 
-                    },
-                    onReject = { 
-                        android.util.Log.d("PartnerHubScreen", "[PARTNER] Rejecting request: $it")
-                        viewModel.rejectLinkRequest(it) 
-                    }
-                )
-            }
             uiState.linkStatus == LinkStatus.NOT_LINKED -> {
                 android.util.Log.d("PartnerHubScreen", "[PARTNER] Showing not connected screen")
                 NotConnectedScreenFirebase(
                     myLinkCode = uiState.myLinkCode,
-                    onNavigateToLinkPartner = onNavigateToLinkPartner
+                    pendingRequestCount = pendingRequests.size,
+                    onNavigateToLinkPartner = onNavigateToLinkPartner,
+                    onShowNotifications = { showNotificationDialog = true }
                 )
             }
             uiState.linkStatus == LinkStatus.LINKED -> {
@@ -163,6 +154,193 @@ fun PartnerHubScreen(
                     showCreateQuestionDialog = false
                 }
             )
+        }
+        
+        // Notification Dialog for pending link requests
+        if (showNotificationDialog) {
+            PendingRequestsDialog(
+                requests = pendingRequests,
+                onDismiss = { showNotificationDialog = false },
+                onAccept = { request ->
+                    android.util.Log.d("PartnerHubScreen", "[PARTNER] Accepting request: ${request.id}")
+                    viewModel.acceptLinkRequest(request)
+                    showNotificationDialog = false
+                },
+                onReject = { request ->
+                    android.util.Log.d("PartnerHubScreen", "[PARTNER] Rejecting request: ${request.id}")
+                    viewModel.rejectLinkRequest(request)
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Dialog hiển thị danh sách lời mời kết nối
+ */
+@Composable
+private fun PendingRequestsDialog(
+    requests: List<FirebaseLinkRequest>,
+    onDismiss: () -> Unit,
+    onAccept: (FirebaseLinkRequest) -> Unit,
+    onReject: (FirebaseLinkRequest) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "Lời mời kết nối",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+        },
+        text = {
+            if (requests.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NotificationsNone,
+                        contentDescription = null,
+                        tint = Color(0xFFBDBDBD),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Không có lời mời nào",
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    requests.forEach { request ->
+                        PendingRequestItem(
+                            request = request,
+                            onAccept = { onAccept(request) },
+                            onReject = { onReject(request) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Đóng",
+                    color = Color(0xFF4CAF50),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    )
+}
+
+/**
+ * Item hiển thị một lời mời kết nối
+ */
+@Composable
+private fun PendingRequestItem(
+    request: FirebaseLinkRequest,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFFF5F5F5)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Avatar
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF4CAF50), Color(0xFF8BC34A))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = request.fromUserName.firstOrNull()?.toString()?.uppercase() ?: "?",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = request.fromUserName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Muốn kết nối với bạn",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onReject,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = TextSecondary
+                    )
+                ) {
+                    Text("Từ chối", fontSize = 13.sp)
+                }
+                
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    )
+                ) {
+                    Text("Chấp nhận", fontSize = 13.sp)
+                }
+            }
         }
     }
 }
@@ -295,28 +473,302 @@ private fun PendingRequestsScreenFirebase(
 @Composable
 private fun NotConnectedScreenFirebase(
     myLinkCode: String,
-    onNavigateToLinkPartner: () -> Unit
+    pendingRequestCount: Int = 0,
+    onNavigateToLinkPartner: () -> Unit,
+    onShowNotifications: () -> Unit = {}
 ) {
-    Column(
+    Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Header
-        PartnerScreenHeader(
-            title = "Partner",
-            onAddFriendClick = null
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Header with notification bell
+            NotConnectedHeader(
+                title = "Partner",
+                pendingRequestCount = pendingRequestCount,
+                onNotificationClick = onShowNotifications
+            )
+            
+            // Not connected content with green theme
+            NotConnectedContentGreen(
+                myLinkCode = myLinkCode,
+                onAddByCode = { code ->
+                    // Navigate to link partner screen to search
+                    onNavigateToLinkPartner()
+                },
+                onShareLink = {
+                    // TODO: Share link functionality
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Header với nút thông báo cho màn hình chưa kết nối
+ */
+@Composable
+private fun NotConnectedHeader(
+    title: String,
+    pendingRequestCount: Int,
+    onNotificationClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(top = 30.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
         )
         
-        // Not connected content
-        NotConnectedContent(
-            myLinkCode = myLinkCode,
-            onAddByCode = { code ->
-                // Navigate to link partner screen to search
-                onNavigateToLinkPartner()
-            },
-            onShareLink = {
-                // TODO: Share link functionality
+        // Notification bell with badge
+        Box {
+            IconButton(
+                onClick = onNotificationClick,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE8F5E9))
+            ) {
+                Icon(
+                    imageVector = if (pendingRequestCount > 0) 
+                        Icons.Default.Notifications 
+                    else 
+                        Icons.Default.NotificationsNone,
+                    contentDescription = "Thông báo",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(24.dp)
+                )
             }
+            
+            // Badge for pending requests
+            if (pendingRequestCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF5252)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (pendingRequestCount > 9) "9+" else pendingRequestCount.toString(),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Giao diện kết nối với theme xanh lá (unified green theme)
+ */
+@Composable
+private fun NotConnectedContentGreen(
+    myLinkCode: String,
+    onAddByCode: (String) -> Unit,
+    onShareLink: () -> Unit
+) {
+    var linkCode by remember { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
+    var showCopied by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(showCopied) {
+        if (showCopied) {
+            delay(2000)
+            showCopied = false
+        }
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Welcome section
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(Color(0xFF66BB6A), Color(0xFF4CAF50))
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Favorite,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(50.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(20.dp))
+        
+        Text(
+            text = "Kết nối với người ấy",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
         )
+        
+        Text(
+            text = "Chia sẻ mã của bạn hoặc nhập mã của người ấy",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // My link code section
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFFE8F5E9)
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Mã của bạn",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF4CAF50)
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Link code display
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    myLinkCode.forEach { char ->
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = char.toString(),
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Copy button
+                AnimatedVisibility(visible = showCopied) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Đã sao chép!",
+                            color = Color(0xFF4CAF50),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                
+                OutlinedButton(
+                    onClick = {
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(myLinkCode))
+                        showCopied = true
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF4CAF50)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sao chép mã")
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Divider
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE0E0E0))
+            Text(
+                text = "hoặc",
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = TextSecondary,
+                fontSize = 14.sp
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE0E0E0))
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Enter partner code button
+        Button(
+            onClick = { onAddByCode("") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF4CAF50)
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.PersonAdd,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "Nhập mã người ấy",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
