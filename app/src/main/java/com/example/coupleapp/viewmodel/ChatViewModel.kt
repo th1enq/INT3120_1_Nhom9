@@ -1,14 +1,18 @@
 package com.example.coupleapp.viewmodel
 
+import android.app.Application
+import android.content.Context
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.model.ChatMessage
 import com.example.coupleapp.data.model.FirebaseChatMessage
 import com.example.coupleapp.data.model.FirebaseUser
 import com.example.coupleapp.data.model.MessageType
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.utils.NotificationHelper
 import com.google.firebase.database.*
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.delay
@@ -25,14 +29,16 @@ import java.util.UUID
 /**
  * ViewModel for Chat Screen with Firebase integration
  */
-class ChatViewModel : ViewModel() {
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
     private val realtimeDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(
         "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
     )
+    private val notificationHelper = NotificationHelper(application.applicationContext)
     private var messagesListener: ValueEventListener? = null
     private var messagesRef: DatabaseReference? = null
+    private var isInChatScreen = false
 
     companion object {
         private const val TAG = "ChatViewModel"
@@ -71,7 +77,19 @@ class ChatViewModel : ViewModel() {
         messagesListener?.let { listener ->
             messagesRef?.removeEventListener(listener)
         }
+        isInChatScreen = false
         Log.d(TAG, "ChatViewModel cleared, realtime listener removed")
+    }
+    
+    /**
+     * Set whether user is currently viewing the chat screen
+     */
+    fun setInChatScreen(inChat: Boolean) {
+        isInChatScreen = inChat
+        if (inChat) {
+            // Cancel notifications when user enters chat screen
+            notificationHelper.cancelMessageNotification()
+        }
     }
 
     /**
@@ -184,6 +202,32 @@ class ChatViewModel : ViewModel() {
                 
                 // Sort by timestamp
                 val sortedMessages = messagesList.sortedBy { it.createdAt }
+                
+                // Check for new messages from partner and show notification
+                val previousMessages = _messages.value
+                val newMessagesFromPartner = sortedMessages.filter { msg ->
+                    msg.senderId == partnerId && 
+                    !msg.isRead && 
+                    previousMessages.none { it.id == msg.id }
+                }
+                
+                // Show notification if:
+                // 1. There are new messages from partner
+                // 2. App is in background OR user is not in chat screen
+                val shouldShowNotification = newMessagesFromPartner.isNotEmpty() && 
+                    (!CoupleApplication.isAppInForeground || !isInChatScreen)
+                
+                if (shouldShowNotification) {
+                    val partnerName = _partner.value?.displayName ?: "Người yêu"
+                    val latestMessage = newMessagesFromPartner.last()
+                    notificationHelper.showMessageNotification(
+                        senderName = partnerName,
+                        messageText = latestMessage.content,
+                        messageCount = newMessagesFromPartner.size
+                    )
+                    Log.d(TAG, "[CHAT] 🔔 Notification shown: ${newMessagesFromPartner.size} new messages")
+                }
+                
                 _messages.value = sortedMessages
                 
                 Log.d(TAG, "[CHAT] ✅ Updated ${sortedMessages.size} messages in UI")

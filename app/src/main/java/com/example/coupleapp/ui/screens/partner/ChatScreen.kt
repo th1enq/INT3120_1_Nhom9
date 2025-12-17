@@ -55,6 +55,9 @@ fun ChatScreen(
     
     // Check biometric availability and authenticate on launch
     LaunchedEffect(Unit) {
+        // Set that user is in chat screen and cancel notifications
+        viewModel.setInChatScreen(true)
+        
         if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
             BiometricHelper.authenticate(
                 activity = activity,
@@ -121,6 +124,13 @@ fun ChatScreen(
             error = authError
         )
         return
+    }
+    
+    // Cleanup when leaving chat screen
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.setInChatScreen(false)
+        }
     }
     
     val messages by viewModel.messages.collectAsState()

@@ -163,8 +163,12 @@ fun EditProfileScreen(
                                     bio = bio,
                                     profileImageUrl = uploadedImageUrl,
                                     onSuccess = {
-                                        showSuccess = true
-                                        onSaveClick()
+                                        scope.launch {
+                                            showSuccess = true
+                                            // Reload profile data immediately
+                                            delay(500)
+                                            onSaveClick()
+                                        }
                                     },
                                     onError = { error ->
                                         errorMessage = error
