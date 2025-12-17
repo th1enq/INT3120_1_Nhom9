@@ -169,6 +169,60 @@ class ProfileViewModel : ViewModel() {
         Log.d(TAG, "refreshProfile() called")
         loadUserProfile()
     }
+    
+    /**
+     * Update user profile
+     */
+    fun updateProfile(
+        displayName: String,
+        email: String,
+        phoneNumber: String,
+        dateOfBirth: String,
+        gender: String,
+        bio: String,
+        profileImageUrl: String? = null,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val currentUserId = authRepository.currentUser?.uid
+                if (currentUserId == null) {
+                    onError("User not logged in")
+                    return@launch
+                }
+                
+                val updates = mutableMapOf<String, Any>(
+                    "displayName" to displayName,
+                    "email" to email,
+                    "phoneNumber" to phoneNumber,
+                    "dateOfBirth" to dateOfBirth,
+                    "gender" to gender,
+                    "bio" to bio
+                )
+                
+                profileImageUrl?.let {
+                    updates["profileImageUrl"] = it
+                }
+                
+                firestoreRepository.updateDocument(
+                    FirebaseFirestoreRepository.USERS_COLLECTION,
+                    currentUserId,
+                    updates
+                ).onSuccess {
+                    Log.d(TAG, "Profile updated successfully")
+                    loadUserProfile() // Reload profile
+                    onSuccess()
+                }.onFailure { error ->
+                    Log.e(TAG, "Failed to update profile", error)
+                    onError(error.message ?: "Failed to update profile")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating profile", e)
+                onError(e.message ?: "Unknown error")
+            }
+        }
+    }
 }
 
 /**

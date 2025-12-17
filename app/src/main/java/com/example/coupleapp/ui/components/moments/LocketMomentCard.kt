@@ -69,20 +69,40 @@ fun LocketMomentCard(
                         )
                     }
                     LocketType.PHOTO -> {
-                        Icon(
-                            imageVector = Icons.Filled.Image,
-                            contentDescription = null,
-                            tint = Color(0xFF66BB6A),
-                            modifier = Modifier.size(32.dp)
-                        )
+                        // Display actual photo if URL is available
+                        if (moment.content.isNotEmpty() && (moment.content.startsWith("http") || moment.content.startsWith("data:"))) {
+                            coil.compose.AsyncImage(
+                                model = moment.content,
+                                contentDescription = "Locket Photo",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Image,
+                                contentDescription = null,
+                                tint = Color(0xFF66BB6A),
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
                     }
                     LocketType.DRAWING -> {
-                        Icon(
-                            imageVector = Icons.Filled.Brush,
-                            contentDescription = null,
-                            tint = Color(0xFF66BB6A),
-                            modifier = Modifier.size(32.dp)
-                        )
+                        // Display actual drawing if URL is available
+                        if (moment.content.isNotEmpty() && (moment.content.startsWith("http") || moment.content.startsWith("data:"))) {
+                            coil.compose.AsyncImage(
+                                model = moment.content,
+                                contentDescription = "Locket Drawing",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Brush,
+                                contentDescription = null,
+                                tint = Color(0xFF66BB6A),
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
                     }
                 }
             }

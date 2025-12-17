@@ -225,7 +225,9 @@ fun ProfileScreen(
                             partnerName = partnerName,
                             partnerAvatar = partnerAvatar,
                             daysTogethe = daysTogethers,
-                            linkCode = linkCode
+                            linkCode = linkCode,
+                            currentUser = uiState.currentUser,
+                            partner = uiState.partner
                         )
                     }
                 }
@@ -307,7 +309,9 @@ private fun ProfileHeader(
     partnerName: String,
     partnerAvatar: String,
     daysTogethe: Int,
-    linkCode: String
+    linkCode: String,
+    currentUser: com.example.coupleapp.data.model.FirebaseUser? = null,
+    partner: com.example.coupleapp.data.model.FirebaseUser? = null
 ) {
     Box(
         modifier = Modifier
@@ -340,10 +344,21 @@ private fun ProfileHeader(
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = userAvatar,
-                        fontSize = 40.sp
-                    )
+                    if (currentUser?.profileImageUrl != null && currentUser.profileImageUrl!!.isNotEmpty()) {
+                        coil.compose.AsyncImage(
+                            model = currentUser.profileImageUrl,
+                            contentDescription = "Your Profile Picture",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = "Default Profile",
+                            modifier = Modifier.size(40.dp),
+                            tint = Color(0xFFE0E0E0)
+                        )
+                    }
                 }
                 
                 // Heart in middle
@@ -371,10 +386,21 @@ private fun ProfileHeader(
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = partnerAvatar,
-                        fontSize = 40.sp
-                    )
+                    if (partner?.profileImageUrl != null && partner.profileImageUrl!!.isNotEmpty()) {
+                        coil.compose.AsyncImage(
+                            model = partner.profileImageUrl,
+                            contentDescription = "Partner Profile Picture",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = "Default Partner Profile",
+                            modifier = Modifier.size(40.dp),
+                            tint = Color(0xFFE0E0E0)
+                        )
+                    }
                 }
             }
             

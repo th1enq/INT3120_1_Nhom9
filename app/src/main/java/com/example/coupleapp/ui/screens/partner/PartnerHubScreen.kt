@@ -109,9 +109,10 @@ fun PartnerHubScreen(
                 LinkedPartnerScreenFirebase(
                     currentUser = uiState.currentUser,
                     partner = uiState.partner,
+                    partnerLocationName = uiState.partnerLocationName,
+                    partnerDistance = uiState.partnerDistance,
                     shortcuts = viewModel.shortcuts,
                     qaQuestions = qaQuestions,
-                    
                     onNavigateToChat = {
                         android.util.Log.d("PartnerHubScreen", "[PARTNER] Navigate to chat")
                         onNavigateToChat()
@@ -326,6 +327,8 @@ private fun NotConnectedScreenFirebase(
 private fun LinkedPartnerScreenFirebase(
     currentUser: FirebaseUser?,
     partner: FirebaseUser?,
+    partnerLocationName: String,
+    partnerDistance: Double?,
     shortcuts: List<PartnerShortcut>,
     qaQuestions: List<QAQuestion>,
     onNavigateToChat: () -> Unit,
@@ -348,14 +351,14 @@ private fun LinkedPartnerScreenFirebase(
     
     // Convert FirebaseUser to PartnerUser for HouseCard
     val partnerUser = partner?.let {
-        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Converting partner to PartnerUser: \\${it.displayName}")
+        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Converting partner to PartnerUser: ${it.displayName}")
         PartnerUser(
             id = it.id,
             name = it.displayName,
             nickname = it.bio ?: "",
             avatarUrl = it.profileImageUrl,
             linkCode = it.linkCode,
-            locationName = uiState.partnerLocationName
+            locationName = partnerLocationName.ifEmpty { "Unknown" }
         )
     }
     
@@ -393,9 +396,14 @@ private fun LinkedPartnerScreenFirebase(
             // House Card như mock data
             if (partnerUser != null) {
                 android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Rendering HouseCard for: ${partnerUser.name}")
+                val distanceText = when {
+                    partnerDistance == null -> ""
+                    partnerDistance < 1.0 -> String.format("%.0f m", partnerDistance * 1000)
+                    else -> String.format("%.1f km", partnerDistance)
+                }
                 HouseCard(
                     partner = partnerUser,
-                    partnerDistance = "Unknown",
+                    partnerDistance = distanceText,
                     partnerLocation = partnerUser.locationName,
                     shortcuts = shortcuts,
                     onChatClick = {
@@ -416,11 +424,10 @@ private fun LinkedPartnerScreenFirebase(
                 )
             }
             
-            android.util.Log.d("LinkedPartnerScreen", "[PARTNER] After HouseCard, before Spacer")
             Spacer(modifier = Modifier.height(16.dp))
             
             // Q&A Timeline Section
-            android.util.Log.d("LinkedPartnerScreen", "[PARTNER] After Spacer, rendering Q&A Timeline, questions: ${qaQuestions.size}")
+            android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Rendering Q&A Timeline, questions: ${qaQuestions.size}")
             QATimelineSection(
                 questions = qaQuestions,
                 currentUserId = currentUser?.id ?: "",

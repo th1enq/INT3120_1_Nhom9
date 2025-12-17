@@ -26,8 +26,8 @@ class AuthViewModel : ViewModel() {
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
 
     init {
-        // Don't auto-check on init to avoid auto-login
-        // checkAuthStatus() will be called manually when needed
+        // Auto-check on init for persistent login
+        checkAuthStatus()
     }
 
     /**

@@ -578,24 +578,70 @@ class PartnerHubViewModelFirebase : ViewModel() {
     private fun loadPartnerLocation(partnerId: String) {
         viewModelScope.launch {
             try {
+                val currentUser = authRepository.currentUser ?: return@launch
                 val firestore = Firebase.firestore
-                val locationSnapshot = firestore.collection("locations")
+                
+                // Load partner location
+                val partnerLocationSnapshot = firestore.collection("locations")
                     .whereEqualTo("userId", partnerId)
                     .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                     .limit(1)
                     .get()
                     .await()
-                val locationDoc = locationSnapshot.documents.firstOrNull()
-                val locationName = locationDoc?.getString("address") ?: ""
+                val partnerLocationDoc = partnerLocationSnapshot.documents.firstOrNull()
+                val partnerLocationName = partnerLocationDoc?.getString("address") ?: ""
+                
+                // Load current user location
+                val myLocationSnapshot = firestore.collection("locations")
+                    .whereEqualTo("userId", currentUser.uid)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .await()
+                val myLocationDoc = myLocationSnapshot.documents.firstOrNull()
+                
+                // Calculate distance if both locations available
+                var distance: Double? = null
+                if (partnerLocationDoc != null && myLocationDoc != null) {
+                    val partnerLat = partnerLocationDoc.getDouble("latitude")
+                    val partnerLng = partnerLocationDoc.getDouble("longitude")
+                    val myLat = myLocationDoc.getDouble("latitude")
+                    val myLng = myLocationDoc.getDouble("longitude")
+                    
+                    if (partnerLat != null && partnerLng != null && myLat != null && myLng != null) {
+                        distance = calculateDistance(myLat, myLng, partnerLat, partnerLng)
+                    }
+                }
+                
                 _uiState.update { state ->
                     state.copy(
-                        partnerLocationName = locationName
+                        partnerLocationName = partnerLocationName,
+                        partnerDistance = distance
                     )
                 }
             } catch (e: Exception) {
                 // Nếu lỗi thì không cập nhật gì, giữ nguyên
+                Log.e(TAG, "Error loading partner location", e)
             }
         }
+    }
+    
+    /**
+     * Calculate distance between two coordinates in kilometers
+     */
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val earthRadius = 6371.0 // km
+        
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        
+        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        
+        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        
+        return earthRadius * c
     }
 }
 

@@ -658,6 +658,7 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
     /**
      * Add a photo to a shared place
      * Flow: Upload to Firebase Storage -> Save metadata to Firestore -> Refresh UI
+     * Limit: Maximum 30 photos per place
      */
     fun addPhotoToPlace(placeId: String, photoUriString: String) {
         viewModelScope.launch {
@@ -668,7 +669,13 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                     throw Exception("User not logged in")
                 }
                 
-                android.util.Log.d("DistanceViewModel", "Adding photo to place: $placeId")
+                // Check photo count limit (30 photos max)
+                val currentPhotoCount = _photosState.value.photos.size
+                if (currentPhotoCount >= 30) {
+                    throw Exception("Đã đạt giới hạn 30 ảnh cho địa điểm này. Vui lòng xóa một số ảnh cũ trước khi thêm ảnh mới.")
+                }
+                
+                android.util.Log.d("DistanceViewModel", "Adding photo to place: $placeId (current count: $currentPhotoCount/30)")
                 android.util.Log.d("DistanceViewModel", "Photo URI string: $photoUriString")
                 
                 // Parse the URI
@@ -774,6 +781,50 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                 android.util.Log.e("DistanceViewModel", "Error deleting photo", e)
                 _photosState.update { 
                     it.copy(error = "Failed to delete photo: ${e.message}") 
+                }
+            } finally {
+                _photosState.update { it.copy(isAddingPhoto = false) }
+            }
+        }
+    }
+    
+    /**
+     * Delete multiple photos from a shared place at once
+     */
+    fun deleteMultiplePhotosFromPlace(photoIds: List<String>, placeId: String) {
+        viewModelScope.launch {
+            _photosState.update { it.copy(isAddingPhoto = true, error = null) }
+            
+            try {
+                android.util.Log.d("DistanceViewModel", "Deleting ${photoIds.size} photos from place: $placeId")
+                
+                var successCount = 0
+                var failCount = 0
+                
+                // Delete each photo
+                photoIds.forEach { photoId ->
+                    val result = locationRepository.deletePhotoFromSharedPlace(photoId, placeId)
+                    if (result.isSuccess) {
+                        successCount++
+                    } else {
+                        failCount++
+                    }
+                }
+                
+                android.util.Log.d("DistanceViewModel", "Deleted $successCount photos, $failCount failed")
+                
+                // Reload photos to update the UI
+                loadPlacePhotos(placeId)
+                
+                if (failCount > 0) {
+                    _photosState.update { 
+                        it.copy(error = "Đã xóa $successCount ảnh, $failCount ảnh không thể xóa") 
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DistanceViewModel", "Error deleting multiple photos", e)
+                _photosState.update { 
+                    it.copy(error = "Lỗi khi xóa ảnh: ${e.message}") 
                 }
             } finally {
                 _photosState.update { it.copy(isAddingPhoto = false) }

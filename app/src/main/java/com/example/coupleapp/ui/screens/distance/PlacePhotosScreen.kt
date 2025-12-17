@@ -73,6 +73,9 @@ fun PlacePhotosScreen(
     var visible by remember { mutableStateOf(false) }
     var showAddPhotoDialog by remember { mutableStateOf(false) }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedPhotoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
     
     android.util.Log.d("PlacePhotosScreen", "=== Screen rendered for placeId: $placeId ===")
     android.util.Log.d("PlacePhotosScreen", "Photos count: ${photosState.photos.size}")
@@ -152,7 +155,24 @@ fun PlacePhotosScreen(
                 topBar = {
                     PlacePhotosTopBar(
                         placeName = photosState.place?.placeName ?: "",
-                        onBackClick = onBackClick
+                        onBackClick = if (selectionMode) {
+                            {
+                                selectionMode = false
+                                selectedPhotoIds = emptySet()
+                            }
+                        } else {
+                            onBackClick
+                        },
+                        selectionMode = selectionMode,
+                        selectedCount = selectedPhotoIds.size,
+                        onEnterSelectionMode = {
+                            selectionMode = true
+                        },
+                        onDeleteSelected = {
+                            if (selectedPhotoIds.isNotEmpty()) {
+                                showDeleteConfirmation = true
+                            }
+                        }
                     )
                 },
                 floatingActionButton = {
@@ -229,6 +249,15 @@ fun PlacePhotosScreen(
                                     photos = photosState.photos,
                                     currentUserId = currentUserId,
                                     placeId = placeId,
+                                    selectionMode = selectionMode,
+                                    selectedPhotoIds = selectedPhotoIds,
+                                    onPhotoSelectionChanged = { photoId, isSelected ->
+                                        selectedPhotoIds = if (isSelected) {
+                                            selectedPhotoIds + photoId
+                                        } else {
+                                            selectedPhotoIds - photoId
+                                        }
+                                    },
                                     onDeletePhoto = { photoId ->
                                         viewModel.deletePhotoFromPlace(photoId, placeId)
                                     },
@@ -287,6 +316,59 @@ fun PlacePhotosScreen(
         )
     }
     
+    // Delete confirmation dialog
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = Color(0xFFF44336),
+                    modifier = Modifier.size(48.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Delete ${selectedPhotoIds.size} photo${if (selectedPhotoIds.size > 1) "s" else ""}?",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = "This action cannot be undone. These photos will be permanently removed from this place.",
+                    fontSize = 14.sp,
+                    color = TextSecondary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteMultiplePhotosFromPlace(selectedPhotoIds.toList(), placeId)
+                        selectionMode = false
+                        selectedPhotoIds = emptySet()
+                        showDeleteConfirmation = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Delete All")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteConfirmation = false }
+                ) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+    
     // Show error toast
     LaunchedEffect(photosState.error) {
         photosState.error?.let { error ->
@@ -299,12 +381,16 @@ fun PlacePhotosScreen(
 @Composable
 private fun PlacePhotosTopBar(
     placeName: String,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    selectionMode: Boolean = false,
+    selectedCount: Int = 0,
+    onEnterSelectionMode: () -> Unit = {},
+    onDeleteSelected: () -> Unit = {}
 ) {
     TopAppBar(
         title = {
             Text(
-                text = placeName,
+                text = if (selectionMode) "$selectedCount selected" else placeName,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -331,21 +417,42 @@ private fun PlacePhotosTopBar(
             }
         },
         actions = {
-            IconButton(
-                onClick = { /* TODO: Share */ },
-                modifier = Modifier
-                    .padding(8.dp)
-                    .size(40.dp)
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color.White)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Share,
-                    contentDescription = "Share",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
+            if (selectionMode && selectedCount > 0) {
+                // Delete button when in selection mode
+                IconButton(
+                    onClick = onDeleteSelected,
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(40.dp)
+                        .shadow(4.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF44336))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Selected",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else if (!selectionMode) {
+                // Selection mode button
+                IconButton(
+                    onClick = onEnterSelectionMode,
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .size(40.dp)
+                        .shadow(4.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Select Photos",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -477,10 +584,13 @@ private fun PhotosGrid(
     photos: List<SharedPlacePhoto>,
     currentUserId: String,
     placeId: String,
+    selectionMode: Boolean = false,
+    selectedPhotoIds: Set<String> = emptySet(),
+    onPhotoSelectionChanged: (String, Boolean) -> Unit = { _, _ -> },
     onDeletePhoto: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    android.util.Log.d("PhotosGrid", "Rendering grid with ${photos.size} photos, currentUserId: $currentUserId")
+    android.util.Log.d("PhotosGrid", "Rendering grid with ${photos.size} photos, currentUserId: $currentUserId, selectionMode: $selectionMode")
     
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -498,6 +608,11 @@ private fun PhotosGrid(
                 photo = photo,
                 currentUserId = currentUserId,
                 animationDelay = index * 80,
+                selectionMode = selectionMode,
+                isSelected = selectedPhotoIds.contains(photo.id),
+                onSelectionChanged = { isSelected ->
+                    onPhotoSelectionChanged(photo.id, isSelected)
+                },
                 onDeleteClick = { onDeletePhoto(photo.id) }
             )
         }
@@ -509,6 +624,9 @@ private fun PhotoCard(
     photo: SharedPlacePhoto,
     currentUserId: String,
     animationDelay: Int,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onSelectionChanged: (Boolean) -> Unit = {},
     onDeleteClick: () -> Unit
 ) {
     var visible by remember { mutableStateOf(false) }
@@ -530,8 +648,8 @@ private fun PhotoCard(
         label = "photoScale"
     )
     
-    // Delete confirmation dialog
-    if (showDeleteDialog) {
+    // Delete confirmation dialog (only in normal mode)
+    if (showDeleteDialog && !selectionMode) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             shape = RoundedCornerShape(20.dp),
@@ -602,7 +720,12 @@ private fun PhotoCard(
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null
-                ) { /* TODO: Open full screen */ },
+                ) { 
+                    if (selectionMode) {
+                        onSelectionChanged(!isSelected)
+                    }
+                    /* TODO: Open full screen in normal mode */ 
+                },
             shape = RoundedCornerShape(16.dp),
             color = Color.White,
             shadowElevation = 4.dp
@@ -744,24 +867,66 @@ private fun PhotoCard(
                     )
                 }
                 
-                // Delete button (bottom right)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .size(28.dp)
-                        .shadow(2.dp, CircleShape)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.9f))
-                        .clickable { showDeleteDialog = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete photo",
-                        tint = Color(0xFFE53935),
-                        modifier = Modifier.size(16.dp)
+                // Delete button (bottom right) - only show in normal mode
+                if (!selectionMode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .size(28.dp)
+                            .shadow(2.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.9f))
+                            .clickable { showDeleteDialog = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete photo",
+                            tint = Color(0xFFE53935),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                
+                // Selection checkbox overlay - only show in selection mode
+                if (selectionMode) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                if (isSelected) Color.Black.copy(alpha = 0.3f)
+                                else Color.Transparent
+                            )
                     )
+                    
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(32.dp)
+                            .shadow(2.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) PastelPink
+                                else Color.White.copy(alpha = 0.9f)
+                            )
+                            .border(
+                                2.dp,
+                                if (isSelected) SoftPink else Color.Gray.copy(alpha = 0.3f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = SoftPink,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
