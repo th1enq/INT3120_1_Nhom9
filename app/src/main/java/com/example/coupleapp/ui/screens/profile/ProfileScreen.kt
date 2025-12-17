@@ -109,10 +109,12 @@ fun ProfileScreen(
         }
     }
     
-    // Animation
+    // Animation and refresh on return
     LaunchedEffect(Unit) {
         delay(100)
         visible = true
+        // Reload profile data when screen is shown
+        viewModel.loadUserProfile()
     }
     
     // Logout confirmation dialog
@@ -137,6 +139,7 @@ fun ProfileScreen(
                     onClick = {
                         showLogoutDialog = false
                         viewModel.signOut()
+                        // Navigate immediately after logout
                         onLogout()
                     }
                 ) {

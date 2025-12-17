@@ -69,6 +69,9 @@ dependencies {
     // Lifecycle runtime compose for LocalLifecycleOwner
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     
+    // Lifecycle process for app lifecycle tracking
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    
     // Lottie for animations
     implementation("com.airbnb.android:lottie-compose:6.1.0")
     

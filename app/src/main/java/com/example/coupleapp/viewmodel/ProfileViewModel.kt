@@ -34,7 +34,7 @@ class ProfileViewModel : ViewModel() {
         loadUserProfile()
     }
 
-    private fun loadUserProfile() {
+    fun loadUserProfile() {
         viewModelScope.launch {
             Log.d(TAG, "loadUserProfile() started")
             _uiState.value = _uiState.value.copy(isLoading = true)
