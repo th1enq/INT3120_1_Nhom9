@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,6 +21,7 @@ import com.example.coupleapp.ui.screens.RegisterScreen
 import com.example.coupleapp.ui.screens.LoginWithFirebaseScreen
 import com.example.coupleapp.ui.screens.RegisterWithFirebaseScreen
 import com.example.coupleapp.ui.screens.WelcomeScreen
+import com.example.coupleapp.viewmodel.AuthState
 import com.example.coupleapp.viewmodel.AuthViewModel
 import com.example.coupleapp.viewmodel.QuestViewModelFirebase
 import com.example.coupleapp.ui.screens.SleepTrackerScreen
@@ -53,9 +55,27 @@ fun NavGraph(
     // Shared QuestViewModel across all screens
     val questViewModel: QuestViewModelFirebase = viewModel()
     
+    // Shared AuthViewModel for persistent login check
+    val sharedAuthViewModel: AuthViewModel = viewModel()
+    val authState by sharedAuthViewModel.authState.collectAsState()
+    
+    // Determine start destination based on login state
+    val actualStartDestination = remember(authState) {
+        when {
+            startDestination != null -> startDestination
+            authState == AuthState.Authenticated -> Screen.Home.route
+            else -> Screen.Welcome.route
+        }
+    }
+    
+    // Check auth status on app launch
+    LaunchedEffect(Unit) {
+        sharedAuthViewModel.checkAuthStatus()
+    }
+    
     NavHost(
         navController = navController,
-        startDestination = startDestination ?: Screen.Welcome.route
+        startDestination = actualStartDestination
     ) {
         composable(
             route = Screen.Welcome.route,
@@ -66,11 +86,13 @@ fun NavGraph(
                 fadeOut(animationSpec = tween(300))
             }
         ) {
-            val authViewModel: AuthViewModel = viewModel()
-            
-            // Reset auth state when entering Welcome screen
-            androidx.compose.runtime.LaunchedEffect(Unit) {
-                authViewModel.resetAuthState()
+            // If already authenticated, navigate to Home
+            LaunchedEffect(authState) {
+                if (authState == AuthState.Authenticated) {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                }
             }
             
             WelcomeScreen(

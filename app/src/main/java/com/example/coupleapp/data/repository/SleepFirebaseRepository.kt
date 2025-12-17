@@ -747,4 +747,271 @@ class SleepFirebaseRepository(
             Log.e(TAG, "updateLastAutoSyncTime: Error", e)
         }
     }
+    
+    // ========== Manual Sleep Tracking ==========
+    
+    /**
+     * Start manual sleep tracking
+     */
+    suspend fun startManualSleepTracking(userId: String): Result<String> {
+        return try {
+            Log.d(TAG, "startManualSleepTracking: Creating session for user $userId")
+            val docRef = firestore.collection("active_sleep_sessions").document(userId)
+            
+            // Use explicit map to ensure field names are correct
+            // NOTE: Do NOT include 'id' field - it conflicts with @DocumentId annotation
+            val sessionData = hashMapOf(
+                "userId" to userId,
+                "startTime" to Timestamp.now(),
+                "isActive" to true,
+                "active" to true,  // Include both for backward compatibility
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            
+            Log.d(TAG, "startManualSleepTracking: Writing to Firestore with fields: ${sessionData.keys}")
+            docRef.set(sessionData).await()
+            
+            Log.d(TAG, "startManualSleepTracking: Successfully written to Firestore - doc path: ${docRef.path}")
+            Result.success(userId)
+        } catch (e: Exception) {
+            Log.e(TAG, "startManualSleepTracking: Error writing to Firestore", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Get active sleep session
+     */
+    suspend fun getActiveSleepSession(userId: String): Result<FirebaseActiveSleepSession?> {
+        return try {
+            Log.d(TAG, "getActiveSleepSession: Querying for user $userId")
+            val doc = firestore.collection("active_sleep_sessions")
+                .document(userId)
+                .get()
+                .await()
+            
+            Log.d(TAG, "getActiveSleepSession: Query complete - doc.exists=${doc.exists()}, doc.id=${doc.id}")
+            
+            if (doc.exists()) {
+                // Check both field names for compatibility (Firestore may have "active" or "isActive")
+                val isActive = doc.getBoolean("isActive") ?: doc.getBoolean("active")
+                val data = doc.data
+                Log.d(TAG, "getActiveSleepSession: Found doc - isActive=$isActive, data keys=${data?.keys}")
+                
+                if (isActive == true) {
+                    // Parse manually to avoid @DocumentId conflict with existing 'id' field
+                    val startTime = doc.getTimestamp("startTime")
+                    val session = FirebaseActiveSleepSession(
+                        id = doc.id,
+                        userId = doc.getString("userId") ?: userId,
+                        startTime = startTime,
+                        isActive = true
+                    )
+                    Log.d(TAG, "getActiveSleepSession: Returning active session - startTime=$startTime")
+                    Result.success(session)
+                } else {
+                    Log.d(TAG, "getActiveSleepSession: Session exists but isActive=false")
+                    Result.success(null)
+                }
+            } else {
+                Log.d(TAG, "getActiveSleepSession: No document found")
+                Result.success(null)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getActiveSleepSession: Error querying Firestore", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * End manual sleep tracking and create record
+     */
+    suspend fun endManualSleepTracking(userId: String): Result<FirebaseSleepRecord> {
+        return try {
+            val sessionDoc = firestore.collection("active_sleep_sessions")
+                .document(userId)
+                .get()
+                .await()
+            
+            if (!sessionDoc.exists()) {
+                return Result.failure(Exception("No active sleep session found"))
+            }
+            
+            val session = sessionDoc.toObject(FirebaseActiveSleepSession::class.java)
+                ?: return Result.failure(Exception("Failed to parse sleep session"))
+            
+            val startTime = session.startTime?.toDate()?.toInstant()
+                ?: return Result.failure(Exception("Invalid start time"))
+            
+            val endTime = Instant.now()
+            val durationMinutes = java.time.Duration.between(startTime, endTime).toMinutes().toInt()
+            
+            // Convert to LocalDateTime for bed/wake times
+            val startDateTime = LocalDateTime.ofInstant(startTime, ZoneId.systemDefault())
+            val endDateTime = LocalDateTime.ofInstant(endTime, ZoneId.systemDefault())
+            
+            // Get settings for target duration
+            val settings = getSleepSettings(userId).getOrNull()
+            val targetDuration = settings?.targetSleepDurationMinutes ?: 480
+            
+            // Calculate quality
+            val (quality, achievement) = calculateSleepQuality(durationMinutes, targetDuration)
+            
+            // Get couple ID
+            val coupleIdResult = getCoupleId(userId)
+            val coupleId = coupleIdResult.getOrNull() ?: ""
+            
+            // Create sleep record
+            val record = FirebaseSleepRecord(
+                userId = userId,
+                coupleId = coupleId,
+                date = Timestamp(Date.from(startDateTime.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant())),
+                bedTimeHour = startDateTime.hour,
+                bedTimeMinute = startDateTime.minute,
+                wakeUpTimeHour = endDateTime.hour,
+                wakeUpTimeMinute = endDateTime.minute,
+                actualSleepDurationMinutes = durationMinutes,
+                targetSleepDurationMinutes = targetDuration,
+                sleepDurationMinutes = durationMinutes,
+                quality = quality.name,
+                achievementPercentage = achievement,
+                trackingMethod = "MANUAL",
+                isManualTracking = false,
+                manualSleepStartTime = session.startTime
+            )
+            
+            // Save record
+            val recordId = saveSleepRecord(record).getOrThrow()
+            
+            // Delete active session
+            firestore.collection("active_sleep_sessions")
+                .document(userId)
+                .delete()
+                .await()
+            
+            Log.d(TAG, "endManualSleepTracking: Created record $recordId, duration=$durationMinutes minutes")
+            Result.success(record.copy(id = recordId))
+        } catch (e: Exception) {
+            Log.e(TAG, "endManualSleepTracking: Error", e)
+            Result.failure(e)
+        }
+    }
+    
+    // ========== Google Sleep API Integration ==========
+    
+    /**
+     * Save sleep segment from Google API
+     */
+    suspend fun saveSleepSegmentFromGoogleApi(
+        userId: String,
+        startTimeMillis: Long,
+        endTimeMillis: Long,
+        durationMillis: Long
+    ): Result<String> {
+        return try {
+            val startInstant = Instant.ofEpochMilli(startTimeMillis)
+            val endInstant = Instant.ofEpochMilli(endTimeMillis)
+            val durationMinutes = (durationMillis / 1000 / 60).toInt()
+            
+            val startDateTime = LocalDateTime.ofInstant(startInstant, ZoneId.systemDefault())
+            val endDateTime = LocalDateTime.ofInstant(endInstant, ZoneId.systemDefault())
+            
+            // Get settings
+            val settings = getSleepSettings(userId).getOrNull()
+            val targetDuration = settings?.targetSleepDurationMinutes ?: 480
+            
+            // Calculate quality
+            val (quality, achievement) = calculateSleepQuality(durationMinutes, targetDuration)
+            
+            // Get couple ID
+            val coupleIdResult = getCoupleId(userId)
+            val coupleId = coupleIdResult.getOrNull() ?: ""
+            
+            // Create record
+            val record = FirebaseSleepRecord(
+                userId = userId,
+                coupleId = coupleId,
+                date = Timestamp(Date.from(startDateTime.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant())),
+                bedTimeHour = startDateTime.hour,
+                bedTimeMinute = startDateTime.minute,
+                wakeUpTimeHour = endDateTime.hour,
+                wakeUpTimeMinute = endDateTime.minute,
+                actualSleepDurationMinutes = durationMinutes,
+                targetSleepDurationMinutes = targetDuration,
+                sleepDurationMinutes = durationMinutes,
+                quality = quality.name,
+                achievementPercentage = achievement,
+                trackingMethod = "GOOGLE_API",
+                isManualTracking = false
+            )
+            
+            // Check if record already exists for this date
+            val existingRecord = getTodaySleepRecord(userId).getOrNull()
+            if (existingRecord != null && existingRecord.trackingMethod == "MANUAL") {
+                // Don't overwrite manual tracking with Google API data
+                Log.d(TAG, "saveSleepSegmentFromGoogleApi: Skipping - manual record exists")
+                return Result.success(existingRecord.id)
+            }
+            
+            val recordId = saveSleepRecord(record).getOrThrow()
+            Log.d(TAG, "saveSleepSegmentFromGoogleApi: Saved record $recordId")
+            
+            Result.success(recordId)
+        } catch (e: Exception) {
+            Log.e(TAG, "saveSleepSegmentFromGoogleApi: Error", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Save sleep classification data
+     */
+    suspend fun saveSleepClassification(
+        userId: String,
+        confidence: Int,
+        motion: Int,
+        light: Int,
+        timestampMillis: Long
+    ): Result<String> {
+        return try {
+            val timestamp = Timestamp(Date(timestampMillis))
+            
+            val classification = FirebaseSleepClassification(
+                userId = userId,
+                confidence = confidence,
+                motion = motion,
+                light = light,
+                timestamp = timestamp
+            )
+            
+            val docRef = firestore.collection("sleep_classifications")
+                .document()
+            
+            docRef.set(classification.copy(id = docRef.id)).await()
+            
+            Log.d(TAG, "saveSleepClassification: Saved ${docRef.id}")
+            Result.success(docRef.id)
+        } catch (e: Exception) {
+            Log.e(TAG, "saveSleepClassification: Error", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Get couple ID for user
+     */
+    private suspend fun getCoupleId(userId: String): Result<String> {
+        return try {
+            val doc = firestore.collection(USERS_COLLECTION)
+                .document(userId)
+                .get()
+                .await()
+            
+            val coupleId = doc.getString("coupleId") ?: ""
+            Result.success(coupleId)
+        } catch (e: Exception) {
+            Log.e(TAG, "getCoupleId: Error", e)
+            Result.success("") // Return empty string on error
+        }
+    }
 }

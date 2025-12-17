@@ -1,5 +1,6 @@
 package com.example.coupleapp.ui.screens.partner
 
+import android.app.Activity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -21,14 +22,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.ChatMessage
 import com.example.coupleapp.data.model.MessageType
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.BiometricHelper
 import com.example.coupleapp.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -41,6 +45,84 @@ fun ChatScreen(
     onBackClick: () -> Unit,
     viewModel: ChatViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
+    
+    // Biometric authentication state
+    var isAuthenticated by remember { mutableStateOf(false) }
+    var authError by remember { mutableStateOf<String?>(null) }
+    var showAuthRequired by remember { mutableStateOf(true) }
+    
+    // Check biometric availability and authenticate on launch
+    LaunchedEffect(Unit) {
+        if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
+            BiometricHelper.authenticate(
+                activity = activity,
+                title = "Xác thực để xem tin nhắn",
+                subtitle = "Sử dụng vân tay, Face ID hoặc mã PIN để mở khóa",
+                negativeButtonText = "Hủy"
+            ) { result ->
+                when (result) {
+                    is BiometricHelper.AuthenticationResult.Success -> {
+                        isAuthenticated = true
+                        showAuthRequired = false
+                    }
+                    is BiometricHelper.AuthenticationResult.Cancelled -> {
+                        // User cancelled - go back
+                        onBackClick()
+                    }
+                    is BiometricHelper.AuthenticationResult.Failed -> {
+                        authError = "Xác thực thất bại, vui lòng thử lại"
+                    }
+                    is BiometricHelper.AuthenticationResult.Error -> {
+                        authError = result.message
+                    }
+                    else -> {}
+                }
+            }
+        } else {
+            // Biometric not available - allow access
+            isAuthenticated = true
+            showAuthRequired = false
+        }
+    }
+    
+    // Show authentication required screen
+    if (showAuthRequired && !isAuthenticated) {
+        AuthenticationRequiredScreen(
+            onRetry = {
+                if (activity != null) {
+                    BiometricHelper.authenticate(
+                        activity = activity,
+                        title = "Xác thực để xem tin nhắn",
+                        subtitle = "Sử dụng vân tay, Face ID hoặc mã PIN để mở khóa",
+                        negativeButtonText = "Hủy"
+                    ) { result ->
+                        when (result) {
+                            is BiometricHelper.AuthenticationResult.Success -> {
+                                isAuthenticated = true
+                                showAuthRequired = false
+                            }
+                            is BiometricHelper.AuthenticationResult.Cancelled -> {
+                                onBackClick()
+                            }
+                            is BiometricHelper.AuthenticationResult.Failed -> {
+                                authError = "Xác thực thất bại, vui lòng thử lại"
+                            }
+                            is BiometricHelper.AuthenticationResult.Error -> {
+                                authError = result.message
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+            },
+            onBack = onBackClick,
+            error = authError
+        )
+        return
+    }
+    
     val messages by viewModel.messages.collectAsState()
     val partner by viewModel.partner.collectAsState()
     val messageText by viewModel.messageText.collectAsState()
@@ -447,6 +529,55 @@ private fun EmojiPicker(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthenticationRequiredScreen(
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    error: String? = null
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = "Biometric Required",
+                tint = Color(0xFFFF6B9D),
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Xác thực để truy cập tin nhắn",
+                fontWeight = FontWeight.Bold,
+                fontSize = 20.sp,
+                color = Color(0xFF2D3748)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Vui lòng xác thực bằng vân tay, Face ID hoặc mã PIN để tiếp tục.",
+                color = Color(0xFF718096),
+                textAlign = TextAlign.Center
+            )
+            error?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = it, color = Color.Red, fontSize = 14.sp)
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B9D))) {
+                    Text("Thử lại", color = Color.White)
+                }
+                OutlinedButton(onClick = onBack) {
+                    Text("Quay lại")
                 }
             }
         }

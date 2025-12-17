@@ -27,12 +27,14 @@ import androidx.compose.ui.unit.sp
 fun SleepSettingsBottomSheet(
     bedTime: String = "22:00",
     sleepGoal: String = "8h 0m",
+    isGoogleSleepApiEnabled: Boolean = false,
     onAddWidgetClick: () -> Unit,
     onWhenToSleepClick: () -> Unit,
     onSleepGoalClick: () -> Unit,
     onMyHistoryClick: () -> Unit,
     onSyncHealthConnectClick: () -> Unit = {},
     onInsertMockDataClick: () -> Unit = {},
+    onToggleGoogleSleepApi: (Boolean) -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -112,6 +114,19 @@ fun SleepSettingsBottomSheet(
             title = "My History",
             currentValue = "",
             onClick = onMyHistoryClick
+        )
+        
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            color = Color(0xFFF5F5F5)
+        )
+        
+        SettingsItemWithSwitch(
+            icon = Icons.Default.Notifications,
+            title = "Google Sleep API",
+            description = "Auto-track sleep in background",
+            isEnabled = isGoogleSleepApiEnabled,
+            onToggle = onToggleGoogleSleepApi
         )
         
         HorizontalDivider(
@@ -216,5 +231,79 @@ private fun SettingsItem(
                 tint = Color(0xFFB0B0B0)
             )
         }
+    }
+}
+
+/**
+ * Settings item with switch toggle
+ */
+@Composable
+private fun SettingsItemWithSwitch(
+    icon: ImageVector,
+    title: String,
+    description: String,
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            // Icon
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFF5F5F5)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFF757575)
+                )
+            }
+            
+            // Title and description
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 16.sp
+                    ),
+                    color = Color(0xFF2D2D2D)
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp
+                    ),
+                    color = Color(0xFF757575)
+                )
+            }
+        }
+        
+        // Switch
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = onToggle,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF4CAF50),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color(0xFFE0E0E0)
+            )
+        )
     }
 }

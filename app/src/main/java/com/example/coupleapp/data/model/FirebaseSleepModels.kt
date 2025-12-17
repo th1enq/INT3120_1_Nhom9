@@ -40,6 +40,9 @@ data class FirebaseSleepRecord(
     val sleepDurationMinutes: Int = 0,
     val quality: String = "GOOD", // EXCELLENT, GOOD, POOR
     val achievementPercentage: Float = 0f,
+    val trackingMethod: String = "MANUAL", // MANUAL, GOOGLE_API, HEALTH_CONNECT
+    val isManualTracking: Boolean = false, // Is user manually tracking sleep
+    val manualSleepStartTime: Timestamp? = null, // When user pressed "Sleep now"
     @ServerTimestamp
     val createdAt: Timestamp? = null
 )
@@ -60,4 +63,32 @@ data class FirebaseWhenToSleep(
     val minutesUntilBedtime: Int = 0,
     @ServerTimestamp
     val checkedAt: Timestamp? = null
+)
+
+/**
+ * Firebase model for Sleep Classification data from Google API
+ */
+data class FirebaseSleepClassification(
+    @DocumentId
+    val id: String = "",
+    val userId: String = "",
+    val confidence: Int = 0, // 0-100
+    val motion: Int = 0, // Motion level
+    val light: Int = 0, // Light level
+    val timestamp: Timestamp? = null,
+    @ServerTimestamp
+    val createdAt: Timestamp? = null
+)
+
+/**
+ * Firebase model for Active Sleep Session (manual tracking)
+ */
+data class FirebaseActiveSleepSession(
+    @DocumentId
+    val id: String = "",
+    val userId: String = "",
+    val startTime: Timestamp? = null,
+    val isActive: Boolean = true,
+    @ServerTimestamp
+    val createdAt: Timestamp? = null
 )

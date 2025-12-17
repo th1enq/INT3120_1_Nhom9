@@ -44,6 +44,7 @@ import java.time.LocalTime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,8 +71,23 @@ fun SleepTrackerScreen(
     val scope = rememberCoroutineScope()
     
     var showHealthConnectPermissionDialog by remember { mutableStateOf(false) }
+    var showActivityRecognitionPermissionDialog by remember { mutableStateOf(false) }
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
+    
+    // Lifecycle observer to refresh sleep state when app resumes
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshSleepState()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
     
     // Show sync status snackbar
     LaunchedEffect(uiState.healthConnectSyncStatus) {
@@ -81,6 +97,13 @@ fun SleepTrackerScreen(
                 duration = SnackbarDuration.Short
             )
             viewModel.clearSyncStatus()
+        }
+    }
+    
+    // Handle activity recognition permission request
+    LaunchedEffect(uiState.needsActivityRecognitionPermission) {
+        if (uiState.needsActivityRecognitionPermission) {
+            showActivityRecognitionPermissionDialog = true
         }
     }
     
@@ -104,7 +127,7 @@ fun SleepTrackerScreen(
     }
     
     // TODO: Remove after testing - Temporary state to show BedtimeReminderDialog for testing
-    var showTestBedtimeDialog by remember { mutableStateOf(true) }
+    var showTestBedtimeDialog by remember { mutableStateOf(false) }
 
     val scrollState = rememberLazyListState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -359,6 +382,42 @@ fun SleepTrackerScreen(
             }
         }
 
+        // Bedtime Reminder Dialog
+        if (uiState.showBedtimeReminder || showTestBedtimeDialog) {
+            val bedTime = uiState.settings?.idealBedTime ?: LocalTime.of(22, 0)
+            BedtimeReminderDialog(
+                bedTime = bedTime,
+                onDismiss = {
+                    viewModel.dismissBedtimeReminder()
+                    showTestBedtimeDialog = false
+                },
+                onGoToSleep = {
+                    viewModel.startManualSleepTracking()
+                    showTestBedtimeDialog = false
+                }
+            )
+        }
+
+        // Wake Up Dialog
+        if (uiState.showWakeUpDialog && uiState.activeSleepSession != null) {
+            val startTime = uiState.activeSleepSession?.startTime?.toDate()?.toInstant()
+            if (startTime != null) {
+                val startDateTime = LocalDateTime.ofInstant(
+                    startTime,
+                    java.time.ZoneId.systemDefault()
+                )
+                WakeUpDialog(
+                    sleepStartTime = startDateTime,
+                    onWakeUp = {
+                        viewModel.endManualSleepTracking()
+                    },
+                    onDismiss = {
+                        viewModel.dismissWakeUpDialog()
+                    }
+                )
+            }
+        }
+
         // --- Bottom Sheet & Dialogs giữ nguyên ---
         if (uiState.showBottomSheet) {
             ModalBottomSheet(
@@ -374,6 +433,7 @@ fun SleepTrackerScreen(
                         val minutes = it % 60
                         "${hours}h ${minutes}m"
                     } ?: "8h 0m",
+                    isGoogleSleepApiEnabled = uiState.isGoogleSleepApiEnabled,
                     onAddWidgetClick = {
                         scope.launch {
                             sheetState.hide()
@@ -436,6 +496,15 @@ fun SleepTrackerScreen(
                             questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SLEEP_TRACKING, 1)
                         }
                     },
+                    onToggleGoogleSleepApi = { enabled ->
+                        scope.launch {
+                            if (enabled) {
+                                viewModel.enableGoogleSleepApi()
+                            } else {
+                                viewModel.disableGoogleSleepApi()
+                            }
+                        }
+                    },
                     onDismiss = {
                         scope.launch {
                             sheetState.hide()
@@ -490,7 +559,9 @@ fun SleepTrackerScreen(
                 BedtimeReminderDialog(
                     bedTime = settings.idealBedTime,
                     onDismiss = { viewModel.dismissBedtimeReminder() },
-                    onGoToSleep = { viewModel.dismissBedtimeReminder() }
+                    onGoToSleep = { 
+                        viewModel.startManualSleepTracking()
+                    }
                 )
             }
         }
@@ -505,6 +576,17 @@ fun SleepTrackerScreen(
             )
         }
         
+        // Activity Recognition permission dialog for Google Sleep API
+        if (showActivityRecognitionPermissionDialog) {
+            ActivityRecognitionPermissionDialog(
+                onDismiss = { showActivityRecognitionPermissionDialog = false },
+                onRequestPermission = { 
+                    showActivityRecognitionPermissionDialog = false
+                    // Permission request is handled by the system
+                }
+            )
+        }
+        
         // TODO: Remove after testing - Temporary dialog for testing BedtimeReminderDialog
         if (showTestBedtimeDialog) {
             BedtimeReminderDialog(
@@ -515,6 +597,44 @@ fun SleepTrackerScreen(
         }
     }
 }
+
+/**
+ * Dialog to request Activity Recognition permission for Google Sleep API
+ */
+@Composable
+private fun ActivityRecognitionPermissionDialog(
+    onDismiss: () -> Unit,
+    onRequestPermission: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Activity Recognition Required",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        },
+        text = {
+            Text(
+                text = "To enable automatic sleep tracking with Google Sleep API, please grant Activity Recognition permission in the app settings.\n\nGo to: Settings > Apps > CoupleApp > Permissions > Physical activity",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(onClick = onRequestPermission) {
+                Text("Open Settings")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Later")
+            }
+        }
+    )
+}
+
 @Composable
 private fun TopBar(
     userName: String,

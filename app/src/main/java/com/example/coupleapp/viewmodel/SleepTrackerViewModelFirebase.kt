@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.SleepFirebaseRepository
+import com.example.coupleapp.data.sleep.GoogleSleepApiManager
 import com.example.coupleapp.widget.SleepWidgetManager
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -25,10 +26,13 @@ class SleepTrackerViewModelFirebase(
     private val context: Context? = null
 ) : ViewModel() {
     private val sleepRepository = SleepFirebaseRepository(context)
+    private val googleSleepApiManager = context?.let { GoogleSleepApiManager(it) }
     private val auth = FirebaseAuth.getInstance()
+    private val prefs = context?.getSharedPreferences("sleep_prefs", Context.MODE_PRIVATE)
 
     companion object {
         private const val TAG = "SleepTrackerViewModel"
+        private const val PREF_GOOGLE_SLEEP_API_ENABLED = "google_sleep_api_enabled"
     }
 
     private val _uiState = MutableStateFlow(SleepTrackerUiState())
@@ -46,6 +50,8 @@ class SleepTrackerViewModelFirebase(
         Log.d(TAG, "SleepTrackerViewModelFirebase initialized")
         loadInitialData()
         checkAndAutoSync()
+        checkActiveSleepSession()
+        checkGoogleSleepApiStatus()
     }
 
     private fun loadInitialData() {
@@ -172,8 +178,11 @@ class SleepTrackerViewModelFirebase(
                     )
                 }
 
-                // Check bedtime reminder
-                checkBedtimeReminder(settings.idealBedTime)
+                // Check bedtime reminder (only if no active sleep session)
+                val hasActiveSession = _uiState.value.activeSleepSession != null
+                if (!hasActiveSession) {
+                    checkBedtimeReminder(settings.idealBedTime)
+                }
 
                 Log.d(TAG, "Sleep data loaded successfully")
 
@@ -184,10 +193,55 @@ class SleepTrackerViewModelFirebase(
         }
     }
 
+    /**
+     * Check if it's time for bedtime reminder
+     * Shows dialog if current time is within 30 minutes before or after bedtime
+     * Does NOT show if user already has a sleep record for today (already slept and woke up)
+     */
     private fun checkBedtimeReminder(bedTime: LocalTime) {
-        val (isTimeToSleep, message) = sleepRepository.checkTimeToSleep(bedTime)
+        val now = LocalTime.now()
+        val today = LocalDate.now()
+        val minutesDiff = java.time.Duration.between(bedTime, now).toMinutes()
         
-        if (isTimeToSleep) {
+        Log.d(TAG, "checkBedtimeReminder: bedTime=$bedTime, now=$now, minutesDiff=$minutesDiff")
+        
+        // Check if user already has a sleep record for today
+        val sleepRecord = _uiState.value.sleepRecord
+        val recordDate = sleepRecord?.date?.toLocalDate()
+        val hasTodayRecord = sleepRecord != null && recordDate == today
+        
+        Log.d(TAG, "checkBedtimeReminder: sleepRecord=${sleepRecord?.id}, recordDate=$recordDate, today=$today, hasTodayRecord=$hasTodayRecord")
+        
+        // Show reminder if:
+        // 1. No active sleep session
+        // 2. No sleep record for today (haven't slept yet today)
+        // 3. Within time window
+        val shouldShowReminder = when {
+            _uiState.value.activeSleepSession != null -> {
+                Log.d(TAG, "checkBedtimeReminder: Active session exists, not showing")
+                false
+            }
+            hasTodayRecord -> {
+                Log.d(TAG, "checkBedtimeReminder: Already have today's record (id=${sleepRecord?.id}), not showing")
+                false
+            }
+            minutesDiff in -30..60 -> {
+                Log.d(TAG, "checkBedtimeReminder: Within reminder window, showing")
+                true
+            }
+            // Handle overnight case (e.g., bedtime at 23:00, current time 00:30)
+            bedTime.hour >= 20 && now.hour < 4 -> {
+                val adjustedMinutesDiff = minutesDiff + 24 * 60 // Adjust for day wrap
+                Log.d(TAG, "checkBedtimeReminder: Overnight case, adjustedMinutesDiff=$adjustedMinutesDiff")
+                adjustedMinutesDiff in -30..60
+            }
+            else -> {
+                Log.d(TAG, "checkBedtimeReminder: Outside reminder window, not showing")
+                false
+            }
+        }
+        
+        if (shouldShowReminder) {
             _uiState.update { it.copy(showBedtimeReminder = true) }
         }
     }
@@ -596,6 +650,285 @@ class SleepTrackerViewModelFirebase(
             Log.e(TAG, "tryAutoSync: Error during auto-sync", e)
         }
     }
+    
+    // ========== Manual Sleep Tracking ==========
+    
+    /**
+     * Check if user has an active sleep session
+     * Called on init and when app resumes from background
+     */
+    private fun checkActiveSleepSession() {
+        viewModelScope.launch {
+            try {
+                val userId = auth.currentUser?.uid ?: run {
+                    Log.w(TAG, "checkActiveSleepSession: User not logged in")
+                    return@launch
+                }
+                
+                Log.d(TAG, "checkActiveSleepSession: Checking for user $userId")
+                
+                val result = sleepRepository.getActiveSleepSession(userId)
+                val session = result.getOrNull()
+                
+                if (session != null && session.isActive) {
+                    val startTime = session.startTime?.toDate()
+                    val sleepDurationMinutes = if (startTime != null) {
+                        java.time.Duration.between(startTime.toInstant(), java.time.Instant.now()).toMinutes()
+                    } else 0L
+                    
+                    Log.d(TAG, "checkActiveSleepSession: Found active session started at ${session.startTime}, duration=${sleepDurationMinutes} mins")
+                    
+                    // Only show WakeUpDialog if user has been sleeping for at least 2 hours (120 minutes)
+                    val minimumSleepMinutes = 120L
+                    val shouldShowWakeUp = sleepDurationMinutes >= minimumSleepMinutes
+                    
+                    Log.d(TAG, "checkActiveSleepSession: shouldShowWakeUp=$shouldShowWakeUp (need >= ${minimumSleepMinutes} mins, have $sleepDurationMinutes mins)")
+                    
+                    _uiState.update { it.copy(
+                        activeSleepSession = session,
+                        showWakeUpDialog = shouldShowWakeUp,
+                        showBedtimeReminder = false // Don't show bedtime reminder if already sleeping
+                    ) }
+                } else {
+                    Log.d(TAG, "checkActiveSleepSession: No active session found")
+                    _uiState.update { it.copy(
+                        activeSleepSession = null,
+                        showWakeUpDialog = false
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "checkActiveSleepSession: Error", e)
+            }
+        }
+    }
+    
+    /**
+     * Start manual sleep tracking (called when user presses "Sleep now")
+     */
+    fun startManualSleepTracking() {
+        viewModelScope.launch {
+            try {
+                val userId = auth.currentUser?.uid ?: run {
+                    Log.e(TAG, "startManualSleepTracking: User not logged in")
+                    return@launch
+                }
+                
+                Log.d(TAG, "startManualSleepTracking: Starting for user $userId at ${LocalTime.now()}")
+                
+                val result = sleepRepository.startManualSleepTracking(userId)
+                
+                if (result.isSuccess) {
+                    Log.d(TAG, "startManualSleepTracking: Success - session created")
+                    
+                    // Create local session immediately (don't wait for Firestore read)
+                    val localSession = FirebaseActiveSleepSession(
+                        id = userId,
+                        userId = userId,
+                        startTime = com.google.firebase.Timestamp.now(),
+                        isActive = true
+                    )
+                    
+                    // Update UI immediately with the local session
+                    _uiState.update { it.copy(
+                        showBedtimeReminder = false,
+                        activeSleepSession = localSession,
+                        showWakeUpDialog = false, // Don't show wake up dialog immediately after starting
+                        healthConnectSyncStatus = "Sleep tracking started! Good night 🌙"
+                    ) }
+                    
+                    Log.d(TAG, "startManualSleepTracking: UI updated with local session, skipping Firestore re-read")
+                } else {
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                    Log.e(TAG, "startManualSleepTracking: Failed - $errorMsg")
+                    _uiState.update { it.copy(
+                        healthConnectSyncStatus = "Failed to start tracking: $errorMsg"
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "startManualSleepTracking: Error", e)
+                _uiState.update { it.copy(
+                    healthConnectSyncStatus = "Error: ${e.message}"
+                ) }
+            }
+        }
+    }
+    
+    /**
+     * End manual sleep tracking (called when user presses "I'm awake!")
+     */
+    fun endManualSleepTracking() {
+        viewModelScope.launch {
+            try {
+                val userId = auth.currentUser?.uid ?: run {
+                    Log.e(TAG, "endManualSleepTracking: User not logged in")
+                    return@launch
+                }
+                
+                Log.d(TAG, "endManualSleepTracking: Ending for user $userId at ${LocalTime.now()}")
+                
+                val result = sleepRepository.endManualSleepTracking(userId)
+                
+                if (result.isSuccess) {
+                    val record = result.getOrNull()
+                    val hours = (record?.actualSleepDurationMinutes ?: 0) / 60
+                    val mins = (record?.actualSleepDurationMinutes ?: 0) % 60
+                    Log.d(TAG, "endManualSleepTracking: Success - recorded ${hours}h ${mins}m, quality=${record?.quality}")
+                    
+                    // Clear active session
+                    _uiState.update { it.copy(
+                        activeSleepSession = null,
+                        showWakeUpDialog = false,
+                        healthConnectSyncStatus = "Sleep recorded: ${hours}h ${mins}m! ☀️"
+                    ) }
+                    
+                    // Reload data to show new record
+                    loadUserData(userId, false)
+                } else {
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Unknown error"
+                    Log.e(TAG, "endManualSleepTracking: Failed - $errorMsg")
+                    _uiState.update { it.copy(
+                        healthConnectSyncStatus = "Failed to record sleep: $errorMsg"
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "endManualSleepTracking: Error", e)
+                _uiState.update { it.copy(
+                    healthConnectSyncStatus = "Error: ${e.message}"
+                ) }
+            }
+        }
+    }
+    
+    /**
+     * Dismiss wake up dialog
+     */
+    fun dismissWakeUpDialog() {
+        _uiState.update { it.copy(showWakeUpDialog = false) }
+    }
+    
+    // ========== Google Sleep API ==========
+    
+    /**
+     * Check Google Sleep API status from SharedPreferences
+     */
+    private fun checkGoogleSleepApiStatus() {
+        viewModelScope.launch {
+            try {
+                // Check saved preference first
+                val savedEnabled = prefs?.getBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, false) ?: false
+                // Also verify PendingIntent exists
+                val isRegistered = googleSleepApiManager?.isSleepTrackingRegistered() ?: false
+                
+                // If saved as enabled but not registered, try to re-register
+                if (savedEnabled && !isRegistered) {
+                    Log.d(TAG, "checkGoogleSleepApiStatus: Re-registering Google Sleep API")
+                    val result = googleSleepApiManager?.registerSleepUpdates()
+                    if (result?.isSuccess == true) {
+                        _uiState.update { it.copy(isGoogleSleepApiEnabled = true) }
+                        Log.d(TAG, "checkGoogleSleepApiStatus: Re-registration successful")
+                    } else {
+                        // Registration failed, update preference
+                        prefs?.edit()?.putBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, false)?.apply()
+                        _uiState.update { it.copy(isGoogleSleepApiEnabled = false) }
+                        Log.w(TAG, "checkGoogleSleepApiStatus: Re-registration failed")
+                    }
+                } else {
+                    _uiState.update { it.copy(isGoogleSleepApiEnabled = savedEnabled && isRegistered) }
+                }
+                
+                Log.d(TAG, "checkGoogleSleepApiStatus: Google Sleep API enabled = ${_uiState.value.isGoogleSleepApiEnabled}")
+            } catch (e: Exception) {
+                Log.e(TAG, "checkGoogleSleepApiStatus: Error", e)
+            }
+        }
+    }
+    
+    /**
+     * Enable Google Sleep API
+     */
+    fun enableGoogleSleepApi() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "enableGoogleSleepApi: Registering...")
+                
+                if (googleSleepApiManager?.hasActivityRecognitionPermission() == false) {
+                    Log.e(TAG, "enableGoogleSleepApi: Missing permission")
+                    _uiState.update { it.copy(
+                        healthConnectSyncStatus = "Activity recognition permission required",
+                        needsActivityRecognitionPermission = true
+                    ) }
+                    return@launch
+                }
+                
+                val result = googleSleepApiManager?.registerSleepUpdates()
+                
+                if (result?.isSuccess == true) {
+                    Log.d(TAG, "enableGoogleSleepApi: Success")
+                    // Save to SharedPreferences
+                    prefs?.edit()?.putBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, true)?.apply()
+                    _uiState.update { it.copy(
+                        isGoogleSleepApiEnabled = true,
+                        healthConnectSyncStatus = "Google Sleep API enabled"
+                    ) }
+                } else {
+                    val errorMsg = result?.exceptionOrNull()?.message ?: "Unknown error"
+                    Log.e(TAG, "enableGoogleSleepApi: Failed - $errorMsg")
+                    _uiState.update { it.copy(
+                        healthConnectSyncStatus = "Failed to enable Google Sleep API: $errorMsg"
+                    ) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "enableGoogleSleepApi: Error", e)
+                _uiState.update { it.copy(
+                    healthConnectSyncStatus = "Error: ${e.message}"
+                ) }
+            }
+        }
+    }
+    
+    /**
+     * Disable Google Sleep API
+     */
+    fun disableGoogleSleepApi() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "disableGoogleSleepApi: Unregistering...")
+                
+                val result = googleSleepApiManager?.unregisterSleepUpdates()
+                
+                if (result?.isSuccess == true) {
+                    Log.d(TAG, "disableGoogleSleepApi: Success")
+                    // Save to SharedPreferences
+                    prefs?.edit()?.putBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, false)?.apply()
+                    _uiState.update { it.copy(
+                        isGoogleSleepApiEnabled = false,
+                        healthConnectSyncStatus = "Google Sleep API disabled"
+                    ) }
+                } else {
+                    Log.e(TAG, "disableGoogleSleepApi: Failed - ${result?.exceptionOrNull()?.message}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "disableGoogleSleepApi: Error", e)
+            }
+        }
+    }
+    
+    /**
+     * Refresh sleep session state (called when app comes to foreground)
+     */
+    fun refreshSleepState() {
+        Log.d(TAG, "refreshSleepState: Checking active session and bedtime")
+        checkActiveSleepSession()
+        checkBedtimeOnResume()
+    }
+    
+    /**
+     * Check bedtime when app resumes
+     */
+    private fun checkBedtimeOnResume() {
+        val bedTime = _uiState.value.settings?.idealBedTime ?: return
+        checkBedtimeReminder(bedTime)
+    }
 }
 
 enum class TimeEditorType {
@@ -617,8 +950,12 @@ data class SleepTrackerUiState(
     val showTimeEditor: Boolean = false,
     val timeEditorType: TimeEditorType = TimeEditorType.NONE,
     val showBedtimeReminder: Boolean = false,
+    val showWakeUpDialog: Boolean = false,
     val showWidgetInstructions: Boolean = false,
-    val healthConnectSyncStatus: String? = null
+    val healthConnectSyncStatus: String? = null,
+    val activeSleepSession: FirebaseActiveSleepSession? = null,
+    val isGoogleSleepApiEnabled: Boolean = false,
+    val needsActivityRecognitionPermission: Boolean = false
 ) {
     val isContentReady: Boolean
         get() = !isLoading && sleepRecord != null

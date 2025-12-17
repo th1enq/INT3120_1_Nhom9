@@ -111,6 +111,7 @@ fun PartnerHubScreen(
                     partner = uiState.partner,
                     shortcuts = viewModel.shortcuts,
                     qaQuestions = qaQuestions,
+                    
                     onNavigateToChat = {
                         android.util.Log.d("PartnerHubScreen", "[PARTNER] Navigate to chat")
                         onNavigateToChat()
@@ -347,14 +348,14 @@ private fun LinkedPartnerScreenFirebase(
     
     // Convert FirebaseUser to PartnerUser for HouseCard
     val partnerUser = partner?.let {
-        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Converting partner to PartnerUser: ${it.displayName}")
+        android.util.Log.d("LinkedPartnerScreen", "[PARTNER] Converting partner to PartnerUser: \\${it.displayName}")
         PartnerUser(
             id = it.id,
             name = it.displayName,
             nickname = it.bio ?: "",
             avatarUrl = it.profileImageUrl,
             linkCode = it.linkCode,
-            locationName = "Unknown"
+            locationName = uiState.partnerLocationName
         )
     }
     

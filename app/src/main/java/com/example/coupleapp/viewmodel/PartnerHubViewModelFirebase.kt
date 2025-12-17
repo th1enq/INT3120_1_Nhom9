@@ -8,7 +8,10 @@ import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-
+import com.google.firebase.firestore.ktx.firestore
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.firestore.ktx.firestore
 /**
  * ViewModel cho Partner Hub - màn hình chính của tab Partner
  * Sử dụng Firebase thay vì mock data
@@ -185,7 +188,8 @@ class PartnerHubViewModelFirebase : ViewModel() {
                         )
                     }
                     Log.d(TAG, "[PARTNER] UI state updated with partner")
-                    
+                    // Load partner location
+                    loadPartnerLocation(partner.id)
                     // Load Q&A questions after partner is loaded
                     Log.d(TAG, "[PARTNER] Loading Q&A questions...")
                     try {
@@ -564,6 +568,32 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 loadPendingRequests()
             } catch (e: Exception) {
                 Log.e(TAG, "Error rejecting link request", e)
+            }
+        }
+    }
+
+    /**
+     * Load partner's latest location and update UI state
+     */
+    private fun loadPartnerLocation(partnerId: String) {
+        viewModelScope.launch {
+            try {
+                val firestore = Firebase.firestore
+                val locationSnapshot = firestore.collection("locations")
+                    .whereEqualTo("userId", partnerId)
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .await()
+                val locationDoc = locationSnapshot.documents.firstOrNull()
+                val locationName = locationDoc?.getString("address") ?: ""
+                _uiState.update { state ->
+                    state.copy(
+                        partnerLocationName = locationName
+                    )
+                }
+            } catch (e: Exception) {
+                // Nếu lỗi thì không cập nhật gì, giữ nguyên
             }
         }
     }

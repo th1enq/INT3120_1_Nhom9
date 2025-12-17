@@ -95,6 +95,9 @@ dependencies {
     // Health Connect for Sleep Tracking
     implementation("androidx.health.connect:connect-client:1.1.0-alpha10")
     
+    // Biometric Authentication
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    
     // Firebase BOM
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     
