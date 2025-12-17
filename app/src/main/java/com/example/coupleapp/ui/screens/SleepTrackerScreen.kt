@@ -164,12 +164,12 @@ fun SleepTrackerScreen(
 
         Crossfade(
             targetState = uiState.isLoading,
-            animationSpec = tween(durationMillis = 600),
+            animationSpec = tween(durationMillis = 400),
             label = "LoadingCrossfade",
             modifier = modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen()
+                LoadingScreen(message = "Loading sleep data...")
             } else {
                 Box(
                     modifier = Modifier
@@ -375,7 +375,9 @@ fun SleepTrackerScreen(
                             currentUserName = uiState.currentUser.name,
                             partnerUserName = uiState.partnerUser.name,
                             isCurrentUser = uiState.isCurrentUser,
-                            onToggle = { viewModel.toggleUser() }
+                            onToggle = { viewModel.toggleUser() },
+                            currentUserAvatar = uiState.currentUser.avatarUrl,
+                            partnerUserAvatar = uiState.partnerUser.avatarUrl
                         )
                     }
                 }

@@ -100,11 +100,11 @@ fun MomentsScreen(
     ) { paddingValues ->
         Crossfade(
             targetState = uiState.isLoading,
-            animationSpec = tween(durationMillis = 600),
+            animationSpec = tween(durationMillis = 400),
             label = "LoadingCrossfade"
         ) { loading ->
             if (loading) {
-                LoadingScreen()
+                LoadingScreen(message = "Loading moments...")
             } else {
                 Box(
                     modifier = Modifier

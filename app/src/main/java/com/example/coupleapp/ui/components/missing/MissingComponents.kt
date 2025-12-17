@@ -20,13 +20,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.MissingSummary
 import com.example.coupleapp.data.model.UserMissCount
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
  * Top bar for Missing screen with streak indicator
@@ -180,6 +185,7 @@ fun TodayMissCountCard(
                     UserMissCountItem(
                         userName = myCount.userName,
                         count = myCount.todayCount,
+                        avatarUrl = myCount.userAvatar,
                         isCurrentUser = true
                     )
                     
@@ -195,6 +201,7 @@ fun TodayMissCountCard(
                     UserMissCountItem(
                         userName = partnerCount.userName,
                         count = partnerCount.todayCount,
+                        avatarUrl = partnerCount.userAvatar,
                         isCurrentUser = false
                     )
                 }
@@ -207,9 +214,15 @@ fun TodayMissCountCard(
 private fun UserMissCountItem(
     userName: String,
     count: Int,
+    avatarUrl: String?,
     isCurrentUser: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    
+    // Use custom ImageLoader that supports base64 from Firestore
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
@@ -224,12 +237,25 @@ private fun UserMissCountItem(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                tint = if (isCurrentUser) Color(0xFFFF6B9D) else Color(0xFF6B9DFF),
-                modifier = Modifier.size(24.dp)
-            )
+            if (!avatarUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
+                    contentDescription = "Avatar",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = if (isCurrentUser) Color(0xFFFF6B9D) else Color(0xFF6B9DFF),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
         
         Spacer(modifier = Modifier.height(8.dp))

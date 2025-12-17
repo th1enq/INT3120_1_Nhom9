@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.compose.rememberNavController
@@ -21,7 +21,10 @@ import com.example.coupleapp.service.LocationTrackingService
 import com.example.coupleapp.ui.theme.CoupleAppTheme
 import com.example.coupleapp.worker.PhotoSyncManager
 
-class MainActivity : ComponentActivity() {
+/**
+ * Main Activity - extends FragmentActivity for biometric authentication support
+ */
+class MainActivity : FragmentActivity() {
     
     companion object {
         private const val TAG = "MainActivity"

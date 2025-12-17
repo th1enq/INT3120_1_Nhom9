@@ -37,6 +37,9 @@ import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.viewmodel.ProfileViewModel
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.delay
 
 /**
@@ -338,6 +341,9 @@ private fun ProfileHeader(
                 horizontalArrangement = Arrangement.spacedBy((-20).dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+                
                 // User avatar
                 Box(
                     modifier = Modifier
@@ -348,8 +354,12 @@ private fun ProfileHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     if (currentUser?.profileImageUrl != null && currentUser.profileImageUrl!!.isNotEmpty()) {
-                        coil.compose.AsyncImage(
-                            model = currentUser.profileImageUrl,
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(currentUser.profileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            imageLoader = imageLoader,
                             contentDescription = "Your Profile Picture",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -390,8 +400,12 @@ private fun ProfileHeader(
                     contentAlignment = Alignment.Center
                 ) {
                     if (partner?.profileImageUrl != null && partner.profileImageUrl!!.isNotEmpty()) {
-                        coil.compose.AsyncImage(
-                            model = partner.profileImageUrl,
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(partner.profileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            imageLoader = imageLoader,
                             contentDescription = "Partner Profile Picture",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop

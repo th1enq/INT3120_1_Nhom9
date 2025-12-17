@@ -23,15 +23,6 @@ enum class PurchaseType {
 }
 
 /**
- * Rarity level for seeds
- */
-enum class SeedRarity(val displayName: String) {
-    NORMAL("Thường"),
-    RARE("Hiếm"),
-    SUPER_RARE("Siêu hiếm")
-}
-
-/**
  * Store item data
  */
 data class StoreItem(

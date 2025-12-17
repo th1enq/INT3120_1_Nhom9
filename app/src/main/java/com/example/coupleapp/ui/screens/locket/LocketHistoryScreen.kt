@@ -113,7 +113,7 @@ fun LocketHistoryScreen(
             modifier = modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen()
+                LoadingScreen(message = "Loading history...")
             } else {
                 Box(
                     modifier = Modifier

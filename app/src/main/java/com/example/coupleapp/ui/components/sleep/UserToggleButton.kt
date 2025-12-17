@@ -1,6 +1,7 @@
 package com.example.coupleapp.ui.components.sleep
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,12 +17,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
- * Floating toggle button to switch between users
+ * Floating toggle button to switch between users with avatar support
  */
 @Composable
 fun UserToggleButton(
@@ -29,7 +35,9 @@ fun UserToggleButton(
     partnerUserName: String,
     isCurrentUser: Boolean,
     onToggle: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currentUserAvatar: String? = null,
+    partnerUserAvatar: String? = null
 ) {
     var isPressed by remember { mutableStateOf(false) }
     
@@ -73,7 +81,8 @@ fun UserToggleButton(
             UserToggleItem(
                 userName = currentUserName,
                 isActive = isCurrentUser,
-                color = Color(0xFFFF9ECE)
+                color = Color(0xFFFF9ECE),
+                avatarUrl = currentUserAvatar
             )
             
             // Divider
@@ -88,7 +97,8 @@ fun UserToggleButton(
             UserToggleItem(
                 userName = partnerUserName,
                 isActive = !isCurrentUser,
-                color = Color(0xFF9ED9FF)
+                color = Color(0xFF9ED9FF),
+                avatarUrl = partnerUserAvatar
             )
         }
     }
@@ -105,8 +115,14 @@ fun UserToggleButton(
 private fun UserToggleItem(
     userName: String,
     isActive: Boolean,
-    color: Color
+    color: Color,
+    avatarUrl: String? = null
 ) {
+    val context = LocalContext.current
+    
+    // Use custom ImageLoader that supports base64 from Firestore
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -122,12 +138,27 @@ private fun UserToggleItem(
                 .background(if (isActive) color else Color(0xFFF5F5F5)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = userName,
-                modifier = Modifier.size(18.dp),
-                tint = if (isActive) Color.White else Color(0xFFB0B0B0)
-            )
+            if (!avatarUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
+                    contentDescription = userName,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = userName,
+                    modifier = Modifier.size(18.dp),
+                    tint = if (isActive) Color.White else Color(0xFFB0B0B0)
+                )
+            }
         }
         
         Text(

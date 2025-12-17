@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.viewmodel.HomeViewModel
 import com.example.coupleapp.ui.components.home.*
-import com.example.coupleapp.ui.components.LoadingScreen
 import kotlinx.coroutines.delay
 
 @Composable
@@ -67,38 +66,34 @@ fun HomeScreen(
         containerColor = Color.Transparent
     ) { paddingValues ->
 
-        // No loading screen - display content immediately
-        if (false) {  // Never show loading for HomeScreen
-            LoadingScreen()
-        } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFFFFF5F8),
-                                    Color(0xFFFFFBF5),
-                                    Color(0xFFFFFAF0)
-                                )
-                            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFFF5F8),
+                            Color(0xFFFFFBF5),
+                            Color(0xFFFFFAF0)
                         )
-                ) {
-                    LazyColumn(
-                        state = scrollState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
-                        contentPadding = PaddingValues(bottom = 16.dp),
-                        // Tối ưu scrolling performance
-                        userScrollEnabled = true
-                    ) {
-                        item(key = "spacer_top") { 
-                            Spacer(modifier = Modifier.height(16.dp)) 
-                        }
+                    )
+                )
+        ) {
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(bottom = 16.dp),
+                // Tối ưu scrolling performance
+                userScrollEnabled = true
+            ) {
+                item(key = "spacer_top") { 
+                    Spacer(modifier = Modifier.height(16.dp)) 
+                }
 
-                        // Slider Section (no animation)
-                        item(key = "slider_section") {
+                // Slider Section (no animation)
+                item(key = "slider_section") {
                             AutoImageSlider(
                                 slides = rememberSlides(),
                                 modifier = Modifier,
@@ -159,6 +154,5 @@ fun HomeScreen(
                         }
                     }
                 }
-        }
     }
 }

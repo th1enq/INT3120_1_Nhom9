@@ -94,6 +94,14 @@ class LocationTrackingService : Service() {
         private val _colocationStartTime = MutableStateFlow<Long?>(null)
         val colocationStartTime: StateFlow<Long?> = _colocationStartTime
         
+        // Photo deduplication - shared across all observer instances
+        // These need to be in companion object to persist across service restarts
+        private val processedPhotoPaths = mutableSetOf<String>()
+        private val recentlyProcessedUris = mutableMapOf<String, Long>()
+        private val addingPhotos = mutableSetOf<String>()
+        private val photoProcessingLock = Any()
+        private const val DEBOUNCE_MS = 3000L // 3 seconds debounce window
+        
         fun startService(
             context: Context,
             userId: String,
@@ -172,6 +180,11 @@ class LocationTrackingService : Service() {
     
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
+    // SharedPreferences for persistent photo deduplication
+    private val processedPhotosPrefs by lazy {
+        getSharedPreferences("processed_photos", Context.MODE_PRIVATE)
+    }
+    
     // Location history tracking
     private var currentLocationEntry: LocationHistoryEntry? = null
     private var lastSignificantLocation: LocationCoordinate? = null
@@ -212,11 +225,25 @@ class LocationTrackingService : Service() {
                 // Android requires this within 5 seconds of startForegroundService()
                 startForeground(NOTIFICATION_ID, createNotification())
                 
-                userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                val newUserId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                val newCoupleId = intent.getStringExtra(EXTRA_COUPLE_ID) ?: ""
+                val newPartnerId = intent.getStringExtra(EXTRA_PARTNER_ID) ?: ""
+                
+                // Check if service is already running with same user - avoid restart
+                val isAlreadyRunning = _isTracking.value && 
+                    userId == newUserId && 
+                    coupleId == newCoupleId
+                
+                if (isAlreadyRunning) {
+                    android.util.Log.d("LocationTrackingService", "Service already running for same user, skipping restart")
+                    return START_STICKY
+                }
+                
+                userId = newUserId
                 userName = intent.getStringExtra(EXTRA_USER_NAME) ?: ""
                 avatarUrl = intent.getStringExtra(EXTRA_AVATAR_URL) ?: ""
-                coupleId = intent.getStringExtra(EXTRA_COUPLE_ID) ?: ""
-                partnerId = intent.getStringExtra(EXTRA_PARTNER_ID) ?: ""
+                coupleId = newCoupleId
+                partnerId = newPartnerId
                 
                 android.util.Log.d("LocationTrackingService", "Service started with: userId=$userId, coupleId=$coupleId, partnerId=$partnerId")
                 
@@ -232,6 +259,9 @@ class LocationTrackingService : Service() {
                 if (partnerId.isEmpty()) {
                     android.util.Log.w("LocationTrackingService", "partnerId is empty - colocation tracking will not work")
                 }
+                
+                // Clean up old processed photos from SharedPreferences (older than 24 hours)
+                cleanupOldProcessedPhotos()
                 
                 startLocationTracking()
                 startPhotoMonitoring()
@@ -805,15 +835,58 @@ class LocationTrackingService : Service() {
                 .addOnSuccessListener {
                     android.util.Log.d("LocationTrackingService", "Updated existing place duration: $placeId")
                     
-                    // Convert and add photos in background
+                    // Convert and add photos in background with deduplication
                     serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         val currentRepPhoto = doc.getString("representativePhotoUrl") ?: ""
                         var firstPhotoBase64: String? = null
                         
+                        // Fetch ALL existing photos for this place ONCE for efficient dedup checking
+                        val allExistingPhotos = try {
+                            db.collection("shared_place_photos")
+                                .whereEqualTo("placeId", placeId)
+                                .get()
+                                .await()
+                        } catch (e: Exception) {
+                            android.util.Log.e("LocationTrackingService", "Error fetching existing photos", e)
+                            null
+                        }
+                        
+                        // Build a set of existing filenames for fast lookup
+                        val existingFilenames = mutableSetOf<String>()
+                        allExistingPhotos?.documents?.forEach { doc ->
+                            val existingPath = doc.getString("originalPath") ?: ""
+                            val existingStableFilename = doc.getString("stableFilename") ?: ""
+                            if (existingPath.isNotEmpty()) {
+                                existingFilenames.add(existingPath.substringAfterLast("/"))
+                            }
+                            if (existingStableFilename.isNotEmpty()) {
+                                existingFilenames.add(existingStableFilename)
+                            }
+                        }
+                        android.util.Log.d("LocationTrackingService", "Existing filenames in place: ${existingFilenames.size}")
+                        
                         photos.forEachIndexed { index, photoPath ->
+                            // Extract stable filename for reliable deduplication
+                            val stableFilename = photoPath.substringAfterLast("/")
+                            
+                            // Skip .pending- files (camera hasn't finished writing)
+                            if (photoPath.contains(".pending-")) {
+                                android.util.Log.d("LocationTrackingService", "SKIP_PENDING: Skipping pending file in updateExistingPlace: $photoPath")
+                                return@forEachIndexed
+                            }
+                            
+                            // Check for duplicate by comparing filename with existing set
+                            if (existingFilenames.contains(stableFilename)) {
+                                android.util.Log.d("LocationTrackingService", "DEDUP: Photo already exists in place (by filename), skipping: $stableFilename")
+                                return@forEachIndexed
+                            }
+                            
+                            // Add to set to prevent duplicates within same batch
+                            existingFilenames.add(stableFilename)
+                            
                             val base64Photo = convertPhotoToBase64(photoPath)
                             if (base64Photo != null) {
-                                if (index == 0) {
+                                if (index == 0 || firstPhotoBase64 == null) {
                                     firstPhotoBase64 = base64Photo
                                 }
                                 
@@ -822,7 +895,9 @@ class LocationTrackingService : Service() {
                                     "photoUrl" to base64Photo,
                                     "takenAt" to Date(),
                                     "takenByUserId" to userId,
-                                    "caption" to null
+                                    "caption" to null,
+                                    "originalPath" to photoPath, // For dedup checking
+                                    "stableFilename" to stableFilename // For reliable dedup
                                 )
                                 db.collection("shared_place_photos").add(photoData)
                                     .addOnSuccessListener {
@@ -894,10 +969,53 @@ class LocationTrackingService : Service() {
                     .addOnSuccessListener { docRef ->
                         android.util.Log.d("LocationTrackingService", ">>> SUCCESS! Created shared place: ${docRef.id}")
                         
-                        // Convert and add photos to shared_place_photos collection
+                        // Convert and add photos to shared_place_photos collection with deduplication
                         serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                             var successfulPhotos = 0
+                            // Track filenames we're adding to prevent duplicates within batch
+                            val addedFilenames = mutableSetOf<String>()
+                            
                             photos.forEach { photoPath ->
+                                // Extract stable filename for reliable deduplication
+                                val stableFilename = photoPath.substringAfterLast("/")
+                                
+                                // Skip .pending- files (camera hasn't finished writing)
+                                if (photoPath.contains(".pending-")) {
+                                    android.util.Log.d("LocationTrackingService", "SKIP_PENDING: Skipping pending file in createNewSharedPlace: $photoPath")
+                                    return@forEach
+                                }
+                                
+                                // Check for duplicate within this batch
+                                if (addedFilenames.contains(stableFilename)) {
+                                    android.util.Log.d("LocationTrackingService", "DEDUP_BATCH: Photo already in batch, skipping: $stableFilename")
+                                    return@forEach
+                                }
+                                
+                                // For new place, check if any photo with same filename was already added
+                                val existingPhotos = try {
+                                    db.collection("shared_place_photos")
+                                        .whereEqualTo("placeId", docRef.id)
+                                        .get()
+                                        .await()
+                                } catch (e: Exception) {
+                                    android.util.Log.e("LocationTrackingService", "Error checking for existing photos", e)
+                                    null
+                                }
+                                
+                                val duplicateExists = existingPhotos?.documents?.any { doc ->
+                                    val existingPath = doc.getString("originalPath") ?: ""
+                                    val existingStableFilename = doc.getString("stableFilename") ?: ""
+                                    existingPath.substringAfterLast("/") == stableFilename ||
+                                    existingStableFilename == stableFilename
+                                } ?: false
+                                
+                                if (duplicateExists) {
+                                    android.util.Log.d("LocationTrackingService", "DEDUP: Photo already exists in new place (by filename check), skipping: $stableFilename")
+                                    return@forEach
+                                }
+                                
+                                addedFilenames.add(stableFilename)
+                                
                                 val base64Photo = convertPhotoToBase64(photoPath)
                                 if (base64Photo != null) {
                                     val photoData = mapOf(
@@ -905,7 +1023,9 @@ class LocationTrackingService : Service() {
                                         "photoUrl" to base64Photo,
                                         "takenAt" to Date(),
                                         "takenByUserId" to userId,
-                                        "caption" to null
+                                        "caption" to null,
+                                        "originalPath" to photoPath, // For dedup checking
+                                        "stableFilename" to stableFilename // For reliable dedup
                                     )
                                     db.collection("shared_place_photos").add(photoData)
                                         .addOnSuccessListener {
@@ -997,6 +1117,12 @@ class LocationTrackingService : Service() {
     
     // Photo monitoring - automatically collect photos taken during colocation
     private fun startPhotoMonitoring() {
+        // First, stop any existing observer to prevent duplicates
+        if (photoObserver != null) {
+            android.util.Log.d("LocationTrackingService", "Photo observer already exists, stopping it first")
+            stopPhotoMonitoring()
+        }
+        
         android.util.Log.d("LocationTrackingService", "Starting photo monitoring for colocation sessions")
         photoObserver = PhotoContentObserver(Handler(Looper.getMainLooper()), contentResolver)
         
@@ -1014,6 +1140,8 @@ class LocationTrackingService : Service() {
                 photoObserver!!
             )
         }
+        
+        android.util.Log.d("LocationTrackingService", "Photo monitoring started successfully")
     }
     
     private fun stopPhotoMonitoring() {
@@ -1021,6 +1149,38 @@ class LocationTrackingService : Service() {
             contentResolver.unregisterContentObserver(it)
         }
         photoObserver = null
+    }
+    
+    /**
+     * Clean up old processed photo entries from SharedPreferences
+     * Remove entries older than 24 hours to prevent unbounded growth
+     */
+    private fun cleanupOldProcessedPhotos() {
+        try {
+            val prefs = processedPhotosPrefs
+            val allEntries = prefs.all
+            val now = System.currentTimeMillis()
+            val oneDayAgo = now - 24 * 60 * 60 * 1000L // 24 hours
+            
+            val editor = prefs.edit()
+            var removedCount = 0
+            
+            for ((key, value) in allEntries) {
+                if (value is Long && value < oneDayAgo) {
+                    editor.remove(key)
+                    removedCount++
+                }
+            }
+            
+            if (removedCount > 0) {
+                editor.apply()
+                android.util.Log.d("LocationTrackingService", "Cleaned up $removedCount old processed photo entries")
+            } else {
+                android.util.Log.d("LocationTrackingService", "No old processed photo entries to clean up, total: ${allEntries.size}")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LocationTrackingService", "Error cleaning up processed photos", e)
+        }
     }
     
     /**
@@ -1033,11 +1193,31 @@ class LocationTrackingService : Service() {
         private val contentResolver: ContentResolver
     ) : ContentObserver(handler) {
         
+        // Note: Deduplication sets are in companion object to persist across observer recreations
+        
         override fun onChange(selfChange: Boolean, uri: Uri?) {
             super.onChange(selfChange, uri)
             
             uri?.let { 
-                android.util.Log.d("LocationTrackingService", "New photo detected: $it")
+                val uriString = it.toString()
+                val currentTime = System.currentTimeMillis()
+                
+                // Check if this URI was recently processed (debounce)
+                synchronized(photoProcessingLock) {
+                    val lastProcessedTime = recentlyProcessedUris[uriString]
+                    if (lastProcessedTime != null && (currentTime - lastProcessedTime) < DEBOUNCE_MS) {
+                        android.util.Log.d("LocationTrackingService", "DEBOUNCE: Photo URI too recent, skipping: ${uriString.takeLast(50)}")
+                        return@let
+                    }
+                    recentlyProcessedUris[uriString] = currentTime
+                    
+                    // Clean up old entries (older than 10 seconds)
+                    recentlyProcessedUris.entries.removeAll { entry -> 
+                        (currentTime - entry.value) > 10000L 
+                    }
+                }
+                
+                android.util.Log.d("LocationTrackingService", "New photo detected (passed debounce): $it")
                 serviceScope.launch {
                     processNewPhoto(it)
                 }
@@ -1046,30 +1226,112 @@ class LocationTrackingService : Service() {
         
         private suspend fun processNewPhoto(uri: Uri) {
             try {
+                android.util.Log.d("LocationTrackingService", ">>> processNewPhoto called for URI: $uri")
+                
+                // Extract media ID from URI for stable deduplication
+                val mediaId = uri.lastPathSegment ?: ""
+                
                 // Get photo path and EXIF info
                 val projection = arrayOf(
                     MediaStore.Images.Media.DATA, 
-                    MediaStore.Images.Media.DATE_ADDED
+                    MediaStore.Images.Media.DATE_ADDED,
+                    MediaStore.Images.Media.DISPLAY_NAME
                 )
                 var photoPath: String? = null
+                var displayName: String? = null
                 
                 contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         val pathIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
                         photoPath = cursor.getString(pathIndex)
+                        val nameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+                        if (nameIndex >= 0) {
+                            displayName = cursor.getString(nameIndex)
+                        }
                     }
                 }
                 
                 if (photoPath == null) {
-                    android.util.Log.d("LocationTrackingService", "Could not get photo path")
+                    android.util.Log.d("LocationTrackingService", "Could not get photo path from URI")
                     return
                 }
+                
+                // CRITICAL: Skip .pending- files - camera hasn't finished writing them yet
+                // They will trigger another ContentObserver event once finalized
+                if (photoPath!!.contains(".pending-")) {
+                    android.util.Log.d("LocationTrackingService", "SKIP_PENDING: Photo is still pending (camera writing), will process when finalized: $photoPath")
+                    return
+                }
+                
+                // Extract stable filename for deduplication (handles renamed files)
+                // This extracts just the filename like "IMG_20251218_034811.jpg" from the full path
+                val stableFilename = photoPath!!.substringAfterLast("/")
+                android.util.Log.d("LocationTrackingService", "Stable filename for dedup: $stableFilename, mediaId: $mediaId")
+                
+                android.util.Log.d("LocationTrackingService", "Photo path resolved: $photoPath")
+                
+                // FIRST: Check SharedPreferences for persistent deduplication (survives app restart/crash)
+                // This is CRITICAL because memory sets get cleared when app restarts
+                val prefs = this@LocationTrackingService.processedPhotosPrefs
+                val prefKeyByFilename = "photo_filename:$stableFilename"
+                val prefKeyByMediaId = if (mediaId.isNotEmpty()) "photo_mediaId:$mediaId" else ""
+                
+                if (prefs.contains(prefKeyByFilename) || 
+                    (prefKeyByMediaId.isNotEmpty() && prefs.contains(prefKeyByMediaId))) {
+                    android.util.Log.d("LocationTrackingService", "PREFS_DUPLICATE: Photo already processed (from SharedPreferences), skipping: $stableFilename")
+                    return
+                }
+                
+                // Check if this photo was already processed using MULTIPLE keys in memory:
+                // 1. Full path (exact match)
+                // 2. Stable filename (catches renamed files)
+                // 3. Media ID (unique identifier from MediaStore)
+                synchronized(photoProcessingLock) {
+                    // Check all possible duplicate keys
+                    val isDuplicate = processedPhotoPaths.contains(photoPath) ||
+                                     processedPhotoPaths.contains(stableFilename) ||
+                                     (mediaId.isNotEmpty() && processedPhotoPaths.contains("mediaId:$mediaId"))
+                    
+                    if (isDuplicate) {
+                        android.util.Log.d("LocationTrackingService", "MEMORY_DUPLICATE: Photo already processed (path/filename/mediaId), skipping: $photoPath")
+                        return
+                    }
+                    
+                    // Add ALL keys for comprehensive deduplication
+                    processedPhotoPaths.add(photoPath!!)
+                    processedPhotoPaths.add(stableFilename)
+                    if (mediaId.isNotEmpty()) {
+                        processedPhotoPaths.add("mediaId:$mediaId")
+                    }
+                    android.util.Log.d("LocationTrackingService", "Added to processedPhotoPaths (path+filename+mediaId), current size: ${processedPhotoPaths.size}")
+                    
+                    // CRITICAL: Also save to SharedPreferences for persistence across app restarts
+                    prefs.edit()
+                        .putLong(prefKeyByFilename, System.currentTimeMillis())
+                        .apply()
+                    if (prefKeyByMediaId.isNotEmpty()) {
+                        prefs.edit()
+                            .putLong(prefKeyByMediaId, System.currentTimeMillis())
+                            .apply()
+                    }
+                    android.util.Log.d("LocationTrackingService", "Saved to SharedPreferences for persistence: $stableFilename")
+                    
+                    // Keep set size manageable (max 300 entries to accommodate multiple keys per photo)
+                    if (processedPhotoPaths.size > 300) {
+                        val iterator = processedPhotoPaths.iterator()
+                        repeat(150) { if (iterator.hasNext()) { iterator.next(); iterator.remove() } }
+                        android.util.Log.d("LocationTrackingService", "Cleaned up processedPhotoPaths, new size: ${processedPhotoPaths.size}")
+                    }
+                }
+                
+                android.util.Log.d("LocationTrackingService", "Photo path is NEW, proceeding with processing: $photoPath")
                 
                 // Read EXIF location from photo
                 val photoLocation = getPhotoExifLocation(photoPath!!)
                 
                 // Case 1: Active colocation session - add photo to session
                 if (_isColocationActive.value) {
+                    android.util.Log.d("LocationTrackingService", "Processing for active colocation session")
                     processPhotoForActiveColocation(photoPath!!)
                     return
                 }
@@ -1124,20 +1386,34 @@ class LocationTrackingService : Service() {
             
             android.util.Log.d("LocationTrackingService", "Processing photo for active colocation session")
             
-            // Add photo path to colocation session
+            // Extract stable filename for comparison (handles renamed files)
+            val stableFilename = photoPath.substringAfterLast("/")
+            
+            // Add photo path to colocation session (if not already present)
             @Suppress("UNCHECKED_CAST")
             val currentPhotos = sessionDoc.get("photosCollected") as? List<String> ?: emptyList()
-            val updatedPhotos = currentPhotos.toMutableList().apply { add(photoPath) }
             
-            db.collection("colocation_sessions")
-                .document("${coupleId}_active")
-                .update(mapOf(
-                    "photosCollected" to updatedPhotos,
-                    "lastPhotoAddedAt" to Date()
-                ))
-                .addOnSuccessListener {
-                    android.util.Log.d("LocationTrackingService", "Photo added to colocation session")
-                }
+            // Check if photo already exists in session by comparing filenames
+            val photoAlreadyInSession = currentPhotos.any { existingPath ->
+                val existingFilename = existingPath.substringAfterLast("/")
+                existingPath == photoPath || existingFilename == stableFilename
+            }
+            
+            if (photoAlreadyInSession) {
+                android.util.Log.d("LocationTrackingService", "DEDUP_SESSION: Photo already in session (by filename), skipping: $stableFilename")
+            } else {
+                val updatedPhotos = currentPhotos.toMutableList().apply { add(photoPath) }
+                
+                db.collection("colocation_sessions")
+                    .document("${coupleId}_active")
+                    .update(mapOf(
+                        "photosCollected" to updatedPhotos,
+                        "lastPhotoAddedAt" to Date()
+                    ))
+                    .addOnSuccessListener {
+                        android.util.Log.d("LocationTrackingService", "Photo added to colocation session")
+                    }
+            }
             
             // If already converted to shared place, add to shared place photos directly
             val sharedPlaceId = sessionDoc.getString("sharedPlaceId")
@@ -1189,39 +1465,125 @@ class LocationTrackingService : Service() {
                 }
         }
         
+        // Note: addingPhotos and photoProcessingLock are in companion object
+        
         private fun addPhotoToSharedPlaceInternal(placeId: String, photoPath: String) {
-            android.util.Log.d("LocationTrackingService", "Adding photo directly to shared place: $placeId")
+            android.util.Log.d("LocationTrackingService", ">>> addPhotoToSharedPlaceInternal called for: $placeId, path: $photoPath")
+            
+            // Extract stable filename for reliable deduplication (handles renamed .pending- files)
+            val stableFilename = photoPath.substringAfterLast("/")
+            val photoKeyByPath = "${placeId}_${photoPath}"
+            val photoKeyByFilename = "${placeId}_filename:${stableFilename}"
+            
+            // FIRST: Check SharedPreferences for persistent deduplication (survives process restarts)
+            val prefs = this@LocationTrackingService.processedPhotosPrefs
+            if (prefs.contains(photoKeyByPath) || prefs.contains(photoKeyByFilename)) {
+                android.util.Log.d("LocationTrackingService", "PREFS_DUPLICATE: Photo already processed (from SharedPreferences), skipping: $stableFilename")
+                return
+            }
+            
+            // SECOND: Check memory set for current session deduplication
+            synchronized(photoProcessingLock) {
+                if (addingPhotos.contains(photoKeyByPath) || addingPhotos.contains(photoKeyByFilename)) {
+                    android.util.Log.d("LocationTrackingService", "MEMORY_DUPLICATE: Photo already being added, skipping: $stableFilename")
+                    return
+                }
+                addingPhotos.add(photoKeyByPath)
+                addingPhotos.add(photoKeyByFilename)
+                android.util.Log.d("LocationTrackingService", "Added to addingPhotos (path+filename), current size: ${addingPhotos.size}")
+            }
+            
+            // Mark as processed in SharedPreferences immediately with BOTH keys
+            prefs.edit()
+                .putLong(photoKeyByPath, System.currentTimeMillis())
+                .putLong(photoKeyByFilename, System.currentTimeMillis())
+                .apply()
+            android.util.Log.d("LocationTrackingService", "Marked photo as processing in SharedPreferences: $stableFilename")
             
             // Convert photo to base64 in background using outer class function
             serviceScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                val base64Photo = this@LocationTrackingService.convertPhotoToBase64(photoPath)
-                if (base64Photo == null) {
-                    android.util.Log.e("LocationTrackingService", "Failed to convert photo to base64")
-                    return@launch
-                }
-                
-                val photoData = mapOf(
-                    "placeId" to placeId,
-                    "photoUrl" to base64Photo,
-                    "takenAt" to Date(),
-                    "takenByUserId" to userId,
-                    "caption" to null
-                )
-                
-                db.collection("shared_place_photos").add(photoData)
-                    .addOnSuccessListener {
-                        android.util.Log.d("LocationTrackingService", "Photo added to shared place photos (base64)")
+                try {
+                    // THIRD: Check Firestore for existing photo with same filename
+                    // We need to check ALL photos for this place and compare filenames manually
+                    // because old documents might not have stableFilename field
+                    android.util.Log.d("LocationTrackingService", "Checking Firestore for existing photo with filename: $stableFilename")
+                    
+                    val allPhotosForPlace = db.collection("shared_place_photos")
+                        .whereEqualTo("placeId", placeId)
+                        .get()
+                        .await()
+                    
+                    // Check if any existing photo has the same filename (from originalPath or stableFilename)
+                    val duplicateExists = allPhotosForPlace.documents.any { doc ->
+                        val existingPath = doc.getString("originalPath") ?: ""
+                        val existingStableFilename = doc.getString("stableFilename") ?: ""
+                        val existingFilenameFromPath = existingPath.substringAfterLast("/")
+                        
+                        // Match by: exact path, stableFilename field, or filename extracted from path
+                        existingPath == photoPath || 
+                        existingStableFilename == stableFilename ||
+                        existingFilenameFromPath == stableFilename
                     }
-                    .addOnFailureListener { e ->
-                        android.util.Log.e("LocationTrackingService", "Failed to add photo to shared place", e)
+                    
+                    if (duplicateExists) {
+                        android.util.Log.d("LocationTrackingService", "FIRESTORE_DUPLICATE: Photo already exists in Firestore (by filename check), skipping: $stableFilename")
+                        return@launch
                     }
-                
-                // Update photo count
-                val placeRef = db.collection("shared_places").document(placeId)
-                db.runTransaction { transaction ->
-                    val placeSnapshot = transaction.get(placeRef)
-                    val currentCount = placeSnapshot.getLong("photosCount") ?: 0
-                    transaction.update(placeRef, "photosCount", currentCount + 1)
+                    
+                    android.util.Log.d("LocationTrackingService", "No duplicate found in Firestore (checked ${allPhotosForPlace.size()} photos), proceeding to add photo")
+                    
+                    android.util.Log.d("LocationTrackingService", "Converting photo to base64: $photoPath")
+                    val base64Photo = this@LocationTrackingService.convertPhotoToBase64(photoPath)
+                    if (base64Photo == null) {
+                        android.util.Log.e("LocationTrackingService", "Failed to convert photo to base64")
+                        return@launch
+                    }
+                    
+                    android.util.Log.d("LocationTrackingService", "Base64 conversion successful, saving to Firestore...")
+                    
+                    val photoData = mapOf(
+                        "placeId" to placeId,
+                        "photoUrl" to base64Photo,
+                        "takenAt" to Date(),
+                        "takenByUserId" to userId,
+                        "caption" to null,
+                        "originalPath" to photoPath, // Store original path for dedup checking
+                        "stableFilename" to stableFilename // Store stable filename for reliable dedup
+                    )
+                    
+                    // Use deterministic document ID based on placeId + stableFilename to prevent duplicates
+                    // This ensures that even with race conditions, the same photo can only exist once
+                    val photoDocId = "${placeId}_${stableFilename}".replace(Regex("[^a-zA-Z0-9_-]"), "_")
+                    android.util.Log.d("LocationTrackingService", "Using deterministic doc ID: $photoDocId")
+                    
+                    db.collection("shared_place_photos").document(photoDocId).set(photoData)
+                        .addOnSuccessListener {
+                            android.util.Log.d("LocationTrackingService", "SUCCESS: Photo added/updated in shared place photos, docId: $photoDocId")
+                        }
+                        .addOnFailureListener { e ->
+                            android.util.Log.e("LocationTrackingService", "FAILED: Could not add photo to shared place", e)
+                        }
+                    
+                    // Update photo count
+                    android.util.Log.d("LocationTrackingService", "Updating photo count for place: $placeId")
+                    val placeRef = db.collection("shared_places").document(placeId)
+                    db.runTransaction { transaction ->
+                        val placeSnapshot = transaction.get(placeRef)
+                        val currentCount = placeSnapshot.getLong("photosCount") ?: 0
+                        android.util.Log.d("LocationTrackingService", "Current count: $currentCount, updating to: ${currentCount + 1}")
+                        transaction.update(placeRef, "photosCount", currentCount + 1)
+                    }.addOnSuccessListener {
+                        android.util.Log.d("LocationTrackingService", "Photo count updated successfully")
+                    }.addOnFailureListener { e ->
+                        android.util.Log.e("LocationTrackingService", "Failed to update photo count", e)
+                    }
+                } finally {
+                    // Remove from adding set after completion (both keys)
+                    synchronized(photoProcessingLock) {
+                        addingPhotos.remove(photoKeyByPath)
+                        addingPhotos.remove(photoKeyByFilename)
+                        android.util.Log.d("LocationTrackingService", "Removed from addingPhotos: $stableFilename")
+                    }
                 }
             }
         }

@@ -52,11 +52,11 @@ fun CalendarScreen(
     // Loading state
     Crossfade(
         targetState = uiState.isLoading,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = tween(durationMillis = 400),
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
-            LoadingScreen()
+            LoadingScreen(message = "Loading calendar...")
         } else {
             CalendarMainContent(
                 uiState = uiState,

@@ -120,7 +120,7 @@ fun GardenScreen(
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
-            LoadingScreen()
+            LoadingScreen(message = "Loading garden...")
         } else {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -258,7 +258,8 @@ fun GardenScreen(
                                 if (uiState.plant != null && !uiState.plant!!.status.isDead) {
                                     viewModel.useCareItem(item.type)
                                 }
-                            }
+                            },
+                            onHarvestClick = { viewModel.harvestPlant() }
                         )
                     }
                 }
@@ -293,7 +294,8 @@ fun BottomPanel(
     inventory: GardenInventory,
     selectedTab: GardenTab,
     onTabSelected: (GardenTab) -> Unit,
-    onItemClick: (CareItem) -> Unit
+    onItemClick: (CareItem) -> Unit,
+    onHarvestClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -306,6 +308,23 @@ fun BottomPanel(
                 plant = plant,
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
+            
+            // Show harvest button when plant is ready
+            if (plant.isReadyToHarvest) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onHarvestClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    ),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Text("🌸 Harvest", color = Color.White)
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))

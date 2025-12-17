@@ -8,12 +8,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -39,7 +38,8 @@ import com.example.coupleapp.R
 import com.example.coupleapp.data.model.*
 
 /**
- * Gallery Screen showing plant collection
+ * Gallery Screen showing plant collection - Simplified version
+ * Shows plants by PlantType only (not by color combination)
  */
 @Composable
 fun GalleryDialog(
@@ -93,31 +93,36 @@ fun GalleryDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Statistics
-                val unlockedCount = gallery.count { it.isUnlocked }
-                val totalCount = gallery.size
+                // Statistics - count by PlantType (9 types x 4 rarities = 36 total)
+                // Group by plantType+rarity, count if any color is unlocked
+                val groupedByTypeRarity = gallery.groupBy { "${it.plantType}_${it.rarity}" }
+                val totalTypes = groupedByTypeRarity.size
+                val unlockedTypes = groupedByTypeRarity.count { (_, plants) -> plants.any { it.isUnlocked } }
+                
                 Text(
-                    "Unlocked: $unlockedCount / $totalCount",
+                    "Unlocked: $unlockedTypes / $totalTypes",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF757575)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Gallery sections by rarity
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                // Gallery sections by rarity - simplified to show by PlantType only
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     PlantRarity.values().reversed().forEach { rarity ->
+                        // Group by PlantType, count unique unlocked colors
                         val plantsInRarity = gallery.filter { it.rarity == rarity }
                         
-                        item {
-                            GallerySection(
-                                rarity = rarity,
-                                plants = plantsInRarity
-                            )
-                        }
+                        GallerySection(
+                            rarity = rarity,
+                            plants = plantsInRarity
+                        )
                     }
                 }
             }
@@ -126,7 +131,7 @@ fun GalleryDialog(
 }
 
 /**
- * Gallery section for a rarity level
+ * Gallery section for a rarity level - shows plants grouped by PlantType
  */
 @Composable
 fun GallerySection(
@@ -140,7 +145,14 @@ fun GallerySection(
         PlantRarity.COMMON -> Color(0xFF4CAF50) to "🌿"
     }
 
-    val unlockedCount = plants.count { it.isUnlocked }
+    // Group by PlantType - show only one item per plant type (with first unlocked color or locked)
+    val plantsByType = plants.groupBy { it.plantType }
+    val displayPlants = plantsByType.map { (plantType, plantsOfType) ->
+        // Prefer showing an unlocked version if any exists
+        plantsOfType.find { it.isUnlocked } ?: plantsOfType.first()
+    }
+    
+    val unlockedTypes = displayPlants.count { it.isUnlocked }
 
     Column {
         // Section header
@@ -168,7 +180,7 @@ fun GallerySection(
             }
 
             Text(
-                "$unlockedCount / ${plants.size}",
+                "$unlockedTypes / ${displayPlants.size}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = sectionColor
             )
@@ -176,21 +188,29 @@ fun GallerySection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Plants grid
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(((plants.size / 4 + 1) * 100).dp.coerceAtMost(200.dp)),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            userScrollEnabled = false
+        // Plants grid using simple Column + Row (not LazyVerticalGrid to avoid nesting issues)
+        val rows = displayPlants.chunked(4)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(plants) { plant ->
-                GalleryPlantItem(
-                    plant = plant,
-                    rarityColor = sectionColor
-                )
+            rows.forEach { rowPlants ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowPlants.forEach { plant ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            GalleryPlantItem(
+                                plant = plant,
+                                rarityColor = sectionColor
+                            )
+                        }
+                    }
+                    // Fill empty slots if row is not full
+                    repeat(4 - rowPlants.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }
@@ -218,20 +238,46 @@ fun GalleryPlantItem(
                 color = if (isUnlocked) rarityColor else Color(0xFFE0E0E0),
                 shape = RoundedCornerShape(12.dp)
             )
-            .padding(8.dp),
+            .padding(4.dp),
         contentAlignment = Alignment.Center
     ) {
         if (isUnlocked) {
-            // Show plant with color
-            val colorMatrix = createHueRotationMatrix(plant.flowerColor.colorHue)
-            
-            Image(
-                painter = painterResource(id = R.drawable.blooming),
-                contentDescription = plant.flowerColor.displayName,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit,
-                colorFilter = ColorFilter.colorMatrix(colorMatrix)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Show plant with color
+                val colorMatrix = createHueRotationMatrix(plant.flowerColor.colorHue)
+                
+                Image(
+                    painter = painterResource(id = R.drawable.blooming),
+                    contentDescription = plant.flowerColor.displayName,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = ColorFilter.colorMatrix(colorMatrix)
+                )
+                
+                // Plant name
+                Text(
+                    text = plant.plantType.vietnameseName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = rarityColor,
+                    maxLines = 1,
+                    fontSize = 8.sp
+                )
+                
+                // Flower color name
+                Text(
+                    text = plant.flowerColor.vietnameseName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF757575),
+                    maxLines = 1,
+                    fontSize = 7.sp
+                )
+            }
         } else {
             // Locked state
             Column(

@@ -1,5 +1,6 @@
 package com.example.coupleapp.ui.screens.profile
 
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,13 +28,19 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.repository.FirebaseStorageRepository
+import com.example.coupleapp.util.ImageCropHelper
 import com.example.coupleapp.viewmodel.ProfileViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Edit Profile Screen - Allows user to edit their profile information
@@ -67,30 +74,102 @@ fun EditProfileScreen(
     var showSuccess by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showAvatarPicker by remember { mutableStateOf(false) }
+    var showImageSourcePicker by remember { mutableStateOf(false) }
     
-    // Image picker launcher
+    // Camera photo file URI
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    
+    // Function to process and upload image (crop to circle)
+    fun processAndUploadImage(uri: Uri) {
+        scope.launch {
+            isUploading = true
+            try {
+                // Load and crop image to circle
+                val bitmap = withContext(Dispatchers.IO) {
+                    ImageCropHelper.loadBitmapFromUri(context, uri, 800)
+                }
+                
+                if (bitmap != null) {
+                    // Crop to circle
+                    val circularBitmap = withContext(Dispatchers.IO) {
+                        ImageCropHelper.cropToCircle(bitmap)
+                    }
+                    
+                    // Save to cache
+                    val croppedFile = withContext(Dispatchers.IO) {
+                        ImageCropHelper.saveBitmapToCache(context, circularBitmap, "avatar_${System.currentTimeMillis()}.jpg")
+                    }
+                    
+                    // Recycle bitmaps
+                    if (circularBitmap != bitmap) {
+                        circularBitmap.recycle()
+                    }
+                    bitmap.recycle()
+                    
+                    if (croppedFile != null) {
+                        val croppedUri = Uri.fromFile(croppedFile)
+                        
+                        // Upload cropped image
+                        val result = storageRepository.uploadImageWithContext(
+                            context = context,
+                            uri = croppedUri,
+                            path = FirebaseStorageRepository.PROFILE_IMAGES_PATH,
+                            filename = "profile_${System.currentTimeMillis()}.jpg"
+                        )
+                        result.onSuccess { url ->
+                            uploadedImageUrl = url
+                        }
+                        result.onFailure { error ->
+                            errorMessage = error.message
+                        }
+                        
+                        // Delete temp file
+                        croppedFile.delete()
+                    } else {
+                        errorMessage = "Không thể xử lý ảnh"
+                    }
+                } else {
+                    errorMessage = "Không thể đọc ảnh"
+                }
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "Lỗi xử lý ảnh"
+            }
+            isUploading = false
+        }
+    }
+    
+    // Image picker launcher (from gallery)
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             selectedImageUri = it
-            // Upload image immediately
-            scope.launch {
-                isUploading = true
-                val result = storageRepository.uploadImageWithContext(
-                    context = context,
-                    uri = it,
-                    path = FirebaseStorageRepository.PROFILE_IMAGES_PATH,
-                    filename = "profile_${System.currentTimeMillis()}.jpg"
-                )
-                result.onSuccess { url ->
-                    uploadedImageUrl = url
-                }
-                result.onFailure { error ->
-                    errorMessage = error.message
-                }
-                isUploading = false
-            }
+            processAndUploadImage(it)
+        }
+    }
+    
+    // Camera launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempCameraUri != null) {
+            selectedImageUri = tempCameraUri
+            processAndUploadImage(tempCameraUri!!)
+        }
+    }
+    
+    // Create temp file for camera
+    fun createTempImageFile(): Uri? {
+        return try {
+            val tempFile = File.createTempFile("camera_", ".jpg", context.cacheDir)
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                tempFile
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("EditProfileScreen", "Error creating temp file", e)
+            null
         }
     }
     
@@ -106,8 +185,6 @@ fun EditProfileScreen(
             uploadedImageUrl = user.profileImageUrl
         }
     }
-    
-    val avatarOptions = listOf("😊", "😎", "🥰", "😇", "🤗", "😍", "🥳", "😋", "🤩", "😺", "🐱", "🐶")
     
     LaunchedEffect(Unit) {
         delay(100)
@@ -129,7 +206,110 @@ fun EditProfileScreen(
         }
     }
     
-    // No avatar picker dialog - removed
+    // Image source picker dialog
+    if (showImageSourcePicker) {
+        AlertDialog(
+            onDismissRequest = { showImageSourcePicker = false },
+            title = {
+                Text(
+                    text = "Chọn ảnh đại diện",
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2D3748)
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Camera option
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showImageSourcePicker = false
+                                tempCameraUri = createTempImageFile()
+                                tempCameraUri?.let { uri ->
+                                    cameraLauncher.launch(uri)
+                                }
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF5F5F5)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = null,
+                                tint = Color(0xFFFF6B9D),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Chụp ảnh",
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF2D3748)
+                                )
+                                Text(
+                                    text = "Sử dụng camera để chụp ảnh mới",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF718096)
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Gallery option
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showImageSourcePicker = false
+                                imagePickerLauncher.launch("image/*")
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF5F5F5)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PhotoLibrary,
+                                contentDescription = null,
+                                tint = Color(0xFF6B9DFF),
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Chọn từ thư viện",
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF2D3748)
+                                )
+                                Text(
+                                    text = "Chọn ảnh từ bộ sưu tập của bạn",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF718096)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showImageSourcePicker = false }) {
+                    Text("Hủy", color = Color(0xFF718096))
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
     
     Scaffold(
         topBar = {
@@ -224,7 +404,7 @@ fun EditProfileScreen(
                             .shadow(8.dp, CircleShape)
                             .clip(CircleShape)
                             .background(Color.White)
-                            .clickable { imagePickerLauncher.launch("image/*") },
+                            .clickable { showImageSourcePicker = true },
                         contentAlignment = Alignment.Center
                     ) {
                         if (uploadedImageUrl != null && uploadedImageUrl!!.isNotEmpty()) {

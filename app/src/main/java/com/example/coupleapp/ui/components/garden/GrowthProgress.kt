@@ -39,12 +39,8 @@ fun GrowthProgressTimer(
     val hours = (totalMinutes % (24 * 60)) / 60
     val minutes = totalMinutes % 60
 
-    // Progress calculation (0-1)
-    val totalStageTime = plant.stage.growthTimeHours * 60 * 60 * 1000L
-    val elapsed = System.currentTimeMillis() - plant.stageStartedAt
-    val progress = if (totalStageTime > 0) {
-        (elapsed.toFloat() / totalStageTime).coerceIn(0f, 1f)
-    } else 0f
+    // Progress calculation - use plant's currentGrowthProgress which includes fertilizer boost
+    val progress = plant.currentGrowthProgress
 
     val animatedProgress by animateFloatAsState(
         targetValue = progress,

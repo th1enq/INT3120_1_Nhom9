@@ -188,7 +188,7 @@ fun LocketScreen(
                 modifier = modifier.fillMaxSize()
             ) { loading ->
                 if (loading) {
-                    LoadingScreen()
+                    LoadingScreen(message = "Loading...")
                 } else {
                     Box(
                         modifier = Modifier
@@ -343,6 +343,7 @@ fun LocketScreen(
                         ) {
                             LocketToggleButton(
                                 partnerUserName = uiState.partnerUser.name,
+                                partnerAvatarUrl = uiState.partnerUser.avatarUrl,
                                 isPinMode = uiState.isPinMode,
                                 onPinClick = { viewModel.togglePinMode(true) },
                                 onUserClick = { 

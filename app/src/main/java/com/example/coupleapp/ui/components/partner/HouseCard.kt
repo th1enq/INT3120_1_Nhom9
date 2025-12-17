@@ -24,16 +24,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.PartnerShortcut
 import com.example.coupleapp.data.model.PartnerUser
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
  * Card hình ngôi nhà hiển thị thông tin partner và các shortcut
@@ -394,23 +398,41 @@ private fun PartnerAvatar(
     avatarUrl: String?,
     size: Int
 ) {
-    // Sử dụng hình giống broccoli trong ảnh
+    val context = LocalContext.current
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
+    android.util.Log.d("PartnerAvatar", "Rendering avatar for: $name, avatarUrl: ${avatarUrl?.take(50)}...")
+    
     Surface(
         modifier = Modifier.size(size.dp),
         shape = CircleShape,
-        color = Color(0xFF81C784)
+        color = Color(0xFFFFB6C1) // Light pink background
     ) {
         Box(contentAlignment = Alignment.Center) {
-            if (avatarUrl.isNullOrEmpty()) {
-                // Emoji broccoli như trong ảnh
-                Text(
-                    text = "🥦",
-                    fontSize = (size / 2).sp
+            if (!avatarUrl.isNullOrEmpty()) {
+                // Load actual avatar image
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
+                    contentDescription = "Avatar of $name",
+                    modifier = Modifier
+                        .size(size.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                    onSuccess = {
+                        android.util.Log.d("PartnerAvatar", "Avatar loaded successfully for: $name")
+                    },
+                    onError = {
+                        android.util.Log.e("PartnerAvatar", "Failed to load avatar for: $name")
+                    }
                 )
             } else {
-                // TODO: Load image from URL
+                // Fallback to first letter
                 Text(
-                    text = name.firstOrNull()?.toString() ?: "?",
+                    text = name.firstOrNull()?.toString()?.uppercase() ?: "?",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

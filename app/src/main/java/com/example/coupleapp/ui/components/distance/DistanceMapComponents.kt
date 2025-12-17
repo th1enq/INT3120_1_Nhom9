@@ -30,15 +30,19 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.Base64ImageDecoder
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
  * Custom avatar marker for map display with kawaii style and arrow pointing down
@@ -134,10 +138,17 @@ fun AvatarMapMarkerWithArrow(
                     .border(3.dp, borderColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
+                val context = LocalContext.current
+                val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+                
                 // Avatar image - display actual avatar if URL exists, otherwise show emoji
-                if (user.avatarUrl.isNotEmpty() && user.avatarUrl.startsWith("http")) {
+                if (user.avatarUrl.isNotEmpty()) {
                     AsyncImage(
-                        model = user.avatarUrl,
+                        model = ImageRequest.Builder(context)
+                            .data(user.avatarUrl)
+                            .crossfade(true)
+                            .build(),
+                        imageLoader = imageLoader,
                         contentDescription = "Avatar of ${user.userName}",
                         modifier = Modifier
                             .size(size - 8.dp)
@@ -378,10 +389,17 @@ fun AvatarMapMarker(
                 .border(3.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
+            val context = LocalContext.current
+            val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+            
             // Avatar image - display actual avatar if URL exists, otherwise show emoji
-            if (user.avatarUrl.isNotEmpty() && user.avatarUrl.startsWith("http")) {
+            if (user.avatarUrl.isNotEmpty()) {
                 AsyncImage(
-                    model = user.avatarUrl,
+                    model = ImageRequest.Builder(context)
+                        .data(user.avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
                     contentDescription = "Avatar of ${user.userName}",
                     modifier = Modifier
                         .size(size - 8.dp)
@@ -389,7 +407,7 @@ fun AvatarMapMarker(
                     contentScale = ContentScale.Crop
                 )
             } else {
-                // Fallback to emoji placeholder
+                // No avatar - emoji placeholder
                 Box(
                     modifier = Modifier
                         .size(size - 8.dp)
@@ -411,7 +429,6 @@ fun AvatarMapMarker(
                 }
             }
         }
-        
         // Online indicator
         if (user.isOnline) {
             Box(
@@ -665,8 +682,12 @@ private fun FloatingAvatarButton(
     isUser: Boolean,
     hasNotification: Boolean = false
 ) {
+    val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Use custom ImageLoader that supports base64 from Firestore
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
     
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else 1f,
@@ -693,10 +714,13 @@ private fun FloatingAvatarButton(
                 .border(2.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            // Show avatar image if available, otherwise show emoji
-            if (!avatarUrl.isNullOrEmpty() && avatarUrl.startsWith("http")) {
+            if (!avatarUrl.isNullOrEmpty()) {
                 AsyncImage(
-                    model = avatarUrl,
+                    model = ImageRequest.Builder(context)
+                        .data(avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
                     contentDescription = "User avatar",
                     modifier = Modifier
                         .size(44.dp)
@@ -704,6 +728,7 @@ private fun FloatingAvatarButton(
                     contentScale = ContentScale.Crop
                 )
             } else {
+                // No avatar - show emoji as fallback
                 Text(text = emoji, fontSize = 22.sp)
             }
         }

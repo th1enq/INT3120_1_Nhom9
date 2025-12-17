@@ -119,7 +119,7 @@ fun MissingScreen(
             modifier = modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen()
+                LoadingScreen(message = "Loading...")
             } else {
                 Box(
                     modifier = Modifier

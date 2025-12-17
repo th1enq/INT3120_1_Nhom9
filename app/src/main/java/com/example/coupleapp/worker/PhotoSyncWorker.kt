@@ -284,6 +284,7 @@ class PhotoSyncWorker(
     /**
      * Thêm ảnh vào album của place
      * Chuyển đổi sang base64 và lưu vào Firestore
+     * Sử dụng filename-based deduplication để tránh trùng với LocationTrackingService
      */
     private suspend fun addPhotoToPlace(
         contentUri: Uri,
@@ -291,17 +292,48 @@ class PhotoSyncWorker(
         userId: String
     ): Boolean {
         return try {
-            // Check if photo already exists in this place's album
-            val existingCheck = db.collection("shared_place_photos")
+            // Extract filename from URI for deduplication
+            val filename = getFilenameFromUri(contentUri)
+            if (filename == null) {
+                Log.e(TAG, "Could not extract filename from URI: $contentUri")
+                return false
+            }
+            
+            Log.d(TAG, "Checking for duplicate photo with filename: $filename")
+            
+            // FIRST: Check SharedPreferences to see if LocationTrackingService already processed this
+            // This prevents double-adding when both systems run
+            val processedPhotosPrefs = applicationContext.getSharedPreferences("processed_photos", android.content.Context.MODE_PRIVATE)
+            val prefKeyByFilename = "photo_filename:$filename"
+            if (processedPhotosPrefs.contains(prefKeyByFilename)) {
+                Log.d(TAG, "PREFS_DUPLICATE: Photo already processed by LocationTrackingService, skipping: $filename")
+                return false
+            }
+            
+            // Fetch ALL photos for this place and check filename manually
+            // This handles both old docs (without stableFilename) and new docs
+            val allPhotosForPlace = db.collection("shared_place_photos")
                 .whereEqualTo("placeId", placeId)
-                .whereEqualTo("originalUri", contentUri.toString())
                 .get()
                 .await()
             
-            if (!existingCheck.isEmpty) {
-                Log.d(TAG, "Photo already exists in album, skipping")
-                return false
+            for (doc in allPhotosForPlace.documents) {
+                val existingPath = doc.getString("originalPath") ?: doc.getString("originalUri") ?: ""
+                val existingFilename = existingPath.substringAfterLast("/")
+                val existingStableFilename = doc.getString("stableFilename") ?: ""
+                
+                if (existingFilename == filename || existingStableFilename == filename) {
+                    Log.d(TAG, "DEDUP: Photo already exists in album (by filename: $filename), skipping")
+                    return false
+                }
             }
+            
+            Log.d(TAG, "No duplicate found, adding photo: $filename")
+            
+            // Mark as processed in SharedPreferences BEFORE adding to prevent race condition
+            processedPhotosPrefs.edit()
+                .putLong(prefKeyByFilename, System.currentTimeMillis())
+                .apply()
             
             // Convert photo to base64
             val base64Photo = convertPhotoToBase64(contentUri)
@@ -310,18 +342,26 @@ class PhotoSyncWorker(
                 return false
             }
             
-            // Add to shared_place_photos collection
+            // Add to shared_place_photos collection with stableFilename for future dedup
             val photoData = mapOf(
                 "placeId" to placeId,
                 "photoUrl" to base64Photo,
                 "originalUri" to contentUri.toString(),
+                "originalPath" to contentUri.toString(),
+                "stableFilename" to filename,
                 "takenAt" to java.util.Date(),
                 "takenByUserId" to userId,
                 "addedBy" to "auto_sync",
                 "caption" to null
             )
             
-            db.collection("shared_place_photos").add(photoData).await()
+            // Use deterministic document ID based on placeId + filename to prevent duplicates
+            // This ensures that even with race conditions, the same photo can only exist once
+            val photoDocId = "${placeId}_${filename}".replace(Regex("[^a-zA-Z0-9_-]"), "_")
+            Log.d(TAG, "Using deterministic doc ID: $photoDocId")
+            
+            db.collection("shared_place_photos").document(photoDocId).set(photoData).await()
+            Log.d(TAG, "Photo added successfully: $filename")
             
             // Update photos count in shared_places
             db.runTransaction { transaction ->
@@ -380,6 +420,28 @@ class PhotoSyncWorker(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error converting photo to base64", e)
+            null
+        }
+    }
+    
+    /**
+     * Extract filename from content URI
+     */
+    private fun getFilenameFromUri(uri: Uri): String? {
+        return try {
+            val projection = arrayOf(MediaStore.Images.Media.DISPLAY_NAME)
+            applicationContext.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(MediaStore.Images.Media.DISPLAY_NAME)
+                    if (nameIndex >= 0) {
+                        return cursor.getString(nameIndex)
+                    }
+                }
+            }
+            // Fallback: extract from URI path
+            uri.lastPathSegment?.substringAfterLast("/")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting filename from URI", e)
             null
         }
     }

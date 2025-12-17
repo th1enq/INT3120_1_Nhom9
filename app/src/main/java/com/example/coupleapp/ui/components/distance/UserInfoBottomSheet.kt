@@ -28,9 +28,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.LocationHistory
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 import java.time.format.DateTimeFormatter
 
 /**
@@ -135,9 +137,16 @@ private fun UserProfileHeader(
                 .border(3.dp, borderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (user.avatarUrl.isNotEmpty() && user.avatarUrl.startsWith("http")) {
+            if (user.avatarUrl.isNotEmpty()) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+                
                 AsyncImage(
-                    model = user.avatarUrl,
+                    model = ImageRequest.Builder(context)
+                        .data(user.avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
                     contentDescription = "Avatar of ${user.userName}",
                     modifier = Modifier
                         .size(58.dp)

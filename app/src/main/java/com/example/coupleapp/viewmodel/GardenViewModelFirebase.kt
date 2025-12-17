@@ -96,26 +96,41 @@ class GardenViewModelFirebase : ViewModel() {
                     clazz = FirebaseGardenInventory::class.java
                 )
 
-                // Load gallery
-                val galleryResult = firestoreRepository.queryDocuments(
-                    collection = "garden_gallery",
-                    field = "userId",
-                    value = userId,
-                    clazz = FirebaseGalleryItem::class.java
-                )
+                // Load gallery - shared between couple
+                val galleryResult = if (!coupleId.isNullOrEmpty()) {
+                    firestoreRepository.queryDocuments(
+                        collection = "garden_gallery",
+                        field = "coupleId",
+                        value = coupleId,
+                        clazz = FirebaseGalleryItem::class.java
+                    )
+                } else {
+                    firestoreRepository.queryDocuments(
+                        collection = "garden_gallery",
+                        field = "userId",
+                        value = userId,
+                        clazz = FirebaseGalleryItem::class.java
+                    )
+                }
 
                 plantResult.fold(
                     onSuccess = { plants ->
                         Log.d("GardenViewModel", "[GARDEN] ✅ Found ${plants.size} plant(s) in Firebase")
                         plants.forEachIndexed { index, fbPlant ->
-                            Log.d("GardenViewModel", "[GARDEN]   Plant #$index: id=${fbPlant.id}, coupleId=${fbPlant.coupleId}, userId=${fbPlant.userId}, stage=${fbPlant.stage}, water=${fbPlant.water}, sun=${fbPlant.sunlight}, health=${fbPlant.health}")
+                            Log.d("GardenViewModel", "[GARDEN]   Plant #$index: id=${fbPlant.id}, coupleId=${fbPlant.coupleId}, userId=${fbPlant.userId}, stage=${fbPlant.stage}, type=${fbPlant.plantType}, water=${fbPlant.water}, sun=${fbPlant.sunlight}, health=${fbPlant.health}")
                         }
                         val plant = plants.firstOrNull()?.toPlant()
                         if (plant != null) {
-                            Log.d("GardenViewModel", "[GARDEN] ✓ Using plant: id=${plant.id}, stage=${plant.stage}, water=${plant.status.water}, sun=${plant.status.sunlight}")
+                            Log.d("GardenViewModel", "[GARDEN] ✓ Using plant: id=${plant.id}, stage=${plant.stage}, type=${plant.plantType}, boost=${plant.fertilizerBoostHours}h")
                         } else {
                             Log.d("GardenViewModel", "[GARDEN] ⚠️ No plant found - user needs to plant seed")
                         }
+                        
+                        // Load collection (shared between couple)
+                        val collection = if (!coupleId.isNullOrEmpty()) {
+                            loadCollection(coupleId)
+                        } else emptyList()
+                        Log.d("GardenViewModel", "[GARDEN] Loaded ${collection.size} plants in collection")
                         
                         inventoryResult.fold(
                             onSuccess = { firebaseInventory ->
@@ -124,14 +139,23 @@ class GardenViewModelFirebase : ViewModel() {
                                 
                                 galleryResult.fold(
                                     onSuccess = { galleryItems ->
+                                        Log.d("GardenViewModel", "[GARDEN] 📚 Loaded ${galleryItems.size} gallery items from Firebase")
+                                        galleryItems.forEach { item ->
+                                            Log.d("GardenViewModel", "[GARDEN]   Gallery item: color=${item.flowerColor}, rarity=${item.rarity}, type=${item.plantType}, unlocked=${item.isUnlocked}")
+                                        }
                                         val gallery = createGalleryWithUnlocks(galleryItems)
+                                        val unlockedCount = gallery.count { it.isUnlocked }
+                                        Log.d("GardenViewModel", "[GARDEN] 📚 Gallery created: $unlockedCount / ${gallery.size} unlocked")
                                         
                                         _uiState.update {
                                             it.copy(
                                                 isLoading = false,
                                                 plant = plant,
                                                 inventory = inventory,
-                                                gallery = gallery
+                                                gallery = gallery,
+                                                collection = collection,
+                                                coupleId = coupleId ?: "",
+                                                partnerId = partnerId ?: ""
                                             )
                                         }
                                     },
@@ -186,6 +210,7 @@ class GardenViewModelFirebase : ViewModel() {
         android.util.Log.d("GardenViewModel", "[GARDEN] 🌱 Converting Firebase plant to domain model:")
         android.util.Log.d("GardenViewModel", "[GARDEN]    id=${this.id}, coupleId=${this.coupleId}, userId=${this.userId}")
         android.util.Log.d("GardenViewModel", "[GARDEN]    stage=${this.stage}, rarity=${this.rarity}, color=${this.flowerColor}")
+        android.util.Log.d("GardenViewModel", "[GARDEN]    plantType=${this.plantType}, fertilizerBoost=${this.fertilizerBoostHours}h")
         android.util.Log.d("GardenViewModel", "[GARDEN]    water=${this.water}, sunlight=${this.sunlight}, health=${this.health}")
         val stage = when (this.stage.lowercase()) {
             "seed" -> PlantStage.SEED
@@ -208,6 +233,10 @@ class GardenViewModelFirebase : ViewModel() {
             it.name.lowercase() == this.flowerColor.lowercase() 
         } ?: PlantFlowerColor.PINK
 
+        val plantType = PlantType.values().find {
+            it.name.lowercase() == this.plantType.lowercase()
+        } ?: PlantType.ROSE
+
         val plant = Plant(
             id = this.id,
             name = this.plantName,
@@ -219,9 +248,15 @@ class GardenViewModelFirebase : ViewModel() {
                 lastUpdateTime = this.updatedAt?.time ?: System.currentTimeMillis()
             ),
             rarity = rarity,
+            plantType = plantType,
             flowerColor = flowerColor,
             isInGreenhouse = this.isInGreenhouse,
-            stageStartedAt = this.createdAt?.time ?: System.currentTimeMillis()
+            stageStartedAt = this.stageStartedAt,
+            fertilizerBoostHours = this.fertilizerBoostHours,
+            coupleId = this.coupleId,
+            plantedByUserId = this.plantedByUserId,
+            lastCaredByUserId = this.lastCaredByUserId,
+            plantedAt = this.createdAt?.time ?: System.currentTimeMillis()
         )
         android.util.Log.d("GardenViewModel", "[GARDEN] ✓ Plant converted successfully: ${plant.id}")
         return plant
@@ -232,12 +267,22 @@ class GardenViewModelFirebase : ViewModel() {
      */
     private fun FirebaseGardenInventory.toGardenInventory(): GardenInventory {
         val items = mutableMapOf<CareItemType, CareItem>()
-        Log.d("GardenViewModel", "[GARDEN] Converting Firebase inventory to domain: seeds=${this.seeds}, fert4h=${this.fertilizer4h}, fert8h=${this.fertilizer8h}, fert12h=${this.fertilizer12h}, water=${this.wateringCan}, sun=${this.sunlightBottle}, pesticide=${this.pesticide}, scissors=${this.scissors}")
+        Log.d("GardenViewModel", "[GARDEN] Converting Firebase inventory to domain: seeds=${this.seeds}, rareSeeds=${this.rareSeeds}, superRareSeeds=${this.superRareSeeds}, fert4h=${this.fertilizer4h}, fert8h=${this.fertilizer8h}, fert12h=${this.fertilizer12h}, water=${this.wateringCan}, sun=${this.sunlightBottle}, pesticide=${this.pesticide}, scissors=${this.scissors}")
 
         if (this.seeds > 0) {
             items[CareItemType.SEED_NORMAL] = createDefaultItem(CareItemType.SEED_NORMAL)
                 .copy(quantity = this.seeds)
             Log.d("GardenViewModel", "[GARDEN] Added SEED_NORMAL: quantity=${this.seeds}")
+        }
+        if (this.rareSeeds > 0) {
+            items[CareItemType.SEED_RARE] = createDefaultItem(CareItemType.SEED_RARE)
+                .copy(quantity = this.rareSeeds)
+            Log.d("GardenViewModel", "[GARDEN] Added SEED_RARE: quantity=${this.rareSeeds}")
+        }
+        if (this.superRareSeeds > 0) {
+            items[CareItemType.SEED_SUPER_RARE] = createDefaultItem(CareItemType.SEED_SUPER_RARE)
+                .copy(quantity = this.superRareSeeds)
+            Log.d("GardenViewModel", "[GARDEN] Added SEED_SUPER_RARE: quantity=${this.superRareSeeds}")
         }
         if (this.fertilizer4h > 0) {
             items[CareItemType.FERTILIZER_4H] = createDefaultItem(CareItemType.FERTILIZER_4H)
@@ -288,21 +333,32 @@ class GardenViewModelFirebase : ViewModel() {
      * Create gallery with unlocked items
      */
     private fun createGalleryWithUnlocks(galleryItems: List<FirebaseGalleryItem>): List<GalleryPlant> {
-        val unlockedSet = galleryItems.map { "${it.flowerColor}_${it.rarity}" }.toSet()
+        // Convert to lowercase for consistent matching
+        val unlockedSet = galleryItems.map { 
+            "${it.flowerColor.lowercase()}_${it.rarity.lowercase()}_${it.plantType.lowercase()}" 
+        }.toSet()
+        Log.d("GardenViewModel", "[GALLERY] Unlocked set keys: $unlockedSet")
         
         return PlantFlowerColor.values().flatMap { color ->
-            PlantRarity.values().map { rarity ->
-                val id = "${color.name}_${rarity.name}"
-                val isUnlocked = id in unlockedSet
-                val unlockedItem = galleryItems.find { "${it.flowerColor}_${it.rarity}" == id }
-                
-                GalleryPlant(
-                    id = id,
-                    flowerColor = color,
-                    rarity = rarity,
-                    isUnlocked = isUnlocked,
-                    unlockedAt = unlockedItem?.unlockedAt?.toDate()?.time
-                )
+            PlantRarity.values().flatMap { rarity ->
+                PlantType.values().map { plantType ->
+                    val id = "${color.name}_${rarity.name}_${plantType.name}"
+                    // Use lowercase for matching
+                    val matchKey = "${color.name.lowercase()}_${rarity.name.lowercase()}_${plantType.name.lowercase()}"
+                    val isUnlocked = matchKey in unlockedSet
+                    val unlockedItem = galleryItems.find { 
+                        "${it.flowerColor.lowercase()}_${it.rarity.lowercase()}_${it.plantType.lowercase()}" == matchKey 
+                    }
+                    
+                    GalleryPlant(
+                        id = id,
+                        flowerColor = color,
+                        rarity = rarity,
+                        plantType = plantType,
+                        isUnlocked = isUnlocked,
+                        unlockedAt = unlockedItem?.unlockedAt?.toDate()?.time
+                    )
+                }
             }
         }
     }
@@ -312,13 +368,16 @@ class GardenViewModelFirebase : ViewModel() {
      */
     private fun createDefaultGallery(): List<GalleryPlant> {
         return PlantFlowerColor.values().flatMap { color ->
-            PlantRarity.values().map { rarity ->
-                GalleryPlant(
-                    id = "${color.name}_${rarity.name}",
-                    flowerColor = color,
-                    rarity = rarity,
-                    isUnlocked = false
-                )
+            PlantRarity.values().flatMap { rarity ->
+                PlantType.values().map { plantType ->
+                    GalleryPlant(
+                        id = "${color.name}_${rarity.name}_${plantType.name}",
+                        flowerColor = color,
+                        rarity = rarity,
+                        plantType = plantType,
+                        isUnlocked = false
+                    )
+                }
             }
         }
     }
@@ -428,6 +487,7 @@ class GardenViewModelFirebase : ViewModel() {
     fun useCareItem(itemType: CareItemType) {
         val plant = _uiState.value.plant ?: return
         val inventory = _uiState.value.inventory
+        val userId = authRepository.currentUser?.uid ?: return
         
         if (!inventory.hasItem(itemType)) {
             _uiState.update { it.copy(errorMessage = "Bạn không có vật phẩm này!") }
@@ -447,7 +507,54 @@ class GardenViewModelFirebase : ViewModel() {
 
             delay(2000)
 
-            // Apply effect
+            // Handle fertilizer separately - it modifies fertilizerBoostHours, not status
+            val isFertilizer = itemType in listOf(
+                CareItemType.FERTILIZER_4H, 
+                CareItemType.FERTILIZER_8H, 
+                CareItemType.FERTILIZER_24H
+            )
+            
+            if (isFertilizer) {
+                // Apply fertilizer boost
+                val newBoostHours = plant.fertilizerBoostHours + item.boostHours
+                val fertilizedPlant = plant.copy(
+                    fertilizerBoostHours = newBoostHours,
+                    lastCaredByUserId = userId
+                )
+                val updatedInventory = inventory.useItem(itemType)
+                
+                Log.d("GardenViewModel", "[GARDEN] 🌱 Applied fertilizer: +${item.boostHours}h boost, total=${newBoostHours}h")
+                Log.d("GardenViewModel", "[GARDEN] 🌱 Plant canEvolve=${fertilizedPlant.canEvolve}, timeToNextStage=${fertilizedPlant.timeToNextStage}ms")
+
+                // Update UI with fertilized plant
+                _uiState.update {
+                    it.copy(
+                        plant = fertilizedPlant,
+                        inventory = updatedInventory,
+                        showItemAnimation = false,
+                        animatingItem = null,
+                        lastPartnerCareTime = if (userId != plant.plantedByUserId) System.currentTimeMillis() else it.lastPartnerCareTime
+                    )
+                }
+
+                // Save fertilizer boost to Firebase
+                firestoreRepository.updateDocument(
+                    collection = "garden_plants",
+                    documentId = plant.id,
+                    updates = mapOf(
+                        "fertilizerBoostHours" to newBoostHours,
+                        "lastCaredByUserId" to userId,
+                        "updatedAt" to Timestamp(Date())
+                    )
+                )
+                saveInventory(updatedInventory)
+                
+                // Check if plant can evolve now
+                checkPlantEvolution()
+                return@launch
+            }
+
+            // Apply effect for non-fertilizer items
             val newStatus = when (itemType) {
                 CareItemType.WATER -> plant.status.copy(
                     water = (plant.status.water + item.effectValue).coerceIn(0f, 100f),
@@ -461,14 +568,14 @@ class GardenViewModelFirebase : ViewModel() {
                     health = (plant.status.health + item.effectValue).coerceIn(0f, 100f),
                     lastUpdateTime = System.currentTimeMillis()
                 )
-                CareItemType.FERTILIZER_4H, CareItemType.FERTILIZER_8H, CareItemType.FERTILIZER_24H -> {
-                    applyFertilizer(plant, item.boostHours)
-                    plant.status
-                }
                 else -> plant.status
             }
 
-            val updatedPlant = plant.copy(status = newStatus)
+            // Update lastCaredByUserId to track partner collaboration
+            val updatedPlant = plant.copy(
+                status = newStatus,
+                lastCaredByUserId = userId
+            )
             val updatedInventory = inventory.useItem(itemType)
 
             // Update UI
@@ -477,11 +584,12 @@ class GardenViewModelFirebase : ViewModel() {
                     plant = updatedPlant,
                     inventory = updatedInventory,
                     showItemAnimation = false,
-                    animatingItem = null
+                    animatingItem = null,
+                    lastPartnerCareTime = if (userId != plant.plantedByUserId) System.currentTimeMillis() else it.lastPartnerCareTime
                 )
             }
 
-            // Save to Firebase
+            // Save to Firebase with lastCaredByUserId
             savePlantStatus(updatedPlant)
             saveInventory(updatedInventory)
 
@@ -490,36 +598,31 @@ class GardenViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Apply fertilizer boost
-     */
-    private fun applyFertilizer(plant: Plant, boostHours: Int) {
-        val boostMillis = boostHours * 60 * 60 * 1000L
-        val newStageStartedAt = plant.stageStartedAt - boostMillis
-
-        _uiState.update {
-            it.copy(
-                plant = plant.copy(stageStartedAt = newStageStartedAt)
-            )
-        }
-
-        checkPlantEvolution()
-    }
-
-    /**
      * Check and apply plant evolution
      */
     fun checkPlantEvolution() {
         val plant = _uiState.value.plant ?: return
         
-        android.util.Log.d("GardenViewModel", "[GARDEN] Checking plant evolution: stage=${plant.stage}, canEvolve=${plant.canEvolve}, timeToNextStage=${plant.timeToNextStage}ms, isAlive=${plant.status.isAlive}")
+        android.util.Log.d("GardenViewModel", "[GARDEN] Checking plant evolution: stage=${plant.stage}, canEvolve=${plant.canEvolve}, timeToNextStage=${plant.timeToNextStage}ms, fertilizerBoost=${plant.fertilizerBoostHours}h, isAlive=${plant.status.isAlive}")
         
         if (plant.canEvolve) {
             val nextStage = PlantStage.values().getOrNull(plant.stage.ordinal + 1)
             if (nextStage != null) {
+                android.util.Log.d("GardenViewModel", "[GARDEN] 🌿 Evolving plant from ${plant.stage} to $nextStage")
+                
                 viewModelScope.launch {
+                    // Calculate excess boost hours to carry over to next stage
+                    val currentStageTimeHours = plant.stage.growthTimeHours
+                    val elapsedHours = ((System.currentTimeMillis() - plant.stageStartedAt) / (1000 * 60 * 60)).toInt()
+                    val totalEffectiveHours = elapsedHours + plant.fertilizerBoostHours
+                    val excessBoostHours = maxOf(0, totalEffectiveHours - currentStageTimeHours)
+                    
+                    android.util.Log.d("GardenViewModel", "[GARDEN] 🌿 Boost calculation: elapsed=${elapsedHours}h, boost=${plant.fertilizerBoostHours}h, stageTime=${currentStageTimeHours}h, excess=${excessBoostHours}h")
+                    
                     val evolvedPlant = plant.copy(
                         stage = nextStage,
-                        stageStartedAt = System.currentTimeMillis()
+                        stageStartedAt = System.currentTimeMillis(),
+                        fertilizerBoostHours = excessBoostHours // Carry over excess boost
                     )
 
                     _uiState.update { it.copy(plant = evolvedPlant) }
@@ -530,9 +633,198 @@ class GardenViewModelFirebase : ViewModel() {
                     if (nextStage == PlantStage.BLOOMING) {
                         unlockPlantInGallery(evolvedPlant)
                     }
+                    
+                    // Check if can evolve again (in case of excess boost carries over)
+                    delay(500)
+                    checkPlantEvolution()
                 }
             }
         }
+    }
+
+    /**
+     * Harvest a blooming plant and add to collection
+     */
+    fun harvestPlant() {
+        val plant = _uiState.value.plant ?: return
+        val userId = authRepository.currentUser?.uid ?: return
+        
+        if (!plant.isReadyToHarvest) {
+            _uiState.update { it.copy(errorMessage = "Plant is not ready to harvest!") }
+            return
+        }
+
+        viewModelScope.launch {
+            Log.d("GardenViewModel", "[GARDEN] 🌸 Harvesting plant: ${plant.name}, type=${plant.plantType}, color=${plant.flowerColor}, rarity=${plant.rarity}")
+            
+            // Get user data for coupleId
+            val userResult = firestoreRepository.getDocument(
+                collection = "users",
+                documentId = userId,
+                clazz = FirebaseUser::class.java
+            )
+            val userData = userResult.getOrNull()
+            val coupleId = userData?.coupleId ?: ""
+            val partnerId = userData?.partnerId ?: ""
+            
+            // Check if partner contributed to care
+            val partnerContributed = plant.lastCaredByUserId.isNotEmpty() && 
+                                     plant.lastCaredByUserId != plant.plantedByUserId
+            
+            // Create collected plant
+            val collectedPlant = CollectedPlant(
+                id = UUID.randomUUID().toString(),
+                plantType = plant.plantType,
+                flowerColor = plant.flowerColor,
+                rarity = plant.rarity,
+                unlockedAt = System.currentTimeMillis(),
+                unlockedByCoupleId = coupleId,
+                harvestedByUserId = userId,
+                partnerContributedCare = partnerContributed
+            )
+            
+            // Save to collection in Firebase
+            val firebaseCollectedPlant = FirebaseCollectedPlant(
+                id = collectedPlant.id,
+                coupleId = coupleId,
+                plantType = plant.plantType.name.lowercase(),
+                flowerColor = plant.flowerColor.name.lowercase(),
+                rarity = plant.rarity.name.lowercase(),
+                harvestedByUserId = userId,
+                partnerContributedCare = partnerContributed,
+                unlockedAt = Timestamp(Date())
+            )
+            
+            firestoreRepository.setDocument(
+                collection = "garden_collection",
+                documentId = collectedPlant.id,
+                data = firebaseCollectedPlant
+            ).fold(
+                onSuccess = {
+                    Log.d("GardenViewModel", "[GARDEN] ✅ Plant added to collection: ${collectedPlant.id}")
+                    
+                    // Also unlock in gallery
+                    unlockPlantInGallery(plant)
+                    
+                    // Delete the harvested plant
+                    firestoreRepository.deleteDocument(
+                        collection = "garden_plants",
+                        documentId = plant.id
+                    )
+                    
+                    // Update UI
+                    val harvestResult = HarvestResult(
+                        collectedPlant = collectedPlant,
+                        isNewUnlock = true,
+                        bonusCoins = if (partnerContributed) 50 else 25,
+                        partnerBonus = partnerContributed
+                    )
+                    
+                    _uiState.update { state ->
+                        state.copy(
+                            plant = null,
+                            showHarvestDialog = true,
+                            harvestedPlant = collectedPlant,
+                            collection = state.collection + collectedPlant,
+                            successMessage = if (partnerContributed) 
+                                "Thu hoạch thành công! +50 xu (Bonus từ partner)" 
+                            else 
+                                "Thu hoạch thành công! +25 xu"
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    Log.e("GardenViewModel", "[GARDEN] ❌ Failed to save collection: ${error.message}")
+                    _uiState.update { it.copy(errorMessage = "Không thể thu hoạch: ${error.message}") }
+                }
+            )
+        }
+    }
+
+    /**
+     * Dismiss harvest dialog
+     */
+    fun dismissHarvestDialog() {
+        _uiState.update { it.copy(showHarvestDialog = false, harvestedPlant = null) }
+    }
+
+    /**
+     * Show color editor for collected plant
+     */
+    fun showColorEditor(plant: CollectedPlant) {
+        _uiState.update { it.copy(showColorEditor = true, harvestedPlant = plant) }
+    }
+
+    /**
+     * Dismiss color editor
+     */
+    fun dismissColorEditor() {
+        _uiState.update { it.copy(showColorEditor = false) }
+    }
+
+    /**
+     * Update collected plant color customization
+     */
+    fun updatePlantColor(plantId: String, hue: Float, saturation: Float, brightness: Float) {
+        viewModelScope.launch {
+            val updates = mapOf(
+                "customColorHue" to hue,
+                "customSaturation" to saturation,
+                "customBrightness" to brightness
+            )
+            
+            firestoreRepository.updateDocument(
+                collection = "garden_collection",
+                documentId = plantId,
+                updates = updates
+            ).fold(
+                onSuccess = {
+                    _uiState.update { state ->
+                        val updatedCollection = state.collection.map { plant ->
+                            if (plant.id == plantId) {
+                                plant.copy(
+                                    customColorHue = hue,
+                                    customSaturation = saturation,
+                                    customBrightness = brightness
+                                )
+                            } else plant
+                        }
+                        state.copy(collection = updatedCollection, showColorEditor = false)
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(errorMessage = "Không thể cập nhật màu: ${error.message}") }
+                }
+            )
+        }
+    }
+
+    /**
+     * Load collection from Firebase
+     */
+    private suspend fun loadCollection(coupleId: String): List<CollectedPlant> {
+        val result = firestoreRepository.queryDocuments(
+            collection = "garden_collection",
+            field = "coupleId",
+            value = coupleId,
+            clazz = FirebaseCollectedPlant::class.java
+        )
+        
+        return result.getOrNull()?.map { fb ->
+            CollectedPlant(
+                id = fb.id,
+                plantType = PlantType.values().find { it.name.lowercase() == fb.plantType } ?: PlantType.ROSE,
+                flowerColor = PlantFlowerColor.values().find { it.name.lowercase() == fb.flowerColor } ?: PlantFlowerColor.PINK,
+                rarity = PlantRarity.values().find { it.name.lowercase() == fb.rarity } ?: PlantRarity.COMMON,
+                customColorHue = fb.customColorHue,
+                customSaturation = fb.customSaturation,
+                customBrightness = fb.customBrightness,
+                unlockedAt = fb.unlockedAt?.toDate()?.time ?: System.currentTimeMillis(),
+                unlockedByCoupleId = fb.coupleId,
+                harvestedByUserId = fb.harvestedByUserId,
+                partnerContributedCare = fb.partnerContributedCare
+            )
+        } ?: emptyList()
     }
 
     /**
@@ -540,17 +832,31 @@ class GardenViewModelFirebase : ViewModel() {
      */
     private fun unlockPlantInGallery(plant: Plant) {
         val userId = authRepository.currentUser?.uid ?: return
-        val galleryId = "${plant.flowerColor.name}_${plant.rarity.name}"
+        val galleryId = "${plant.flowerColor.name}_${plant.rarity.name}_${plant.plantType.name}"
         
         viewModelScope.launch {
+            Log.d("GardenViewModel", "[GALLERY] 🔓 Unlocking plant: color=${plant.flowerColor.name}, rarity=${plant.rarity.name}, type=${plant.plantType.name}")
+            
+            // Get coupleId for shared gallery
+            val userResult = firestoreRepository.getDocument(
+                collection = "users",
+                documentId = userId,
+                clazz = FirebaseUser::class.java
+            )
+            val coupleId = userResult.getOrNull()?.coupleId ?: ""
+            
             val galleryItem = FirebaseGalleryItem(
                 id = UUID.randomUUID().toString(),
                 userId = userId,
-                coupleId = "",
-                flowerColor = plant.flowerColor.name,
-                rarity = plant.rarity.name,
+                coupleId = coupleId,
+                flowerColor = plant.flowerColor.name.lowercase(),
+                rarity = plant.rarity.name.lowercase(),
+                plantType = plant.plantType.name.lowercase(),
+                isUnlocked = true,
                 unlockedAt = Timestamp(Date())
             )
+            
+            Log.d("GardenViewModel", "[GALLERY] Saving to Firestore: color=${galleryItem.flowerColor}, rarity=${galleryItem.rarity}, type=${galleryItem.plantType}")
 
             firestoreRepository.setDocument(
                 collection = "garden_gallery",
@@ -581,23 +887,35 @@ class GardenViewModelFirebase : ViewModel() {
             return
         }
 
-        val rarity = when (seedType) {
-            CareItemType.SEED_NORMAL -> determineRarity(SeedRarity.NORMAL)
-            CareItemType.SEED_RARE -> determineRarity(SeedRarity.RARE)
-            CareItemType.SEED_SUPER_RARE -> determineRarity(SeedRarity.SUPER_RARE)
+        // Determine seed rarity
+        val seedRarity = when (seedType) {
+            CareItemType.SEED_NORMAL -> SeedRarity.NORMAL
+            CareItemType.SEED_RARE -> SeedRarity.RARE
+            CareItemType.SEED_SUPER_RARE -> SeedRarity.SUPER_RARE
             else -> return
         }
-
-        val flowerColor = PlantFlowerColor.values().random()
+        
+        // Determine plant rarity from seed
+        val rarity = determineRarity(seedRarity)
+        
+        // Random plant type - rare seeds have higher chance for rare plant types
+        val plantType = determinePlantType(seedRarity)
+        
+        // Random flower color
+        val flowerColor = determineFlowerColor(seedRarity)
 
         val newPlant = Plant(
             id = UUID.randomUUID().toString(),
-            name = "Cây trồng mới",
+            name = "${plantType.vietnameseName} ${flowerColor.vietnameseName}",
             stage = PlantStage.SEED,
             status = PlantStatus(),
             rarity = rarity,
-            flowerColor = flowerColor
+            plantType = plantType,
+            flowerColor = flowerColor,
+            plantedByUserId = userId
         )
+        
+        Log.d("GardenViewModel", "[GARDEN] 🌱 Planting seed: type=${plantType.name}, color=${flowerColor.name}, rarity=${rarity.name}")
 
         viewModelScope.launch {
             // Get user's coupleId for shared garden
@@ -617,11 +935,16 @@ class GardenViewModelFirebase : ViewModel() {
                 plantName = newPlant.name,
                 stage = newPlant.stage.name.lowercase(),
                 rarity = newPlant.rarity.name.lowercase(),
+                plantType = newPlant.plantType.name.lowercase(),
                 flowerColor = newPlant.flowerColor.name.lowercase(),
                 sunlight = newPlant.status.sunlight,
                 water = newPlant.status.water,
                 health = newPlant.status.health,
+                fertilizerBoostHours = 0,
                 isInGreenhouse = newPlant.isInGreenhouse,
+                plantedByUserId = userId,
+                lastCaredByUserId = userId,
+                stageStartedAt = System.currentTimeMillis(),
                 createdAt = Date(),
                 updatedAt = Date()
             )
@@ -636,8 +959,9 @@ class GardenViewModelFirebase : ViewModel() {
                     
                     _uiState.update {
                         it.copy(
-                            plant = newPlant,
-                            inventory = updatedInventory
+                            plant = newPlant.copy(coupleId = coupleId),
+                            inventory = updatedInventory,
+                            successMessage = "Đã trồng ${newPlant.name}! ${rarity.starsCount}⭐"
                         )
                     }
 
@@ -649,6 +973,97 @@ class GardenViewModelFirebase : ViewModel() {
                     }
                 }
             )
+        }
+    }
+
+    /**
+     * Determine plant type based on seed rarity
+     * Rare seeds unlock more exotic plant types
+     */
+    private fun determinePlantType(seedRarity: SeedRarity): PlantType {
+        val random = Random.nextFloat()
+        
+        return when (seedRarity) {
+            SeedRarity.NORMAL -> {
+                // Common plants: Rose, Tulip, Daisy, Sunflower
+                when {
+                    random < 0.30f -> PlantType.ROSE
+                    random < 0.55f -> PlantType.TULIP
+                    random < 0.75f -> PlantType.DAISY
+                    random < 0.90f -> PlantType.SUNFLOWER
+                    else -> PlantType.LILY // Small chance for better plant
+                }
+            }
+            SeedRarity.RARE -> {
+                // Rare plants: Lily, Orchid, Lavender + small chance for exotic
+                when {
+                    random < 0.25f -> PlantType.LILY
+                    random < 0.45f -> PlantType.ORCHID
+                    random < 0.65f -> PlantType.LAVENDER
+                    random < 0.80f -> PlantType.ROSE
+                    random < 0.92f -> PlantType.CHERRY_BLOSSOM
+                    else -> PlantType.LOTUS // Small chance for best plant
+                }
+            }
+            SeedRarity.SUPER_RARE -> {
+                // Super rare: Cherry Blossom, Lotus + all others possible
+                when {
+                    random < 0.30f -> PlantType.CHERRY_BLOSSOM
+                    random < 0.55f -> PlantType.LOTUS
+                    random < 0.70f -> PlantType.ORCHID
+                    random < 0.85f -> PlantType.LAVENDER
+                    else -> PlantType.LILY
+                }
+            }
+        }
+    }
+
+    /**
+     * Determine flower color based on seed rarity
+     * Rare seeds have chance for special colors
+     */
+    private fun determineFlowerColor(seedRarity: SeedRarity): PlantFlowerColor {
+        val random = Random.nextFloat()
+        
+        // Common colors
+        val commonColors = listOf(
+            PlantFlowerColor.PINK, PlantFlowerColor.RED, PlantFlowerColor.YELLOW,
+            PlantFlowerColor.ORANGE, PlantFlowerColor.PURPLE
+        )
+        
+        // Rare colors
+        val rareColors = listOf(
+            PlantFlowerColor.BLUE, PlantFlowerColor.CYAN, PlantFlowerColor.MAGENTA,
+            PlantFlowerColor.GREEN
+        )
+        
+        // Super rare colors
+        val superRareColors = listOf(
+            PlantFlowerColor.WHITE, PlantFlowerColor.BLACK, PlantFlowerColor.RAINBOW
+        )
+        
+        return when (seedRarity) {
+            SeedRarity.NORMAL -> {
+                when {
+                    random < 0.85f -> commonColors.random()
+                    random < 0.97f -> rareColors.random()
+                    else -> superRareColors.random()
+                }
+            }
+            SeedRarity.RARE -> {
+                when {
+                    random < 0.50f -> commonColors.random()
+                    random < 0.85f -> rareColors.random()
+                    else -> superRareColors.random()
+                }
+            }
+            SeedRarity.SUPER_RARE -> {
+                when {
+                    random < 0.20f -> commonColors.random()
+                    random < 0.50f -> rareColors.random()
+                    else -> superRareColors.random()
+                }
+            }
         }
     }
 
@@ -730,14 +1145,20 @@ class GardenViewModelFirebase : ViewModel() {
             val updates = mapOf(
                 "plantName" to plant.name,
                 "stage" to plant.stage.name.lowercase(),
+                "plantType" to plant.plantType.name.lowercase(),
+                "flowerColor" to plant.flowerColor.name.lowercase(),
+                "rarity" to plant.rarity.name.lowercase(),
                 "sunlight" to plant.status.sunlight,
                 "water" to plant.status.water,
                 "health" to plant.status.health,
+                "fertilizerBoostHours" to plant.fertilizerBoostHours,
                 "isInGreenhouse" to plant.isInGreenhouse,
+                "stageStartedAt" to plant.stageStartedAt,
+                "lastCaredByUserId" to plant.lastCaredByUserId,
                 "updatedAt" to Timestamp(Date())
             )
 
-            Log.d("GardenViewModel", "[GARDEN] Saving plant status to Firebase: plantId=${plant.id}, stage=${plant.stage}, water=${plant.status.water}, sun=${plant.status.sunlight}, health=${plant.status.health}")
+            Log.d("GardenViewModel", "[GARDEN] Saving plant status to Firebase: plantId=${plant.id}, stage=${plant.stage}, type=${plant.plantType}, boost=${plant.fertilizerBoostHours}h, lastCaredBy=${plant.lastCaredByUserId}")
             firestoreRepository.updateDocument(
                 collection = "garden_plants",
                 documentId = plant.id,
@@ -755,6 +1176,8 @@ class GardenViewModelFirebase : ViewModel() {
         viewModelScope.launch {
             val updates = mapOf(
                 "seeds" to (inventory.getItem(CareItemType.SEED_NORMAL)?.quantity ?: 0),
+                "rareSeeds" to (inventory.getItem(CareItemType.SEED_RARE)?.quantity ?: 0),
+                "superRareSeeds" to (inventory.getItem(CareItemType.SEED_SUPER_RARE)?.quantity ?: 0),
                 "fertilizer4h" to (inventory.getItem(CareItemType.FERTILIZER_4H)?.quantity ?: 0),
                 "fertilizer8h" to (inventory.getItem(CareItemType.FERTILIZER_8H)?.quantity ?: 0),
                 "fertilizer12h" to (inventory.getItem(CareItemType.FERTILIZER_24H)?.quantity ?: 0),
@@ -771,6 +1194,13 @@ class GardenViewModelFirebase : ViewModel() {
                 updates = updates
             )
         }
+    }
+
+    /**
+     * Clear success message
+     */
+    fun clearSuccessMessage() {
+        _uiState.update { it.copy(successMessage = null) }
     }
 
     /**

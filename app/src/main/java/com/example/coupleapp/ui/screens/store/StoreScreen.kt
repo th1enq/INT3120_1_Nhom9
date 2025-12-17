@@ -92,7 +92,7 @@ fun StoreScreen(
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
-            LoadingScreen()
+            LoadingScreen(message = "Loading store...")
         } else {
             Box(
                 modifier = Modifier.fillMaxSize()

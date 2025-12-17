@@ -70,12 +70,12 @@ fun SleepCalendarHistoryScreen(
 
     Crossfade(
         targetState = uiState.isLoading,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = tween(durationMillis = 400),
         label = "LoadingCrossfade",
         modifier = modifier
     ) { loading ->
         if (loading) {
-            LoadingScreen()
+            LoadingScreen(message = "Loading history...")
         } else {
             Box(
                 modifier = Modifier

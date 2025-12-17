@@ -77,6 +77,7 @@ class SleepTrackerViewModelFirebase(
                 val currentUserProfile = currentUserResult.getOrElse {
                     UserProfile(userId, "User", null)
                 }
+                Log.d(TAG, "Loaded current user profile: name=${currentUserProfile.name}, avatarUrl=${currentUserProfile.avatarUrl?.take(50)}")
 
                 // Load partner profile
                 val partnerIdResult = sleepRepository.getPartnerId()
@@ -88,6 +89,7 @@ class SleepTrackerViewModelFirebase(
                     partnerProfile = partnerResult.getOrElse {
                         UserProfile(partnerId, "Partner", null)
                     }
+                    Log.d(TAG, "Loaded partner profile: name=${partnerProfile.name}, avatarUrl=${partnerProfile.avatarUrl?.take(50)}")
                 }
 
                 _uiState.update { currentState ->

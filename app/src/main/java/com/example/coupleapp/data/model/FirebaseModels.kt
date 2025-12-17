@@ -293,23 +293,26 @@ data class FirebasePurchaseHistory(
 )
 
 /**
- * Firebase Garden Plant Model
+ * Firebase Garden Plant Model - SHARED between couple
  */
 data class FirebaseGardenPlant(
     @DocumentId
     val id: String = "",
-    val coupleId: String = "",
-    val userId: String = "",
+    val coupleId: String = "", // Plants are shared via coupleId
+    val userId: String = "", // Who planted it
     val plantName: String = "",
-    val stage: String = "seed", // seed, sprout, growing, blooming, mature
-    val rarity: String = "common", // common, rare, super_rare
-    val flowerColor: String = "pink", // pink, red, yellow, blue, purple, white
+    val stage: String = "seed", // seed, sprout, seedling, growing, mature, blooming
+    val rarity: String = "common", // common, uncommon, rare, super_rare
+    val plantType: String = "rose", // rose, tulip, sunflower, etc.
+    val flowerColor: String = "pink", // pink, red, yellow, blue, purple, etc.
     val sunlight: Float = 100f,
     val water: Float = 100f,
     val health: Float = 100f,
+    val fertilizerBoostHours: Int = 0, // Hours skipped by fertilizer
     val isInGreenhouse: Boolean = false,
-    val lastWateredAt: Long = 0,
-    val lastSunlightAt: Long = 0,
+    val plantedByUserId: String = "",
+    val lastCaredByUserId: String = "",
+    val stageStartedAt: Long = System.currentTimeMillis(),
     @ServerTimestamp
     val createdAt: Date? = null,
     @ServerTimestamp
@@ -324,6 +327,8 @@ data class FirebaseGardenInventory(
     val id: String = "",
     val userId: String = "",
     val seeds: Int = 0,
+    val rareSeeds: Int = 0,
+    val superRareSeeds: Int = 0,
     val fertilizer4h: Int = 0,
     val fertilizer8h: Int = 0,
     val fertilizer12h: Int = 0,
@@ -336,7 +341,7 @@ data class FirebaseGardenInventory(
 )
 
 /**
- * Firebase Gallery Item Model
+ * Firebase Gallery Item Model - individual plant unlock
  */
 data class FirebaseGalleryItem(
     @DocumentId
@@ -345,7 +350,27 @@ data class FirebaseGalleryItem(
     val coupleId: String = "",
     val flowerColor: String = "",
     val rarity: String = "",
+    val plantType: String = "",
     val isUnlocked: Boolean = false,
+    @ServerTimestamp
+    val unlockedAt: Timestamp? = null
+)
+
+/**
+ * Firebase Collected Plant Model - SHARED collection between couple
+ */
+data class FirebaseCollectedPlant(
+    @DocumentId
+    val id: String = "",
+    val coupleId: String = "", // Collection is shared via coupleId
+    val plantType: String = "",
+    val flowerColor: String = "",
+    val rarity: String = "",
+    val customColorHue: Float? = null,
+    val customSaturation: Float? = null,
+    val customBrightness: Float? = null,
+    val harvestedByUserId: String = "",
+    val partnerContributedCare: Boolean = false,
     @ServerTimestamp
     val unlockedAt: Timestamp? = null
 )

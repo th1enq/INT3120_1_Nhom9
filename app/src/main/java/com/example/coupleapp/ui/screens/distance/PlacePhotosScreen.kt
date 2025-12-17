@@ -77,6 +77,9 @@ fun PlacePhotosScreen(
     var selectedPhotoIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     
+    // Prevent duplicate photo submissions
+    var isPhotoProcessing by remember { mutableStateOf(false) }
+    
     android.util.Log.d("PlacePhotosScreen", "=== Screen rendered for placeId: $placeId ===")
     android.util.Log.d("PlacePhotosScreen", "Photos count: ${photosState.photos.size}")
     android.util.Log.d("PlacePhotosScreen", "Is loading: ${photosState.isLoading}")
@@ -88,8 +91,9 @@ fun PlacePhotosScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let {
-            viewModel.addPhotoToPlace(placeId, it.toString())
+        if (uri != null && !isPhotoProcessing) {
+            isPhotoProcessing = true
+            viewModel.addPhotoToPlace(placeId, uri.toString())
             showAddPhotoDialog = false
         }
     }
@@ -98,9 +102,17 @@ fun PlacePhotosScreen(
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
-        if (success && tempCameraUri != null) {
+        if (success && tempCameraUri != null && !isPhotoProcessing) {
+            isPhotoProcessing = true
             viewModel.addPhotoToPlace(placeId, tempCameraUri.toString())
             showAddPhotoDialog = false
+        }
+    }
+    
+    // Reset processing flag when photos are done loading
+    LaunchedEffect(photosState.isAddingPhoto) {
+        if (!photosState.isAddingPhoto) {
+            isPhotoProcessing = false
         }
     }
     
@@ -145,11 +157,11 @@ fun PlacePhotosScreen(
     
     Crossfade(
         targetState = photosState.isLoading,
-        animationSpec = tween(500),
+        animationSpec = tween(400),
         label = "loadingCrossfade"
     ) { isLoading ->
         if (isLoading) {
-            LoadingScreen()
+            LoadingScreen(message = "Loading photos...")
         } else {
             Scaffold(
                 topBar = {

@@ -19,17 +19,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.components.partner.*
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 import com.example.coupleapp.viewmodel.PartnerHubViewModel
 import com.example.coupleapp.viewmodel.PartnerHubViewModelFirebase
 import kotlinx.coroutines.delay
@@ -929,6 +934,9 @@ private fun HouseCardFirebase(
     partner: FirebaseUser?,
     onNavigateToChat: () -> Unit
 ) {
+    val context = LocalContext.current
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -959,12 +967,27 @@ private fun HouseCardFirebase(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = partner?.displayName?.firstOrNull()?.toString()?.uppercase() ?: "P",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    if (!partner?.profileImageUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(partner?.profileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            imageLoader = imageLoader,
+                            contentDescription = "Partner Avatar",
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = partner?.displayName?.firstOrNull()?.toString()?.uppercase() ?: "P",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
                 
                 Spacer(modifier = Modifier.width(16.dp))

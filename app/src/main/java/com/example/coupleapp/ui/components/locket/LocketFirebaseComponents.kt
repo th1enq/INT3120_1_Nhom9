@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,25 +25,11 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.example.coupleapp.data.model.LocketType
-import android.graphics.BitmapFactory
-import android.util.Base64
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.foundation.Image
-
-/**
- * Decode Base64 to Bitmap (helper function, not Composable)
- */
-private fun decodeBase64ToBitmap(base64String: String): android.graphics.Bitmap? {
-    return try {
-        val imageBytes = Base64.decode(base64String, Base64.DEFAULT)
-        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-    } catch (e: Exception) {
-        null
-    }
-}
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
  * Component to display locket images - supports both Base64 and URL
+ * Now uses custom ImageLoader that can fetch base64 from Firestore
  */
 @Composable
 fun LocketImageFromUrl(
@@ -51,53 +38,52 @@ fun LocketImageFromUrl(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    // Check if it's Base64 encoded image
-    if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-        // It's a URL - use Coil
-        val context = LocalContext.current
-        
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .crossfade(true)
-                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                .build(),
-            contentDescription = contentDescription,
-            modifier = modifier,
-            contentScale = contentScale
-        ) {
-            val state = painter.state
-            when (state) {
-                is AsyncImagePainter.State.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(40.dp),
-                            color = Color(0xFF4CAF50)
-                        )
-                    }
+    val context = LocalContext.current
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
+    SubcomposeAsyncImage(
+        model = ImageRequest.Builder(context)
+            .data(imageUrl)
+            .crossfade(true)
+            .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+            .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+            .build(),
+        imageLoader = imageLoader,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        contentScale = contentScale
+    ) {
+        val state = painter.state
+        when (state) {
+            is AsyncImagePainter.State.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(40.dp),
+                        color = Color(0xFF4CAF50)
+                    )
                 }
-                is AsyncImagePainter.State.Error -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFFF5F5F5)),
-                        contentAlignment = Alignment.Center
+            }
+            is AsyncImagePainter.State.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFF5F5F5)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Error,
-                                contentDescription = null,
-                                tint = Color(0xFFFF5252),
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Error,
+                            contentDescription = null,
+                            tint = Color(0xFFFF5252),
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Failed to load",
                                 fontSize = 10.sp,
@@ -111,35 +97,6 @@ fun LocketImageFromUrl(
                 }
             }
         }
-    } else {
-        // It's Base64 - decode and display
-        val bitmap = androidx.compose.runtime.remember(imageUrl) {
-            decodeBase64ToBitmap(imageUrl)
-        }
-        
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = contentDescription,
-                modifier = modifier,
-                contentScale = contentScale
-            )
-        } else {
-            // Failed to decode
-            Box(
-                modifier = modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFF5F5F5)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Error,
-                    contentDescription = null,
-                    tint = Color(0xFFFF5252)
-                )
-            }
-        }
-    }
 }
 
 /**

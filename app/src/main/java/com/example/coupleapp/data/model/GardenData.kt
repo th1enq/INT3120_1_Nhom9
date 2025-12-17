@@ -5,6 +5,7 @@ import com.example.coupleapp.R
 
 /**
  * Plant growth stages - 6 stages from seed to blooming
+ * Each stage has a specific growth time before transitioning to the next
  */
 enum class PlantStage(
     val displayName: String,
@@ -12,27 +13,61 @@ enum class PlantStage(
     @DrawableRes val imageRes: Int,
     val growthTimeHours: Int // Time to reach next stage
 ) {
-    SEED("Seed", "Hạt giống", R.drawable.seed, 24),
-    SPROUT("Sprout", "Mầm", R.drawable.sprout, 30),
-    SEEDLING("Seedling", "Cây con", R.drawable.seedling, 36),
-    GROWING("Growing", "Đang lớn", R.drawable.growing, 48),
-    MATURE("Mature", "Trưởng thành", R.drawable.mature, 72),
-    BLOOMING("Blooming", "Nở hoa", R.drawable.blooming, 0) // Final stage
+    SEED("Seed", "Hạt giống", R.drawable.seed, 6),           // 6 hours to sprout
+    SPROUT("Sprout", "Mầm", R.drawable.sprout, 7),           // 7 hours to seedling
+    SEEDLING("Seedling", "Cây con", R.drawable.seedling, 8), // 8 hours to growing
+    GROWING("Growing", "Đang lớn", R.drawable.growing, 10),   // 10 hours to mature
+    MATURE("Mature", "Trưởng thành", R.drawable.mature, 12),  // 12 hours to blooming
+    BLOOMING("Blooming", "Nở hoa", R.drawable.blooming, 0)    // Final stage - ready to harvest
 }
 
 /**
- * Plant rarity levels
+ * Seed rarity types - determines which plant rarity pool to draw from
+ */
+enum class SeedRarity(
+    val displayName: String,
+    val vietnameseName: String
+) {
+    NORMAL("Normal", "Thường"),
+    RARE("Rare", "Hiếm"),
+    SUPER_RARE("Super Rare", "Siêu hiếm")
+}
+
+/**
+ * Plant rarity levels - determines the collection value
  */
 enum class PlantRarity(
     val displayName: String,
     val vietnameseName: String,
-    val colorHue: Float, // For bloom color variation
-    val dropRate: Float
+    val colorHue: Float,
+    val dropRate: Float,
+    val starsCount: Int // Visual indicator of rarity
 ) {
-    COMMON("Common", "Thường", 0f, 0.6f),
-    UNCOMMON("Uncommon", "Không phổ biến", 30f, 0.25f),
-    RARE("Rare", "Hiếm", 180f, 0.12f),
-    SUPER_RARE("Super Rare", "Siêu hiếm", 280f, 0.03f)
+    COMMON("Common", "Thường", 0f, 0.6f, 1),
+    UNCOMMON("Uncommon", "Không phổ biến", 30f, 0.25f, 2),
+    RARE("Rare", "Hiếm", 180f, 0.12f, 3),
+    SUPER_RARE("Super Rare", "Siêu hiếm", 280f, 0.03f, 4)
+}
+
+/**
+ * Plant types - different species of plants that can be grown
+ * Each type has unique appearance and is unlocked through collection
+ */
+enum class PlantType(
+    val displayName: String,
+    val vietnameseName: String,
+    @DrawableRes val unlockedImageRes: Int,
+    @DrawableRes val lockedImageRes: Int
+) {
+    ROSE("Rose", "Hoa hồng", R.drawable.blooming, R.drawable.seed),
+    TULIP("Tulip", "Hoa tulip", R.drawable.blooming, R.drawable.seed),
+    SUNFLOWER("Sunflower", "Hoa hướng dương", R.drawable.blooming, R.drawable.seed),
+    LILY("Lily", "Hoa lily", R.drawable.blooming, R.drawable.seed),
+    ORCHID("Orchid", "Hoa lan", R.drawable.blooming, R.drawable.seed),
+    DAISY("Daisy", "Hoa cúc", R.drawable.blooming, R.drawable.seed),
+    LAVENDER("Lavender", "Hoa oải hương", R.drawable.blooming, R.drawable.seed),
+    CHERRY_BLOSSOM("Cherry Blossom", "Hoa anh đào", R.drawable.blooming, R.drawable.seed),
+    LOTUS("Lotus", "Hoa sen", R.drawable.blooming, R.drawable.seed)
 }
 
 /**
@@ -40,18 +75,23 @@ enum class PlantRarity(
  */
 enum class PlantFlowerColor(
     val displayName: String,
+    val vietnameseName: String,
     val colorHue: Float,
+    val hexColor: Long,
     @DrawableRes val bloomingRes: Int
 ) {
-    PINK("Pink", 330f, R.drawable.blooming),
-    RED("Red", 0f, R.drawable.blooming),
-    ORANGE("Orange", 30f, R.drawable.blooming),
-    YELLOW("Yellow", 60f, R.drawable.blooming),
-    GREEN("Green", 120f, R.drawable.blooming),
-    CYAN("Cyan", 180f, R.drawable.blooming),
-    BLUE("Blue", 210f, R.drawable.blooming),
-    PURPLE("Purple", 270f, R.drawable.blooming),
-    MAGENTA("Magenta", 300f, R.drawable.blooming)
+    PINK("Pink", "Hồng", 330f, 0xFFFFB6C1, R.drawable.blooming),
+    RED("Red", "Đỏ", 0f, 0xFFFF4444, R.drawable.blooming),
+    ORANGE("Orange", "Cam", 30f, 0xFFFF9933, R.drawable.blooming),
+    YELLOW("Yellow", "Vàng", 60f, 0xFFFFD700, R.drawable.blooming),
+    GREEN("Green", "Xanh lá", 120f, 0xFF4CAF50, R.drawable.blooming),
+    CYAN("Cyan", "Xanh ngọc", 180f, 0xFF00CED1, R.drawable.blooming),
+    BLUE("Blue", "Xanh dương", 210f, 0xFF4169E1, R.drawable.blooming),
+    PURPLE("Purple", "Tím", 270f, 0xFF9370DB, R.drawable.blooming),
+    MAGENTA("Magenta", "Hồng tím", 300f, 0xFFFF00FF, R.drawable.blooming),
+    WHITE("White", "Trắng", 0f, 0xFFFFFAFA, R.drawable.blooming),
+    BLACK("Black", "Đen", 0f, 0xFF1A1A1A, R.drawable.blooming),
+    RAINBOW("Rainbow", "Cầu vồng", 0f, 0xFFFFFFFF, R.drawable.blooming) // Special rare color
 }
 
 /**
@@ -129,10 +169,16 @@ data class PlantStatus(
             water <= sunlight && water <= health -> PlantStatusType.WATER
             else -> PlantStatusType.HEALTH
         }
+    
+    /**
+     * Calculate overall plant health percentage
+     */
+    val overallHealth: Float
+        get() = (sunlight + water + health) / 3f
 }
 
 /**
- * Main Plant data class
+ * Main Plant data class - shared between couple
  */
 data class Plant(
     val id: String,
@@ -140,27 +186,91 @@ data class Plant(
     val stage: PlantStage = PlantStage.SEED,
     val status: PlantStatus = PlantStatus(),
     val rarity: PlantRarity = PlantRarity.COMMON,
+    val plantType: PlantType = PlantType.ROSE,
     val flowerColor: PlantFlowerColor = PlantFlowerColor.PINK,
     val plantedAt: Long = System.currentTimeMillis(),
     val stageStartedAt: Long = System.currentTimeMillis(),
+    val fertilizerBoostHours: Int = 0, // Total hours skipped by fertilizer
     val growthProgress: Float = 0f, // 0-1 progress to next stage
     val isInGreenhouse: Boolean = false,
     val greenhouseBoost: Float = 1.5f, // 150% growth speed
-    val coupleId: String = "", // For sync between couple
+    val coupleId: String = "", // For sync between couple - SHARED PLANT
+    val plantedByUserId: String = "", // Who planted the seed
+    val lastCaredByUserId: String = "", // Last person who cared for plant
     val lastSyncTime: Long = System.currentTimeMillis()
 ) {
+    /**
+     * Calculate time remaining to next growth stage
+     */
     val timeToNextStage: Long
         get() {
             if (stage == PlantStage.BLOOMING) return 0
-            val baseTime = stage.growthTimeHours * 60 * 60 * 1000L // Convert to milliseconds
-            val adjustedTime = if (isInGreenhouse) (baseTime / greenhouseBoost).toLong() else baseTime
+            val baseTimeMs = stage.growthTimeHours * 60 * 60 * 1000L
+            val fertilizerBoostMs = fertilizerBoostHours * 60 * 60 * 1000L
+            val adjustedTime = if (isInGreenhouse) (baseTimeMs / greenhouseBoost).toLong() else baseTimeMs
+            val effectiveTime = maxOf(0, adjustedTime - fertilizerBoostMs)
             val elapsed = System.currentTimeMillis() - stageStartedAt
-            return maxOf(0, adjustedTime - elapsed)
+            return maxOf(0, effectiveTime - elapsed)
         }
     
+    /**
+     * Calculate current growth progress (0.0 to 1.0)
+     */
+    val currentGrowthProgress: Float
+        get() {
+            if (stage == PlantStage.BLOOMING) return 1f
+            val baseTimeMs = stage.growthTimeHours * 60 * 60 * 1000L
+            if (baseTimeMs <= 0) return 1f
+            val elapsed = System.currentTimeMillis() - stageStartedAt
+            val fertilizerBoostMs = fertilizerBoostHours * 60 * 60 * 1000L
+            val effectiveElapsed = elapsed + fertilizerBoostMs
+            val adjustedTotal = if (isInGreenhouse) (baseTimeMs / greenhouseBoost).toLong() else baseTimeMs
+            return (effectiveElapsed.toFloat() / adjustedTotal).coerceIn(0f, 1f)
+        }
+    
+    /**
+     * Check if plant can evolve to next stage
+     */
     val canEvolve: Boolean
         get() = stage != PlantStage.BLOOMING && timeToNextStage <= 0 && status.isAlive
+    
+    /**
+     * Check if plant is ready to harvest (blooming stage)
+     */
+    val isReadyToHarvest: Boolean
+        get() = stage == PlantStage.BLOOMING && status.isAlive
+    
+    /**
+     * Get total growth time remaining for all stages
+     */
+    val totalTimeRemaining: Long
+        get() {
+            if (stage == PlantStage.BLOOMING) return 0
+            var total = timeToNextStage
+            val stagesRemaining = PlantStage.values().drop(stage.ordinal + 1).dropLast(1) // Exclude BLOOMING
+            stagesRemaining.forEach { nextStage ->
+                total += nextStage.growthTimeHours * 60 * 60 * 1000L
+            }
+            return total
+        }
 }
+
+/**
+ * Collected plant for gallery - shared between couple
+ */
+data class CollectedPlant(
+    val id: String,
+    val plantType: PlantType,
+    val flowerColor: PlantFlowerColor,
+    val rarity: PlantRarity,
+    val customColorHue: Float? = null, // Custom color adjustment
+    val customSaturation: Float? = null,
+    val customBrightness: Float? = null,
+    val unlockedAt: Long = System.currentTimeMillis(),
+    val unlockedByCoupleId: String = "",
+    val harvestedByUserId: String = "",
+    val partnerContributedCare: Boolean = false // Did partner help care for plant?
+)
 
 /**
  * Gallery collection item
@@ -169,8 +279,10 @@ data class GalleryPlant(
     val id: String,
     val flowerColor: PlantFlowerColor,
     val rarity: PlantRarity,
+    val plantType: PlantType = PlantType.ROSE,
     val unlockedAt: Long? = null,
-    val isUnlocked: Boolean = false
+    val isUnlocked: Boolean = false,
+    val customColorHue: Float? = null
 )
 
 /**
@@ -325,16 +437,23 @@ data class GardenUiState(
     val plant: Plant? = null,
     val inventory: GardenInventory = createDefaultInventory(),
     val gallery: List<GalleryPlant> = emptyList(),
+    val collection: List<CollectedPlant> = emptyList(), // Shared collection between couple
     val selectedTab: GardenTab = GardenTab.CARE,
     val showRenameDialog: Boolean = false,
     val showSettingsMenu: Boolean = false,
     val showItemAnimation: Boolean = false,
+    val showHarvestDialog: Boolean = false,
+    val showColorEditor: Boolean = false,
+    val harvestedPlant: CollectedPlant? = null, // Recently harvested plant
     val animatingItem: CareItem? = null,
     val plantThought: PlantStatusType? = null, // For thought bubble
     val errorMessage: String? = null,
+    val successMessage: String? = null,
     val coupleId: String = "",
     val partnerId: String = "",
-    val isConnected: Boolean = true
+    val partnerName: String = "",
+    val isConnected: Boolean = true,
+    val lastPartnerCareTime: Long? = null // When partner last cared for plant
 )
 
 /**
@@ -347,6 +466,15 @@ enum class GardenTab(val displayName: String, val vietnameseName: String) {
 }
 
 /**
+ * Color customization options for harvested plants
+ */
+data class PlantColorCustomization(
+    val hueAdjustment: Float = 0f, // -180 to 180
+    val saturationAdjustment: Float = 0f, // -1 to 1
+    val brightnessAdjustment: Float = 0f // -1 to 1
+)
+
+/**
  * Item use animation state
  */
 data class ItemAnimationState(
@@ -355,4 +483,14 @@ data class ItemAnimationState(
     val progress: Float = 0f, // 0-1 animation progress
     val startPosition: Pair<Float, Float> = 0f to 0f,
     val targetPosition: Pair<Float, Float> = 0f to 0f
+)
+
+/**
+ * Harvest result when plant reaches blooming stage
+ */
+data class HarvestResult(
+    val collectedPlant: CollectedPlant,
+    val isNewUnlock: Boolean, // First time getting this type
+    val bonusCoins: Int = 0,
+    val partnerBonus: Boolean = false // Extra bonus if partner helped
 )

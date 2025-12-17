@@ -9,6 +9,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -59,18 +61,45 @@ fun NavGraph(
     val sharedAuthViewModel: AuthViewModel = viewModel()
     val authState by sharedAuthViewModel.authState.collectAsState()
     
-    // Determine start destination based on login state
-    val actualStartDestination = remember(authState) {
-        when {
-            startDestination != null -> startDestination
-            authState == AuthState.Authenticated -> Screen.Home.route
-            else -> Screen.Welcome.route
-        }
+    // Track if we've checked auth and navigated
+    var hasNavigatedFromAuth by remember { mutableStateOf(false) }
+    
+    // Determine start destination - always start with a splash/loading approach
+    // The actual start destination is determined based on what's passed OR defaults to Welcome
+    // The LaunchedEffect below will handle navigation once auth is determined
+    val actualStartDestination = remember {
+        startDestination ?: Screen.Welcome.route
     }
     
     // Check auth status on app launch
     LaunchedEffect(Unit) {
         sharedAuthViewModel.checkAuthStatus()
+    }
+    
+    // Handle auth state changes for navigation
+    LaunchedEffect(authState) {
+        when (authState) {
+            AuthState.Authenticated -> {
+                // Only navigate if we haven't already done so and not coming from a specific destination
+                if (!hasNavigatedFromAuth && startDestination == null) {
+                    hasNavigatedFromAuth = true
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+            AuthState.Unauthenticated -> {
+                // User logged out or not authenticated
+                if (hasNavigatedFromAuth) {
+                    // User was logged in but now logged out - navigate to Welcome
+                    navController.navigate(Screen.Welcome.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                    hasNavigatedFromAuth = false
+                }
+            }
+            else -> { /* Initial or Loading - do nothing */ }
+        }
     }
     
     NavHost(
@@ -86,14 +115,7 @@ fun NavGraph(
                 fadeOut(animationSpec = tween(300))
             }
         ) {
-            // If already authenticated, navigate to Home
-            LaunchedEffect(authState) {
-                if (authState == AuthState.Authenticated) {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Welcome.route) { inclusive = true }
-                    }
-                }
-            }
+            // No need for LaunchedEffect here - handled above
             
             WelcomeScreen(
                 onGoogleLoginClick = {

@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.SharedPlace
-import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.theme.*
 import com.example.coupleapp.util.LocationUtils
 import com.example.coupleapp.viewmodel.DistanceViewModel

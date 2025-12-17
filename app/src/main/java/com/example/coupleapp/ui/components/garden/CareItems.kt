@@ -423,3 +423,156 @@ fun SideButtonImage(
         )
     }
 }
+
+/**
+ * Collection grid for displaying harvested plants
+ */
+@Composable
+fun CollectionGrid(
+    collection: List<CollectedPlant>,
+    onItemClick: (CollectedPlant) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (collection.isEmpty()) {
+        // Empty collection message
+        Box(
+            modifier = modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "📚",
+                    fontSize = 48.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Bộ sưu tập trống",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF5D4037)
+                )
+                Text(
+                    "Thu hoạch cây để thêm vào bộ sưu tập!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF8D6E63)
+                )
+            }
+        }
+    } else {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            items(collection) { plant ->
+                CollectionItemCard(
+                    plant = plant,
+                    onClick = { onItemClick(plant) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Card for a collected plant in the collection grid
+ */
+@Composable
+fun CollectionItemCard(
+    plant: CollectedPlant,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = Color(plant.flowerColor.hexColor)
+    val rarityStars = "⭐".repeat(plant.rarity.starsCount)
+    
+    Card(
+        modifier = modifier
+            .aspectRatio(0.85f)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Plant type icon with custom color tint
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                backgroundColor.copy(alpha = 0.3f),
+                                backgroundColor.copy(alpha = 0.1f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = plant.plantType.unlockedImageRes),
+                    contentDescription = plant.plantType.displayName,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .graphicsLayer {
+                            // Apply custom color hue if set
+                            plant.customColorHue?.let { hue ->
+                                // Color matrix transformation would go here
+                            }
+                        },
+                    contentScale = ContentScale.Fit
+                )
+            }
+            
+            // Plant name
+            Text(
+                text = plant.plantType.vietnameseName,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium
+                ),
+                color = Color(0xFF5D4037),
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+            
+            // Color indicator
+            Box(
+                modifier = Modifier
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(backgroundColor)
+                    .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+            )
+            
+            // Rarity stars
+            Text(
+                text = rarityStars,
+                fontSize = 10.sp,
+                maxLines = 1
+            )
+            
+            // Partner bonus indicator
+            if (plant.partnerContributedCare) {
+                Text(
+                    text = "💕",
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}

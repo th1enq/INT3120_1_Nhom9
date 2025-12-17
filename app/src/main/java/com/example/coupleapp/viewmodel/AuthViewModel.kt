@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.FirebaseUser
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.utils.FCMHelper
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,19 @@ import java.util.UUID
 class AuthViewModel : ViewModel() {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    
+    // Auth state listener for auto-detecting login/logout
+    private val authStateListener = FirebaseAuth.AuthStateListener { auth ->
+        Log.d("AuthViewModel", "Auth state changed: user = ${auth.currentUser?.uid}")
+        if (auth.currentUser != null) {
+            // User logged in - load data
+            loadUserData(auth.currentUser!!.uid)
+        } else {
+            // User logged out
+            _currentUser.value = null
+            _authState.value = AuthState.Unauthenticated
+        }
+    }
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -26,8 +41,56 @@ class AuthViewModel : ViewModel() {
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
 
     init {
-        // Auto-check on init for persistent login
+        // Register auth state listener for persistent login detection
+        FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
+        // Also check immediately
         checkAuthStatus()
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        // Remove listener when ViewModel is destroyed
+        FirebaseAuth.getInstance().removeAuthStateListener(authStateListener)
+    }
+    
+    /**
+     * Load user data from Firestore
+     */
+    private fun loadUserData(userId: String) {
+        viewModelScope.launch {
+            firestoreRepository.getDocument(
+                FirebaseFirestoreRepository.USERS_COLLECTION,
+                userId,
+                FirebaseUser::class.java
+            ).onSuccess { user ->
+                _currentUser.value = user
+                _authState.value = AuthState.Authenticated
+                Log.d("AuthViewModel", "User data loaded: ${user?.displayName}")
+                
+                // Register FCM token for push notifications
+                registerFCMToken()
+            }.onFailure { error ->
+                Log.e("AuthViewModel", "Failed to load user data: ${error.message}")
+                // Even if Firestore fails, user is still authenticated
+                _authState.value = AuthState.Authenticated
+                // Still try to register FCM token
+                registerFCMToken()
+            }
+        }
+    }
+    
+    /**
+     * Register FCM token for push notifications
+     */
+    private fun registerFCMToken() {
+        viewModelScope.launch {
+            try {
+                FCMHelper.registerFCMToken()
+                Log.d("AuthViewModel", "FCM token registered")
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Failed to register FCM token", e)
+            }
+        }
     }
 
     /**
@@ -35,18 +98,10 @@ class AuthViewModel : ViewModel() {
      */
     fun checkAuthStatus() {
         val firebaseUser = authRepository.currentUser
+        Log.d("AuthViewModel", "checkAuthStatus: firebaseUser = ${firebaseUser?.uid}")
         if (firebaseUser != null) {
             // Load user data from Firestore
-            viewModelScope.launch {
-                firestoreRepository.getDocument(
-                    FirebaseFirestoreRepository.USERS_COLLECTION,
-                    firebaseUser.uid,
-                    FirebaseUser::class.java
-                ).onSuccess { user ->
-                    _currentUser.value = user
-                    _authState.value = AuthState.Authenticated
-                }
-            }
+            loadUserData(firebaseUser.uid)
         } else {
             _authState.value = AuthState.Unauthenticated
         }
@@ -145,9 +200,18 @@ class AuthViewModel : ViewModel() {
      * Sign out
      */
     fun signOut() {
-        authRepository.signOut()
-        _currentUser.value = null
-        _authState.value = AuthState.Unauthenticated
+        viewModelScope.launch {
+            // Unregister FCM token before signing out
+            try {
+                FCMHelper.unregisterFCMToken()
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Failed to unregister FCM token", e)
+            }
+            
+            authRepository.signOut()
+            _currentUser.value = null
+            _authState.value = AuthState.Unauthenticated
+        }
     }
 
     /**

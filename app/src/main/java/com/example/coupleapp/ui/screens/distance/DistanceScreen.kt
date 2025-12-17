@@ -29,7 +29,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.service.LocationTrackingService
-import com.example.coupleapp.ui.components.LoadingScreen
+import com.example.coupleapp.ui.components.LightweightLoadingScreen
 import com.example.coupleapp.ui.components.distance.*
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
@@ -104,8 +104,8 @@ fun DistanceScreen(
         } else {
             // Nếu loading xong (isLoading = false)
             if (!visible) {
-                // Delay lâu hơn để Maps render xong trước khi hiện UI
-                kotlinx.coroutines.delay(500)  // Tăng từ 400ms -> 500ms
+                // Giảm delay để UI hiện nhanh hơn, map sẽ render song song
+                kotlinx.coroutines.delay(200)
                 visible = true
             }
             // Nếu visible đã là true (quay lại từ màn hình khác), giữ nguyên -> Không bị chớp
@@ -160,14 +160,15 @@ fun DistanceScreen(
         }
     }
     
-    // Handle loading state with smooth crossfade
+    // Handle loading state with smooth crossfade - using lightweight loading
     Crossfade(
         targetState = uiState.isLoading,
-        animationSpec = tween(durationMillis = 600),  // Smooth like HomeScreen
+        animationSpec = tween(durationMillis = 400),  // Faster transition
         label = "loadingCrossfade"
     ) { isLoading ->
         if (isLoading) {
-            LoadingScreen()
+            // Use lightweight loading instead of heavy Lottie for map screen
+            LightweightLoadingScreen(message = "Loading location...")
         } else {
             Box(
                 modifier = Modifier

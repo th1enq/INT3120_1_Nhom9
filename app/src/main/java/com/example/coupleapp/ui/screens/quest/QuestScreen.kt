@@ -109,7 +109,7 @@ fun QuestScreen(
             modifier = Modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen()
+                LoadingScreen(message = "Loading quests...")
             } else {
                 Box(
                     modifier = Modifier.fillMaxSize()

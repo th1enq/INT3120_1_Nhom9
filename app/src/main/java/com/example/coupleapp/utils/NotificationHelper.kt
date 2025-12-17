@@ -50,6 +50,7 @@ class NotificationHelper(private val context: Context) {
     
     /**
      * Show notification for new message
+     * Note: For privacy, we don't show message content - only that there's a new message
      */
     fun showMessageNotification(
         senderName: String,
@@ -69,16 +70,30 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         
-        // Build notification
+        // Privacy: Hide actual message content, only show that there's a new message
+        val notificationText = if (messageCount > 1) {
+            "Bạn có $messageCount tin nhắn mới"
+        } else {
+            "Bạn có tin nhắn mới"
+        }
+        
+        // Build notification - content is hidden for privacy
         val notification = NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
             .setSmallIcon(R.drawable.ic_launcher_foreground) // TODO: Add custom icon
             .setContentTitle(senderName)
-            .setContentText(messageText)
+            .setContentText(notificationText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET) // Hide content on lock screen
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
+                    .setSmallIcon(R.drawable.ic_launcher_foreground)
+                    .setContentTitle("Couple App")
+                    .setContentText("Bạn có tin nhắn mới")
+                    .build()
+            )
             .apply {
                 if (messageCount > 1) {
                     setNumber(messageCount)

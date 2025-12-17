@@ -13,12 +13,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.LocketMoment
 import com.example.coupleapp.data.model.LocketType
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
  * Locket moment card component
@@ -55,6 +60,9 @@ fun LocketMomentCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
+                val context = LocalContext.current
+                val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+                
                 when (moment.locketType) {
                     LocketType.EMOJI -> {
                         Text(
@@ -71,11 +79,15 @@ fun LocketMomentCard(
                     LocketType.PHOTO -> {
                         // Display actual photo if URL is available
                         if (moment.content.isNotEmpty() && (moment.content.startsWith("http") || moment.content.startsWith("data:"))) {
-                            coil.compose.AsyncImage(
-                                model = moment.content,
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(moment.content)
+                                    .crossfade(true)
+                                    .build(),
+                                imageLoader = imageLoader,
                                 contentDescription = "Locket Photo",
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                contentScale = ContentScale.Crop
                             )
                         } else {
                             Icon(
@@ -89,11 +101,15 @@ fun LocketMomentCard(
                     LocketType.DRAWING -> {
                         // Display actual drawing if URL is available
                         if (moment.content.isNotEmpty() && (moment.content.startsWith("http") || moment.content.startsWith("data:"))) {
-                            coil.compose.AsyncImage(
-                                model = moment.content,
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(moment.content)
+                                    .crossfade(true)
+                                    .build(),
+                                imageLoader = imageLoader,
                                 contentDescription = "Locket Drawing",
                                 modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                contentScale = ContentScale.Fit
                             )
                         } else {
                             Icon(
