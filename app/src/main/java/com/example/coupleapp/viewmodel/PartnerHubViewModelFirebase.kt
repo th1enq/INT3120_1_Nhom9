@@ -1,24 +1,33 @@
 package com.example.coupleapp.viewmodel
 
+import android.app.Application
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.google.firebase.database.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.google.firebase.firestore.ktx.firestore
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.ktx.Firebase
-import com.google.firebase.firestore.ktx.firestore
 /**
  * ViewModel cho Partner Hub - màn hình chính của tab Partner
  * Sử dụng Firebase thay vì mock data
+ * Note: Message notifications are handled globally by MessageNotificationManager
  */
-class PartnerHubViewModelFirebase : ViewModel() {
+class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val realtimeDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(
+        "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    )
+    
+    // Message listener for unread count only (notifications handled by MessageNotificationManager)
+    private var messagesListener: ValueEventListener? = null
+    private var messagesRef: DatabaseReference? = null
 
     companion object {
         private const val TAG = "PartnerHubViewModel"
@@ -190,6 +199,8 @@ class PartnerHubViewModelFirebase : ViewModel() {
                     Log.d(TAG, "[PARTNER] UI state updated with partner")
                     // Load partner location
                     loadPartnerLocation(partner.id)
+                    // Setup message listener for in-app notifications
+                    setupMessageListener(userId, partnerId)
                     // Load Q&A questions after partner is loaded
                     Log.d(TAG, "[PARTNER] Loading Q&A questions...")
                     try {
@@ -216,6 +227,71 @@ class PartnerHubViewModelFirebase : ViewModel() {
                 _uiState.update { it.copy(isLoading = false, linkStatus = LinkStatus.NOT_LINKED) }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Remove realtime message listener when ViewModel is cleared
+        messagesListener?.let { listener ->
+            messagesRef?.removeEventListener(listener)
+        }
+        Log.d(TAG, "[PARTNER] ViewModel cleared, message listener removed")
+    }
+
+    /**
+     * Setup listener for new messages to show in-app notifications
+     * This runs when user is in PartnerHub (not in ChatScreen)
+     */
+    private fun setupMessageListener(currentUserId: String, partnerId: String) {
+        Log.d(TAG, "[MSG] Setting up message listener for in-app notifications")
+        
+        // Remove any existing listener
+        messagesListener?.let { listener ->
+            messagesRef?.removeEventListener(listener)
+        }
+        
+        // Generate couple ID (same logic as ChatViewModel)
+        val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
+        Log.d(TAG, "[MSG] Couple ID: $coupleId")
+        
+        // Reference to messages in Realtime Database
+        messagesRef = realtimeDatabase.getReference("chats/$coupleId/messages")
+        
+        // Create realtime listener - only for updating unread count in UI
+        // Notifications are handled globally by MessageNotificationManager
+        messagesListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                Log.d(TAG, "[MSG] Message update received, ${snapshot.childrenCount} total messages")
+                
+                var unreadCount = 0
+                
+                for (messageSnapshot in snapshot.children) {
+                    try {
+                        val senderId = messageSnapshot.child("senderId").getValue(String::class.java) ?: continue
+                        val isRead = messageSnapshot.child("isRead").getValue(Boolean::class.java) ?: false
+                        
+                        // Only count unread messages from partner
+                        if (senderId == partnerId && !isRead) {
+                            unreadCount++
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[MSG] Error parsing message: ${e.message}")
+                    }
+                }
+                
+                // Update unread count in UI state
+                _uiState.update { it.copy(unreadMessageCount = unreadCount) }
+                Log.d(TAG, "[MSG] Unread count updated: $unreadCount")
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.e(TAG, "[MSG] ❌ Message listener cancelled: ${error.message}")
+            }
+        }
+        
+        // Attach listener
+        messagesRef?.addValueEventListener(messagesListener!!)
+        Log.d(TAG, "[MSG] ✅ Message listener attached (for unread count)")
     }
 
     fun refreshData() {

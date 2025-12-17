@@ -23,6 +23,9 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
     companion object {
         var isAppInForeground = false
             private set
+        
+        // Track if user is currently in chat screen (to avoid duplicate notifications)
+        var isUserInChatScreen = false
     }
     
     override fun onCreate() {

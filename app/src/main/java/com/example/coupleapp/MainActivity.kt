@@ -16,6 +16,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.compose.rememberNavController
+import com.example.coupleapp.manager.MessageNotificationManager
 import com.example.coupleapp.navigation.NavGraph
 import com.example.coupleapp.service.LocationTrackingService
 import com.example.coupleapp.ui.theme.CoupleAppTheme
@@ -42,6 +43,9 @@ class MainActivity : FragmentActivity() {
             if (PhotoSyncManager.hasRequiredPermissions(this@MainActivity)) {
                 PhotoSyncManager.runSyncNow(this@MainActivity)
             }
+            
+            // Initialize/refresh message notification listener
+            MessageNotificationManager.initialize(this@MainActivity)
         }
         
         override fun onStop(owner: LifecycleOwner) {

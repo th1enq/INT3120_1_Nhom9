@@ -78,6 +78,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             messagesRef?.removeEventListener(listener)
         }
         isInChatScreen = false
+        CoupleApplication.isUserInChatScreen = false
         Log.d(TAG, "ChatViewModel cleared, realtime listener removed")
     }
     
@@ -86,6 +87,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun setInChatScreen(inChat: Boolean) {
         isInChatScreen = inChat
+        CoupleApplication.isUserInChatScreen = inChat
         if (inChat) {
             // Cancel notifications when user enters chat screen
             notificationHelper.cancelMessageNotification()
@@ -213,9 +215,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 
                 // Show notification if:
                 // 1. There are new messages from partner
-                // 2. App is in background OR user is not in chat screen
+                // 2. App is in background OR user is not in chat screen (using global flag)
                 val shouldShowNotification = newMessagesFromPartner.isNotEmpty() && 
-                    (!CoupleApplication.isAppInForeground || !isInChatScreen)
+                    (!CoupleApplication.isAppInForeground || !CoupleApplication.isUserInChatScreen)
                 
                 if (shouldShowNotification) {
                     val partnerName = _partner.value?.displayName ?: "Người yêu"
