@@ -458,6 +458,9 @@ class LocationTrackingService : Service() {
             .set(locationData)
             .addOnSuccessListener {
                 android.util.Log.d("LocationTrackingService", "Location uploaded successfully: $documentId")
+                
+                // Update location widget with new data
+                com.example.coupleapp.widget.LocationWidgetProvider.onLocationChanged(this)
             }
             .addOnFailureListener { e ->
                 android.util.Log.e("LocationTrackingService", "Failed to upload location", e)

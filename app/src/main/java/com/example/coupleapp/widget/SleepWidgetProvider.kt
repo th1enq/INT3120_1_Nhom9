@@ -7,12 +7,16 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.*
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import com.example.coupleapp.MainActivity
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.SleepQuality
 import com.example.coupleapp.data.repository.SleepRepository
+import com.example.coupleapp.widget.data.SleepWidgetCachedData
+import com.example.coupleapp.widget.data.WidgetDataRepository
+import com.example.coupleapp.widget.worker.WidgetUpdateWorker
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -20,23 +24,39 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Sleep Widget Provider
+ * Sleep Widget Provider - Battery Optimized
  * Displays sleep comparison between couple partners in a 4x2 widget
+ * 
+ * Battery Optimization Features:
+ * - Aggressive caching via WidgetDataRepository
+ * - WorkManager for periodic updates (respects Doze mode)
+ * - 30-minute minimum update interval
+ * - Smart data invalidation
  */
 class SleepWidgetProvider : AppWidgetProvider() {
 
     companion object {
+        private const val TAG = "SleepWidgetProvider"
         private const val ACTION_WIDGET_CLICK = "com.example.coupleapp.WIDGET_CLICK"
         private const val ACTION_UPDATE_WIDGET = "com.example.coupleapp.UPDATE_WIDGET"
         
         /**
-         * Force update all widgets
+         * Update all widgets using cached data (battery-efficient)
          */
         fun updateWidgets(context: Context) {
+            Log.d(TAG, "Requesting widget update")
             val intent = Intent(context, SleepWidgetProvider::class.java).apply {
                 action = ACTION_UPDATE_WIDGET
             }
             context.sendBroadcast(intent)
+        }
+        
+        /**
+         * Force update with fresh data from Firebase
+         */
+        fun forceUpdateWidgets(context: Context) {
+            Log.d(TAG, "Force updating widgets")
+            WidgetUpdateWorker.requestImmediateUpdate(context, WidgetUpdateWorker.WIDGET_TYPE_SLEEP)
         }
     }
 
@@ -45,6 +65,7 @@ class SleepWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
+        Log.d(TAG, "onUpdate called for ${appWidgetIds.size} widgets")
         appWidgetIds.forEach { widgetId ->
             updateWidget(context, appWidgetManager, widgetId)
         }
@@ -81,37 +102,58 @@ class SleepWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_sleep_tracker)
             
             try {
-                // Get current user and partner data
-                val currentUser = SleepRepository.getCurrentUser()
-                val partnerUser = SleepRepository.getPartnerUser()
+                // Use cached data for battery efficiency
+                val sleepData = WidgetDataRepository.getSleepWidgetData(context)
                 
-                val currentUserRecord = SleepRepository.getTodaySleepRecord(currentUser.id)
-                val partnerUserRecord = SleepRepository.getTodaySleepRecord(partnerUser.id)
-                
-                val currentSettings = SleepRepository.getSleepSettings(currentUser.id)
-                
-                // Check if we should show bedtime reminder
-                val shouldShowReminder = checkBedtimeReminder(currentSettings.idealBedTime)
-                
-                if (shouldShowReminder) {
-                    // Show bedtime reminder overlay
-                    showBedtimeReminder(views, currentSettings.idealBedTime)
-                } else {
-                    // Show normal sleep comparison
-                    showSleepComparison(
-                        context,
-                        views,
-                        currentUserRecord,
-                        partnerUserRecord,
-                        currentUser.name,
-                        partnerUser.name
+                if (sleepData != null) {
+                    // Check if we should show bedtime reminder
+                    val shouldShowReminder = checkBedtimeReminder(
+                        sleepData.bedtimeHour,
+                        sleepData.bedtimeMinute
                     )
+                    
+                    if (shouldShowReminder) {
+                        showBedtimeReminder(views, sleepData.bedtimeHour, sleepData.bedtimeMinute)
+                    } else {
+                        showSleepComparisonCached(context, views, sleepData)
+                    }
+                } else {
+                    // Fallback to original repository
+                    try {
+                        val currentUser = SleepRepository.getCurrentUser()
+                        val partnerUser = SleepRepository.getPartnerUser()
+                        
+                        val currentUserRecord = SleepRepository.getTodaySleepRecord(currentUser.id)
+                        val partnerUserRecord = SleepRepository.getTodaySleepRecord(partnerUser.id)
+                        
+                        val currentSettings = SleepRepository.getSleepSettings(currentUser.id)
+                        
+                        val shouldShowReminderFallback = checkBedtimeReminder(
+                            currentSettings.idealBedTime.hour,
+                            currentSettings.idealBedTime.minute
+                        )
+                        
+                        if (shouldShowReminderFallback) {
+                            showBedtimeReminder(views, currentSettings.idealBedTime.hour, currentSettings.idealBedTime.minute)
+                        } else {
+                            showSleepComparison(
+                                context,
+                                views,
+                                currentUserRecord,
+                                partnerUserRecord,
+                                currentUser.name,
+                                partnerUser.name
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Fallback also failed", e)
+                        showEmptyState(views, "Đăng nhập để xem giấc ngủ")
+                    }
                 }
                 
             } catch (e: Exception) {
-                // Show error state
-                views.setViewVisibility(R.id.widget_container, View.VISIBLE)
-                views.setViewVisibility(R.id.bedtime_reminder_container, View.GONE)
+                Log.e(TAG, "Error updating widget", e)
+                showEmptyState(views, "Không thể tải dữ liệu")
             }
             
             // Set click intent to open app
@@ -120,7 +162,7 @@ class SleepWidgetProvider : AppWidgetProvider() {
             }
             val clickPendingIntent = PendingIntent.getBroadcast(
                 context,
-                0,
+                appWidgetId,
                 clickIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -131,6 +173,136 @@ class SleepWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    private fun checkBedtimeReminder(bedtimeHour: Int, bedtimeMinute: Int): Boolean {
+        val now = LocalTime.now()
+        val bedTime = LocalTime.of(bedtimeHour, bedtimeMinute)
+        val reminderStart = bedTime.minusMinutes(15)
+        val reminderEnd = bedTime.plusMinutes(30)
+        
+        return now.isAfter(reminderStart) && now.isBefore(reminderEnd)
+    }
+    
+    private fun showEmptyState(views: RemoteViews, message: String) {
+        views.setViewVisibility(R.id.widget_container, View.VISIBLE)
+        views.setViewVisibility(R.id.bedtime_reminder_container, View.GONE)
+        views.setTextViewText(R.id.left_status_text, message)
+        views.setTextColor(R.id.left_status_text, Color.parseColor("#888888"))
+    }
+    
+    private fun showSleepComparisonCached(
+        context: Context,
+        views: RemoteViews,
+        data: SleepWidgetCachedData
+    ) {
+        views.setViewVisibility(R.id.widget_container, View.VISIBLE)
+        views.setViewVisibility(R.id.bedtime_reminder_container, View.GONE)
+        
+        // Update my sleep info (left side)
+        updateUserSleepInfoCached(
+            context,
+            views,
+            data.mySleepDuration,
+            data.mySleepQuality,
+            data.myAchievement,
+            isLeft = true
+        )
+        
+        // Update partner's sleep info (right side)
+        if (data.partnerIsAsleep) {
+            views.setTextViewText(R.id.right_emoji_icon, "😴")
+            views.setTextViewText(R.id.right_status_text, "Đang ngủ...")
+            views.setTextColor(R.id.right_status_text, Color.parseColor("#9C27B0"))
+            views.setViewVisibility(R.id.right_date_text, View.GONE)
+            views.setViewVisibility(R.id.right_duration_text, View.GONE)
+        } else {
+            updateUserSleepInfoCached(
+                context,
+                views,
+                data.partnerSleepDuration,
+                data.partnerSleepQuality,
+                data.partnerAchievement,
+                isLeft = false
+            )
+        }
+    }
+    
+    private fun updateUserSleepInfoCached(
+        context: Context,
+        views: RemoteViews,
+        duration: Int,
+        quality: String,
+        achievement: Float,
+        isLeft: Boolean
+    ) {
+        val emojiText = if (isLeft) "😊" else "🥦"
+        views.setTextViewText(
+            if (isLeft) R.id.left_emoji_icon else R.id.right_emoji_icon,
+            emojiText
+        )
+        
+        val statusImageRes = when (quality) {
+            "EXCELLENT" -> R.drawable.excellent
+            "GOOD" -> R.drawable.good
+            else -> R.drawable.bad
+        }
+        views.setImageViewResource(
+            if (isLeft) R.id.left_status_circle else R.id.right_status_circle,
+            statusImageRes
+        )
+        
+        val sleepQuality = when (quality) {
+            "EXCELLENT" -> SleepQuality.EXCELLENT
+            "GOOD" -> SleepQuality.GOOD
+            else -> SleepQuality.POOR
+        }
+        val progressBitmap = createProgressCircleBitmap(achievement, sleepQuality)
+        views.setImageViewBitmap(
+            if (isLeft) R.id.left_progress_bg else R.id.right_progress_bg,
+            progressBitmap
+        )
+        
+        val statusText = when (quality) {
+            "EXCELLENT" -> "Xuất sắc"
+            "GOOD" -> "Tốt"
+            else -> "Kém"
+        }
+        val statusColor = when (quality) {
+            "EXCELLENT" -> Color.parseColor("#4CAF50")
+            "GOOD" -> Color.parseColor("#FF9800")
+            else -> Color.parseColor("#F44336")
+        }
+        views.setTextViewText(
+            if (isLeft) R.id.left_status_text else R.id.right_status_text,
+            statusText
+        )
+        views.setTextColor(
+            if (isLeft) R.id.left_status_text else R.id.right_status_text,
+            statusColor
+        )
+        
+        views.setViewVisibility(
+            if (isLeft) R.id.left_date_text else R.id.right_date_text,
+            View.VISIBLE
+        )
+        views.setViewVisibility(
+            if (isLeft) R.id.left_duration_text else R.id.right_duration_text,
+            View.VISIBLE
+        )
+        
+        views.setTextViewText(
+            if (isLeft) R.id.left_date_text else R.id.right_date_text,
+            "Hôm nay"
+        )
+        
+        val hours = duration / 60
+        val minutes = duration % 60
+        val durationText = "${hours}h ${minutes}min"
+        views.setTextViewText(
+            if (isLeft) R.id.left_duration_text else R.id.right_duration_text,
+            durationText
+        )
+    }
+
     private fun checkBedtimeReminder(bedTime: LocalTime): Boolean {
         val now = LocalTime.now()
         val reminderStart = bedTime.minusMinutes(15)
@@ -139,14 +311,15 @@ class SleepWidgetProvider : AppWidgetProvider() {
         return now.isAfter(reminderStart) && now.isBefore(reminderEnd)
     }
 
-    private fun showBedtimeReminder(views: RemoteViews, bedTime: LocalTime) {
+    private fun showBedtimeReminder(views: RemoteViews, bedtimeHour: Int, bedtimeMinute: Int) {
         views.setViewVisibility(R.id.widget_container, View.GONE)
         views.setViewVisibility(R.id.bedtime_reminder_container, View.VISIBLE)
         
+        val bedTime = LocalTime.of(bedtimeHour, bedtimeMinute)
         val bedTimeFormatted = bedTime.format(DateTimeFormatter.ofPattern("HH:mm"))
         views.setTextViewText(
             R.id.bedtime_text,
-            "Sleep goal: $bedTimeFormatted"
+            "🌙 Mục tiêu ngủ: $bedTimeFormatted"
         )
     }
 
@@ -253,11 +426,8 @@ class SleepWidgetProvider : AppWidgetProvider() {
         )
     }
 
-    /**
-     * Create a circular progress bitmap similar to SleepHistoryItem
-     */
     private fun createProgressCircleBitmap(achievementPercentage: Float, quality: SleepQuality): Bitmap {
-        val size = 240 // Higher resolution for widget
+        val size = 240
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         
@@ -266,14 +436,12 @@ class SleepWidgetProvider : AppWidgetProvider() {
         val strokeWidth = 30f
         val radius = (size / 2f) - strokeWidth
         
-        // Quality color
         val qualityColor = when (quality) {
             SleepQuality.EXCELLENT -> Color.parseColor("#4CAF50")
             SleepQuality.GOOD -> Color.parseColor("#FF9800")
             SleepQuality.POOR -> Color.parseColor("#F44336")
         }
         
-        // Background circle (light gray)
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#E0E0E0")
             style = Paint.Style.STROKE
@@ -281,7 +449,6 @@ class SleepWidgetProvider : AppWidgetProvider() {
         }
         canvas.drawCircle(centerX, centerY, radius, bgPaint)
         
-        // Progress arc
         val progressPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = qualityColor
             style = Paint.Style.STROKE
@@ -304,11 +471,13 @@ class SleepWidgetProvider : AppWidgetProvider() {
 
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        // First widget added
+        Log.d(TAG, "First Sleep widget added")
+        // Start periodic updates when first widget is added
+        WidgetUpdateWorker.schedulePeriodicUpdates(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        // Last widget removed
+        Log.d(TAG, "Last Sleep widget removed")
     }
 }

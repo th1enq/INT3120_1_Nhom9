@@ -134,6 +134,28 @@
                 android:resource="@xml/location_widget_info" />
         </receiver>
         
+        <!-- Widget Broadcast Receiver for system events -->
+        <receiver
+            android:name=".widget.receiver.WidgetBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.coupleapp.widget.UPDATE_SLEEP" />
+                <action android:name="com.example.coupleapp.widget.UPDATE_LOCKET" />
+                <action android:name="com.example.coupleapp.widget.UPDATE_MISSING" />
+                <action android:name="com.example.coupleapp.widget.UPDATE_LOCATION" />
+                <action android:name="com.example.coupleapp.widget.UPDATE_ALL" />
+                <action android:name="com.example.coupleapp.widget.NEW_LOCKET" />
+                <action android:name="com.example.coupleapp.widget.NEW_MISSING" />
+                <action android:name="com.example.coupleapp.widget.LOCATION_CHANGED" />
+            </intent-filter>
+        </receiver>
+        
         <!-- Google Sleep API Receiver -->
         <receiver
             android:name=".receiver.SleepReceiver"

@@ -4,128 +4,106 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:padding="12dp">
+    android:padding="8dp">
 
-    <!-- Main content -->
+    <!-- Main content - Vertical layout for square widget -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:weightSum="10">
+        android:orientation="vertical"
+        android:gravity="center">
 
-        <!-- Left: Streak info -->
+        <!-- Top: Streak info -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="4"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
 
-            <!-- Streak icon and count -->
             <TextView
                 android:id="@+id/missing_streak_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="🔥 7 ngày"
+                android:text="🔥 7"
                 android:textColor="#FF5722"
-                android:textSize="16sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
-            <!-- Longest streak -->
             <TextView
-                android:id="@+id/missing_longest_streak"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Kỷ lục: 30 ngày"
+                android:layout_marginStart="4dp"
+                android:text="ngày"
                 android:textColor="#888888"
                 android:textSize="10sp" />
 
-            <!-- Divider -->
-            <View
-                android:layout_width="60dp"
-                android:layout_height="1dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="8dp"
-                android:background="#E0E0E0" />
+        </LinearLayout>
 
-            <!-- Today's counts -->
+        <!-- Center: Heart button -->
+        <TextView
+            android:id="@+id/missing_heart_button"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/circle_pink_background"
+            android:gravity="center"
+            android:text="❤️"
+            android:textSize="28sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Nhớ người yêu"
+            android:textColor="#E91E63"
+            android:textSize="9sp"
+            android:textStyle="bold" />
+
+        <!-- Bottom: Today's counts (compact) -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp"
+            android:gravity="center">
+
             <TextView
                 android:id="@+id/missing_my_count"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Bạn: 5 ❤️"
+                android:text="Bạn: 5"
                 android:textColor="#9C27B0"
-                android:textSize="11sp" />
+                android:textSize="9sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:text="•"
+                android:textColor="#CCCCCC"
+                android:textSize="9sp" />
 
             <TextView
                 android:id="@+id/missing_partner_count"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="Người yêu: 3 ❤️"
+                android:text="NY: 3"
                 android:textColor="#E91E63"
-                android:textSize="11sp" />
+                android:textSize="9sp" />
 
         </LinearLayout>
 
-        <!-- Center: Heart button -->
-        <LinearLayout
-            android:layout_width="0dp"
+        <!-- Longest streak (smaller) -->
+        <TextView
+            android:id="@+id/missing_longest_streak"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="3"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-
-            <!-- Heart button -->
-            <TextView
-                android:id="@+id/missing_heart_button"
-                android:layout_width="64dp"
-                android:layout_height="64dp"
-                android:background="@drawable/circle_pink_background"
-                android:gravity="center"
-                android:text="❤️"
-                android:textSize="32sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Nhớ người yêu"
-                android:textColor="#E91E63"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Right: Visual indicator -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="3"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-
-            <!-- Missing icon -->
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/background_missing"
-                android:contentDescription="Missing" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Hôm nay"
-                android:textColor="#666666"
-                android:textSize="10sp" />
-
-        </LinearLayout>
+            android:layout_marginTop="2dp"
+            android:text="Kỷ lục: 30 ngày"
+            android:textColor="#AAAAAA"
+            android:textSize="8sp"
+            android:visibility="gone" />
 
     </LinearLayout>
 

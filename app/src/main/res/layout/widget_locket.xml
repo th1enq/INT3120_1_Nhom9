@@ -4,62 +4,21 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:padding="12dp">
+    android:padding="8dp">
 
     <!-- Content container (shown when there's data) -->
     <LinearLayout
         android:id="@+id/locket_content_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:gravity="center">
 
-        <!-- Left side: Locket icon and sender info -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="8dp">
-
-            <!-- Locket icon -->
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/locket"
-                android:contentDescription="Locket" />
-
-            <!-- Sender name -->
-            <TextView
-                android:id="@+id/locket_sender_name"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Partner"
-                android:textColor="#9C27B0"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:ellipsize="end" />
-
-            <!-- Timestamp -->
-            <TextView
-                android:id="@+id/locket_timestamp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Hôm nay 14:30"
-                android:textColor="#888888"
-                android:textSize="9sp" />
-
-        </LinearLayout>
-
-        <!-- Right side: Content display -->
+        <!-- Top: Content display area -->
         <FrameLayout
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="2"
-            android:padding="4dp">
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
             <!-- Emoji content -->
             <TextView
@@ -68,7 +27,7 @@
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:text="❤️"
-                android:textSize="48sp"
+                android:textSize="40sp"
                 android:visibility="gone" />
 
             <!-- Text content -->
@@ -79,11 +38,12 @@
                 android:gravity="center"
                 android:text="I love you!"
                 android:textColor="#333333"
-                android:textSize="14sp"
+                android:textSize="12sp"
                 android:textStyle="italic"
-                android:maxLines="4"
+                android:maxLines="3"
                 android:ellipsize="end"
-                android:visibility="visible" />
+                android:visibility="visible"
+                android:padding="4dp" />
 
             <!-- Image content (placeholder) -->
             <ImageView
@@ -102,41 +62,69 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom"
                 android:background="#80000000"
-                android:padding="4dp"
+                android:padding="2dp"
                 android:text=""
                 android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:maxLines="2"
+                android:textSize="9sp"
+                android:maxLines="1"
                 android:ellipsize="end"
                 android:visibility="gone" />
 
         </FrameLayout>
 
-        <!-- Send button -->
+        <!-- Bottom: Sender info and Send button -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:paddingStart="8dp"
-            android:paddingEnd="4dp">
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp">
 
+            <!-- Locket icon -->
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/locket"
+                android:contentDescription="Locket" />
+
+            <!-- Sender and time -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="4dp">
+
+                <TextView
+                    android:id="@+id/locket_sender_name"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Partner"
+                    android:textColor="#9C27B0"
+                    android:textSize="10sp"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/locket_timestamp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="14:30"
+                    android:textColor="#888888"
+                    android:textSize="8sp" />
+
+            </LinearLayout>
+
+            <!-- Send button -->
             <TextView
                 android:id="@+id/locket_send_button"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:background="@drawable/circle_pink_background"
                 android:gravity="center"
                 android:text="📷"
-                android:textSize="20sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="Gửi"
-                android:textColor="#9C27B0"
-                android:textSize="9sp" />
+                android:textSize="14sp" />
 
         </LinearLayout>
 
@@ -152,8 +140,8 @@
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:src="@drawable/locket"
             android:alpha="0.5"
             android:contentDescription="No Locket" />
@@ -162,18 +150,19 @@
             android:id="@+id/locket_empty_message"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Chưa có Locket mới"
+            android:layout_marginTop="4dp"
+            android:text="Chưa có Locket"
             android:textColor="#888888"
-            android:textSize="12sp" />
+            android:textSize="10sp"
+            android:gravity="center" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Nhấn để gửi Locket đầu tiên"
+            android:layout_marginTop="2dp"
+            android:text="Nhấn để gửi"
             android:textColor="#9C27B0"
-            android:textSize="10sp" />
+            android:textSize="9sp" />
 
     </LinearLayout>
 

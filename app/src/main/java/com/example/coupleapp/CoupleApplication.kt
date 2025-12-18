@@ -9,6 +9,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import coil.Coil
 import com.example.coupleapp.util.createImageLoaderWithBase64Support
+import com.example.coupleapp.widget.WidgetManager
 import com.example.coupleapp.worker.BackgroundLocationWorker
 import com.example.coupleapp.worker.SleepSyncWorker
 import com.google.firebase.FirebaseApp
@@ -17,7 +18,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 
 /**
- * Application class for initializing Firebase, background workers, and tracking app lifecycle
+ * Application class for initializing Firebase, background workers, widgets and tracking app lifecycle
  */
 class CoupleApplication : Application(), Configuration.Provider, LifecycleEventObserver {
     
@@ -27,10 +28,15 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         
         // Track if user is currently in chat screen (to avoid duplicate notifications)
         var isUserInChatScreen = false
+        
+        // Application instance for global context access (used by widgets, etc.)
+        lateinit var instance: CoupleApplication
+            private set
     }
     
     override fun onCreate() {
         super.onCreate()
+        instance = this
         
         // Initialize Firebase
         FirebaseApp.initializeApp(this)
@@ -49,11 +55,22 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         // Track app lifecycle for notifications
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         
+        // Initialize widget system
+        initializeWidgets()
+        
         Log.d("CoupleApplication", "Firebase initialized successfully")
         Log.d("CoupleApplication", "Coil ImageLoader with base64 support initialized")
         
         // Schedule background location worker if user is logged in
         scheduleBackgroundLocationIfNeeded()
+    }
+    
+    /**
+     * Initialize widget system with periodic updates
+     */
+    private fun initializeWidgets() {
+        Log.d("CoupleApplication", "Initializing widget system")
+        WidgetManager.initialize(this)
     }
     
     /**

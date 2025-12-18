@@ -1,0 +1,665 @@
+package com.example.coupleapp.widget.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+/**
+ * Repository for widget data with caching support
+ * Follows modern app patterns for battery optimization:
+ * - Aggressive caching to reduce network calls
+ * - Smart refresh based on data staleness
+ * - Offline-first approach
+ */
+object WidgetDataRepository {
+    private const val TAG = "WidgetDataRepository"
+    private const val PREFS_NAME = "widget_data_cache"
+    
+    // Cache expiry times (in milliseconds)
+    private const val SLEEP_CACHE_EXPIRY_MS = 30 * 60 * 1000L     // 30 minutes
+    private const val LOCKET_CACHE_EXPIRY_MS = 5 * 60 * 1000L     // 5 minutes (more frequent for real-time feel)
+    private const val MISSING_CACHE_EXPIRY_MS = 15 * 60 * 1000L   // 15 minutes
+    private const val LOCATION_CACHE_EXPIRY_MS = 10 * 60 * 1000L  // 10 minutes
+    
+    // Cache keys
+    private const val KEY_SLEEP_DATA = "sleep_data"
+    private const val KEY_SLEEP_TIMESTAMP = "sleep_timestamp"
+    private const val KEY_LOCKET_DATA = "locket_data"
+    private const val KEY_LOCKET_TIMESTAMP = "locket_timestamp"
+    private const val KEY_MISSING_DATA = "missing_data"
+    private const val KEY_MISSING_TIMESTAMP = "missing_timestamp"
+    private const val KEY_LOCATION_DATA = "location_data"
+    private const val KEY_LOCATION_TIMESTAMP = "location_timestamp"
+    
+    private fun getPrefs(context: Context): SharedPreferences {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    
+    // ==================== SLEEP DATA ====================
+    
+    /**
+     * Get sleep widget data with smart caching
+     * Returns cached data if fresh, otherwise fetches from Firebase
+     */
+    suspend fun getSleepWidgetData(context: Context, forceRefresh: Boolean = false): SleepWidgetCachedData? {
+        val prefs = getPrefs(context)
+        val cachedTimestamp = prefs.getLong(KEY_SLEEP_TIMESTAMP, 0)
+        val now = System.currentTimeMillis()
+        
+        // Check if cache is valid
+        if (!forceRefresh && (now - cachedTimestamp) < SLEEP_CACHE_EXPIRY_MS) {
+            val cachedData = parseSleepCachedData(prefs.getString(KEY_SLEEP_DATA, null))
+            if (cachedData != null) {
+                Log.d(TAG, "Returning cached sleep data")
+                return cachedData
+            }
+        }
+        
+        // Fetch fresh data
+        return withContext(Dispatchers.IO) {
+            try {
+                val freshData = fetchSleepDataFromFirebase()
+                if (freshData != null) {
+                    cacheSleepData(prefs, freshData)
+                }
+                freshData
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching sleep data", e)
+                // Return stale cache if fetch fails
+                parseSleepCachedData(prefs.getString(KEY_SLEEP_DATA, null))
+            }
+        }
+    }
+    
+    private suspend fun fetchSleepDataFromFirebase(): SleepWidgetCachedData? {
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser ?: return null
+        val db = FirebaseFirestore.getInstance()
+        
+        val userDoc = db.collection("users").document(currentUser.uid).get().await()
+        val partnerId = userDoc.getString("partnerId")
+        val userName = userDoc.getString("displayName") ?: "Bạn"
+        
+        if (partnerId.isNullOrEmpty()) return null
+        
+        val partnerDoc = db.collection("users").document(partnerId).get().await()
+        val partnerName = partnerDoc.getString("displayName") ?: "Người yêu"
+        
+        val coupleId = listOf(currentUser.uid, partnerId).sorted().joinToString("_")
+        val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        
+        // Get my sleep record
+        val mySleepDoc = db.collection("sleep_records")
+            .document("${coupleId}_${currentUser.uid}_$today")
+            .get().await()
+        
+        val mySleepDuration = mySleepDoc.getLong("actualDuration")?.toInt() ?: 0
+        val mySleepQuality = mySleepDoc.getString("quality") ?: "GOOD"
+        val myAchievement = mySleepDoc.getDouble("achievementPercentage")?.toFloat() ?: 0f
+        
+        // Get partner's sleep record
+        val partnerSleepDoc = db.collection("sleep_records")
+            .document("${coupleId}_${partnerId}_$today")
+            .get().await()
+        
+        val partnerSleepDuration = partnerSleepDoc.getLong("actualDuration")?.toInt() ?: 0
+        val partnerSleepQuality = partnerSleepDoc.getString("quality") ?: "GOOD"
+        val partnerAchievement = partnerSleepDoc.getDouble("achievementPercentage")?.toFloat() ?: 0f
+        val partnerIsAsleep = partnerSleepDoc.getBoolean("isCurrentlyAsleep") ?: false
+        
+        // Get bedtime setting
+        val settingsDoc = db.collection("sleep_settings").document(currentUser.uid).get().await()
+        val bedtimeHour = settingsDoc.getLong("bedtimeHour")?.toInt() ?: 22
+        val bedtimeMinute = settingsDoc.getLong("bedtimeMinute")?.toInt() ?: 0
+        
+        return SleepWidgetCachedData(
+            myName = userName,
+            partnerName = partnerName,
+            mySleepDuration = mySleepDuration,
+            mySleepQuality = mySleepQuality,
+            myAchievement = myAchievement,
+            partnerSleepDuration = partnerSleepDuration,
+            partnerSleepQuality = partnerSleepQuality,
+            partnerAchievement = partnerAchievement,
+            partnerIsAsleep = partnerIsAsleep,
+            bedtimeHour = bedtimeHour,
+            bedtimeMinute = bedtimeMinute,
+            date = today
+        )
+    }
+    
+    private fun cacheSleepData(prefs: SharedPreferences, data: SleepWidgetCachedData) {
+        prefs.edit()
+            .putString(KEY_SLEEP_DATA, serializeSleepData(data))
+            .putLong(KEY_SLEEP_TIMESTAMP, System.currentTimeMillis())
+            .apply()
+    }
+    
+    private fun serializeSleepData(data: SleepWidgetCachedData): String {
+        return "${data.myName}|${data.partnerName}|${data.mySleepDuration}|${data.mySleepQuality}|" +
+               "${data.myAchievement}|${data.partnerSleepDuration}|${data.partnerSleepQuality}|" +
+               "${data.partnerAchievement}|${data.partnerIsAsleep}|${data.bedtimeHour}|${data.bedtimeMinute}|${data.date}"
+    }
+    
+    private fun parseSleepCachedData(cached: String?): SleepWidgetCachedData? {
+        if (cached == null) return null
+        val parts = cached.split("|")
+        if (parts.size < 12) return null
+        return try {
+            SleepWidgetCachedData(
+                myName = parts[0],
+                partnerName = parts[1],
+                mySleepDuration = parts[2].toInt(),
+                mySleepQuality = parts[3],
+                myAchievement = parts[4].toFloat(),
+                partnerSleepDuration = parts[5].toInt(),
+                partnerSleepQuality = parts[6],
+                partnerAchievement = parts[7].toFloat(),
+                partnerIsAsleep = parts[8].toBoolean(),
+                bedtimeHour = parts[9].toInt(),
+                bedtimeMinute = parts[10].toInt(),
+                date = parts[11]
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    // ==================== LOCKET DATA ====================
+    
+    suspend fun getLocketWidgetData(context: Context, forceRefresh: Boolean = false): LocketWidgetCachedData? {
+        val prefs = getPrefs(context)
+        val cachedTimestamp = prefs.getLong(KEY_LOCKET_TIMESTAMP, 0)
+        val now = System.currentTimeMillis()
+        
+        if (!forceRefresh && (now - cachedTimestamp) < LOCKET_CACHE_EXPIRY_MS) {
+            val cachedData = parseLocketCachedData(prefs.getString(KEY_LOCKET_DATA, null))
+            if (cachedData != null) {
+                Log.d(TAG, "Returning cached locket data")
+                return cachedData
+            }
+        }
+        
+        return withContext(Dispatchers.IO) {
+            try {
+                val freshData = fetchLocketDataFromFirebase()
+                if (freshData != null) {
+                    cacheLocketData(prefs, freshData)
+                }
+                freshData
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching locket data", e)
+                parseLocketCachedData(prefs.getString(KEY_LOCKET_DATA, null))
+            }
+        }
+    }
+    
+    private suspend fun fetchLocketDataFromFirebase(): LocketWidgetCachedData? {
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser ?: return null
+        val db = FirebaseFirestore.getInstance()
+        
+        val userDoc = db.collection("users").document(currentUser.uid).get().await()
+        val partnerId = userDoc.getString("partnerId")
+        
+        if (partnerId.isNullOrEmpty()) return null
+        
+        val coupleId = listOf(currentUser.uid, partnerId).sorted().joinToString("_")
+        
+        // Get latest locket from partner
+        val locketQuery = db.collection("lockets")
+            .whereEqualTo("coupleId", coupleId)
+            .whereEqualTo("senderId", partnerId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()
+            .await()
+        
+        if (locketQuery.documents.isEmpty()) {
+            return LocketWidgetCachedData(
+                senderName = "",
+                content = "",
+                type = "EMPTY",
+                caption = null,
+                timestamp = 0L,
+                hasNewLocket = false
+            )
+        }
+        
+        val doc = locketQuery.documents.first()
+        val senderName = doc.getString("senderName") ?: "Partner"
+        val content = doc.getString("content") ?: ""
+        val type = doc.getString("type") ?: "TEXT"
+        val caption = doc.getString("caption")
+        val timestamp = doc.getTimestamp("timestamp")?.toDate()?.time ?: 0L
+        val isViewed = doc.getBoolean("viewed") ?: true
+        
+        return LocketWidgetCachedData(
+            senderName = senderName,
+            content = content,
+            type = type,
+            caption = caption,
+            timestamp = timestamp,
+            hasNewLocket = !isViewed
+        )
+    }
+    
+    private fun cacheLocketData(prefs: SharedPreferences, data: LocketWidgetCachedData) {
+        prefs.edit()
+            .putString(KEY_LOCKET_DATA, serializeLocketData(data))
+            .putLong(KEY_LOCKET_TIMESTAMP, System.currentTimeMillis())
+            .apply()
+    }
+    
+    private fun serializeLocketData(data: LocketWidgetCachedData): String {
+        return "${data.senderName}|${data.content}|${data.type}|${data.caption ?: ""}|${data.timestamp}|${data.hasNewLocket}"
+    }
+    
+    private fun parseLocketCachedData(cached: String?): LocketWidgetCachedData? {
+        if (cached == null) return null
+        val parts = cached.split("|")
+        if (parts.size < 6) return null
+        return try {
+            LocketWidgetCachedData(
+                senderName = parts[0],
+                content = parts[1],
+                type = parts[2],
+                caption = parts[3].ifEmpty { null },
+                timestamp = parts[4].toLong(),
+                hasNewLocket = parts[5].toBoolean()
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    // ==================== MISSING DATA ====================
+    
+    suspend fun getMissingWidgetData(context: Context, forceRefresh: Boolean = false): MissingWidgetCachedData? {
+        val prefs = getPrefs(context)
+        val cachedTimestamp = prefs.getLong(KEY_MISSING_TIMESTAMP, 0)
+        val now = System.currentTimeMillis()
+        
+        if (!forceRefresh && (now - cachedTimestamp) < MISSING_CACHE_EXPIRY_MS) {
+            val cachedData = parseMissingCachedData(prefs.getString(KEY_MISSING_DATA, null))
+            if (cachedData != null) {
+                Log.d(TAG, "Returning cached missing data")
+                return cachedData
+            }
+        }
+        
+        return withContext(Dispatchers.IO) {
+            try {
+                val freshData = fetchMissingDataFromFirebase()
+                if (freshData != null) {
+                    cacheMissingData(prefs, freshData)
+                }
+                freshData
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching missing data", e)
+                parseMissingCachedData(prefs.getString(KEY_MISSING_DATA, null))
+            }
+        }
+    }
+    
+    private suspend fun fetchMissingDataFromFirebase(): MissingWidgetCachedData? {
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser ?: return null
+        val db = FirebaseFirestore.getInstance()
+        
+        val userDoc = db.collection("users").document(currentUser.uid).get().await()
+        val partnerId = userDoc.getString("partnerId")
+        
+        if (partnerId.isNullOrEmpty()) return null
+        
+        val coupleId = listOf(currentUser.uid, partnerId).sorted().joinToString("_")
+        val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        
+        // Load today's counts
+        val myRecordId = "${coupleId}_${currentUser.uid}_$today"
+        val partnerRecordId = "${coupleId}_${partnerId}_$today"
+        
+        val myRecord = db.collection("missing_records").document(myRecordId).get().await()
+        val partnerRecord = db.collection("missing_records").document(partnerRecordId).get().await()
+        
+        val myTodayCount = myRecord.getLong("count")?.toInt() ?: 0
+        val partnerTodayCount = partnerRecord.getLong("count")?.toInt() ?: 0
+        
+        // Calculate streak efficiently - only check last 30 days
+        var currentStreak = 0
+        var longestStreak = 0
+        var tempStreak = 0
+        var gapFound = false
+        
+        for (dayOffset in 0 until 30) {
+            val date = LocalDate.now().minusDays(dayOffset.toLong())
+            val dateString = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            
+            val myDayRecordId = "${coupleId}_${currentUser.uid}_$dateString"
+            val partnerDayRecordId = "${coupleId}_${partnerId}_$dateString"
+            
+            val myDayRecord = db.collection("missing_records").document(myDayRecordId).get().await()
+            val partnerDayRecord = db.collection("missing_records").document(partnerDayRecordId).get().await()
+            
+            val myDayCount = myDayRecord.getLong("count")?.toInt() ?: 0
+            val partnerDayCount = partnerDayRecord.getLong("count")?.toInt() ?: 0
+            
+            if (myDayCount > 0 && partnerDayCount > 0) {
+                tempStreak++
+                if (!gapFound) {
+                    currentStreak = tempStreak
+                }
+            } else {
+                longestStreak = maxOf(longestStreak, tempStreak)
+                tempStreak = 0
+                if (dayOffset > 0) gapFound = true
+            }
+        }
+        longestStreak = maxOf(longestStreak, tempStreak)
+        
+        return MissingWidgetCachedData(
+            currentStreak = currentStreak,
+            longestStreak = longestStreak,
+            myTodayCount = myTodayCount,
+            partnerTodayCount = partnerTodayCount,
+            hasSentToday = myTodayCount > 0
+        )
+    }
+    
+    private fun cacheMissingData(prefs: SharedPreferences, data: MissingWidgetCachedData) {
+        prefs.edit()
+            .putString(KEY_MISSING_DATA, serializeMissingData(data))
+            .putLong(KEY_MISSING_TIMESTAMP, System.currentTimeMillis())
+            .apply()
+    }
+    
+    private fun serializeMissingData(data: MissingWidgetCachedData): String {
+        return "${data.currentStreak}|${data.longestStreak}|${data.myTodayCount}|${data.partnerTodayCount}|${data.hasSentToday}"
+    }
+    
+    private fun parseMissingCachedData(cached: String?): MissingWidgetCachedData? {
+        if (cached == null) return null
+        val parts = cached.split("|")
+        if (parts.size < 5) return null
+        return try {
+            MissingWidgetCachedData(
+                currentStreak = parts[0].toInt(),
+                longestStreak = parts[1].toInt(),
+                myTodayCount = parts[2].toInt(),
+                partnerTodayCount = parts[3].toInt(),
+                hasSentToday = parts[4].toBoolean()
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    /**
+     * Increment missing count from widget tap
+     * This immediately updates cache for responsive UI
+     */
+    suspend fun incrementMissingCount(context: Context): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val auth = FirebaseAuth.getInstance()
+                val currentUser = auth.currentUser ?: return@withContext false
+                val db = FirebaseFirestore.getInstance()
+                
+                val userDoc = db.collection("users").document(currentUser.uid).get().await()
+                val partnerId = userDoc.getString("partnerId") ?: return@withContext false
+                
+                val coupleId = listOf(currentUser.uid, partnerId).sorted().joinToString("_")
+                val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                val recordId = "${coupleId}_${currentUser.uid}_$today"
+                
+                // Get and increment
+                val currentRecord = db.collection("missing_records").document(recordId).get().await()
+                val currentCount = currentRecord.getLong("count")?.toInt() ?: 0
+                val newCount = currentCount + 1
+                
+                val recordData = hashMapOf(
+                    "id" to recordId,
+                    "coupleId" to coupleId,
+                    "userId" to currentUser.uid,
+                    "date" to today,
+                    "count" to newCount,
+                    "updatedAt" to com.google.firebase.Timestamp.now()
+                )
+                
+                db.collection("missing_records").document(recordId).set(recordData).await()
+                
+                // Update cache immediately for responsive UI
+                val prefs = getPrefs(context)
+                val cachedData = parseMissingCachedData(prefs.getString(KEY_MISSING_DATA, null))
+                if (cachedData != null) {
+                    val updatedData = cachedData.copy(
+                        myTodayCount = newCount,
+                        hasSentToday = true
+                    )
+                    cacheMissingData(prefs, updatedData)
+                }
+                
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Error incrementing missing count", e)
+                false
+            }
+        }
+    }
+    
+    // ==================== LOCATION DATA ====================
+    
+    suspend fun getLocationWidgetData(context: Context, forceRefresh: Boolean = false): LocationWidgetCachedData? {
+        val prefs = getPrefs(context)
+        val cachedTimestamp = prefs.getLong(KEY_LOCATION_TIMESTAMP, 0)
+        val now = System.currentTimeMillis()
+        
+        if (!forceRefresh && (now - cachedTimestamp) < LOCATION_CACHE_EXPIRY_MS) {
+            val cachedData = parseLocationCachedData(prefs.getString(KEY_LOCATION_DATA, null))
+            if (cachedData != null) {
+                Log.d(TAG, "Returning cached location data")
+                return cachedData
+            }
+        }
+        
+        return withContext(Dispatchers.IO) {
+            try {
+                val freshData = fetchLocationDataFromFirebase()
+                if (freshData != null) {
+                    cacheLocationData(prefs, freshData)
+                }
+                freshData
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching location data", e)
+                parseLocationCachedData(prefs.getString(KEY_LOCATION_DATA, null))
+            }
+        }
+    }
+    
+    private suspend fun fetchLocationDataFromFirebase(): LocationWidgetCachedData? {
+        val auth = FirebaseAuth.getInstance()
+        val currentUser = auth.currentUser ?: return null
+        val db = FirebaseFirestore.getInstance()
+        
+        val userDoc = db.collection("users").document(currentUser.uid).get().await()
+        val userName = userDoc.getString("displayName") ?: "Bạn"
+        val partnerId = userDoc.getString("partnerId")
+        val coupleId = userDoc.getString("coupleId")
+        
+        if (partnerId.isNullOrEmpty()) return null
+        
+        val partnerDoc = db.collection("users").document(partnerId).get().await()
+        val partnerName = partnerDoc.getString("displayName") ?: "Người yêu"
+        
+        val effectiveCoupleId = coupleId ?: listOf(currentUser.uid, partnerId).sorted().joinToString("_")
+        
+        // Get my location
+        val myLocationDoc = db.collection("couple_locations")
+            .document(effectiveCoupleId)
+            .collection("user_locations")
+            .document(currentUser.uid)
+            .get()
+            .await()
+        
+        // Get partner's location
+        val partnerLocationDoc = db.collection("couple_locations")
+            .document(effectiveCoupleId)
+            .collection("user_locations")
+            .document(partnerId)
+            .get()
+            .await()
+        
+        val myLat = myLocationDoc.getDouble("latitude")
+        val myLng = myLocationDoc.getDouble("longitude")
+        val myLocationName = myLocationDoc.getString("locationName") ?: "Không rõ"
+        
+        val partnerLat = partnerLocationDoc.getDouble("latitude")
+        val partnerLng = partnerLocationDoc.getDouble("longitude")
+        val partnerLocationName = partnerLocationDoc.getString("locationName") ?: "Không rõ"
+        val partnerLastUpdate = partnerLocationDoc.getTimestamp("updatedAt")?.toDate()?.time ?: 0L
+        
+        // Calculate distance if both have locations
+        val distance = if (myLat != null && myLng != null && partnerLat != null && partnerLng != null) {
+            calculateDistance(myLat, myLng, partnerLat, partnerLng)
+        } else {
+            null
+        }
+        
+        val isSharing = myLat != null && myLng != null
+        
+        return LocationWidgetCachedData(
+            myName = userName,
+            partnerName = partnerName,
+            myLocation = myLocationName,
+            partnerLocation = partnerLocationName,
+            distance = distance,
+            isSharing = isSharing,
+            partnerLastUpdate = partnerLastUpdate
+        )
+    }
+    
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val R = 6371.0 // Earth's radius in km
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return R * c
+    }
+    
+    private fun cacheLocationData(prefs: SharedPreferences, data: LocationWidgetCachedData) {
+        prefs.edit()
+            .putString(KEY_LOCATION_DATA, serializeLocationData(data))
+            .putLong(KEY_LOCATION_TIMESTAMP, System.currentTimeMillis())
+            .apply()
+    }
+    
+    private fun serializeLocationData(data: LocationWidgetCachedData): String {
+        return "${data.myName}|${data.partnerName}|${data.myLocation}|${data.partnerLocation}|" +
+               "${data.distance ?: -1.0}|${data.isSharing}|${data.partnerLastUpdate}"
+    }
+    
+    private fun parseLocationCachedData(cached: String?): LocationWidgetCachedData? {
+        if (cached == null) return null
+        val parts = cached.split("|")
+        if (parts.size < 7) return null
+        return try {
+            val distance = parts[4].toDouble()
+            LocationWidgetCachedData(
+                myName = parts[0],
+                partnerName = parts[1],
+                myLocation = parts[2],
+                partnerLocation = parts[3],
+                distance = if (distance < 0) null else distance,
+                isSharing = parts[5].toBoolean(),
+                partnerLastUpdate = parts[6].toLong()
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    /**
+     * Clear all cached data
+     * Useful when user logs out or switches accounts
+     */
+    fun clearCache(context: Context) {
+        getPrefs(context).edit().clear().apply()
+    }
+    
+    /**
+     * Invalidate specific cache types
+     */
+    fun invalidateSleepCache(context: Context) {
+        getPrefs(context).edit().remove(KEY_SLEEP_TIMESTAMP).apply()
+    }
+    
+    fun invalidateLocketCache(context: Context) {
+        getPrefs(context).edit().remove(KEY_LOCKET_TIMESTAMP).apply()
+    }
+    
+    fun invalidateMissingCache(context: Context) {
+        getPrefs(context).edit().remove(KEY_MISSING_TIMESTAMP).apply()
+    }
+    
+    fun invalidateLocationCache(context: Context) {
+        getPrefs(context).edit().remove(KEY_LOCATION_TIMESTAMP).apply()
+    }
+}
+
+/**
+ * Cached data classes
+ */
+data class SleepWidgetCachedData(
+    val myName: String,
+    val partnerName: String,
+    val mySleepDuration: Int,
+    val mySleepQuality: String,
+    val myAchievement: Float,
+    val partnerSleepDuration: Int,
+    val partnerSleepQuality: String,
+    val partnerAchievement: Float,
+    val partnerIsAsleep: Boolean,
+    val bedtimeHour: Int,
+    val bedtimeMinute: Int,
+    val date: String
+)
+
+data class LocketWidgetCachedData(
+    val senderName: String,
+    val content: String,
+    val type: String,
+    val caption: String?,
+    val timestamp: Long,
+    val hasNewLocket: Boolean
+)
+
+data class MissingWidgetCachedData(
+    val currentStreak: Int,
+    val longestStreak: Int,
+    val myTodayCount: Int,
+    val partnerTodayCount: Int,
+    val hasSentToday: Boolean
+)
+
+data class LocationWidgetCachedData(
+    val myName: String,
+    val partnerName: String,
+    val myLocation: String,
+    val partnerLocation: String,
+    val distance: Double?,
+    val isSharing: Boolean,
+    val partnerLastUpdate: Long
+)

@@ -3,9 +3,11 @@ package com.example.coupleapp.viewmodel
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.LocketFirebaseRepository
 import com.example.coupleapp.data.repository.LocketRepository
+import com.example.coupleapp.widget.LocketWidgetManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.FlowPreview
@@ -388,6 +390,9 @@ class LocketViewModelFirebase : ViewModel() {
                             sendSuccess = true
                         )
                     }
+                    
+                    // Update widget immediately after sending locket
+                    LocketWidgetManager.onLocketSent(CoupleApplication.instance)
                     
                     // Reset success flag after showing
                     delay(2000)

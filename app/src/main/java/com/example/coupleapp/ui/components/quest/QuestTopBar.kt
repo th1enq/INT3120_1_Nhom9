@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,11 +22,14 @@ import androidx.compose.ui.unit.sp
 
 /**
  * Top bar for Quest Screen - Transparent background, pinned header
+ * Shows current streak, longest streak, missed days indicator, and coins
  */
 @Composable
 fun QuestTopBar(
     userCoins: Int,
     currentStreak: Int,
+    longestStreak: Int = 0,
+    missedDays: Int = 0,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -66,8 +70,36 @@ fun QuestTopBar(
         )
 
         Spacer(modifier = Modifier.weight(1f))
+        
+        // Missed days warning (only show if missed days > 0)
+        if (missedDays > 0) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFFFFE0E0).copy(alpha = 0.9f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = "Missed Days",
+                    tint = Color(0xFFE53935),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "-$missedDays",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    ),
+                    color = Color(0xFFE53935)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
 
-        // Streak indicator
+        // Streak indicator with current/longest
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
@@ -78,17 +110,17 @@ fun QuestTopBar(
             Icon(
                 imageVector = Icons.Default.LocalFireDepartment,
                 contentDescription = "Streak",
-                tint = Color(0xFFFF6B35),
+                tint = if (currentStreak > 0) Color(0xFFFF6B35) else Color(0xFFBDBDBD),
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "$currentStreak",
+                text = if (longestStreak > currentStreak) "$currentStreak/$longestStreak" else "$currentStreak",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 ),
-                color = Color(0xFFFF6B35)
+                color = if (currentStreak > 0) Color(0xFFFF6B35) else Color(0xFF9E9E9E)
             )
         }
 

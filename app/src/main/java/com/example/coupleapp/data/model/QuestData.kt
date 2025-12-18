@@ -110,6 +110,9 @@ data class QuestUiState(
     val dailySummary: DailyQuestSummary = DailyQuestSummary(0, 0, 0, 0, 0),
     val userCoins: Int = 0,
     val currentStreak: Int = 0,
+    val longestStreak: Int = 0,           // Longest streak ever achieved
+    val missedDays: Int = 0,              // Number of missed days (streak broken)
+    val lastClaimDate: String? = null,    // Last claim date for reference
     val showRewardDialog: Boolean = false,
     val claimedReward: QuestReward? = null,
     val errorMessage: String? = null,

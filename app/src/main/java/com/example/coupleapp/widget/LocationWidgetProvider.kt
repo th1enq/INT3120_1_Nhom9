@@ -16,6 +16,9 @@ import android.view.View
 import android.widget.RemoteViews
 import com.example.coupleapp.MainActivity
 import com.example.coupleapp.R
+import com.example.coupleapp.widget.data.LocationWidgetCachedData
+import com.example.coupleapp.widget.data.WidgetDataRepository
+import com.example.coupleapp.widget.worker.WidgetUpdateWorker
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
@@ -26,10 +29,14 @@ import kotlinx.coroutines.withContext
 import kotlin.math.*
 
 /**
- * Location Widget Provider
+ * Location Widget Provider - Battery Optimized
  * Displays the distance between couple partners and their locations
- * Battery optimized with 30-minute update intervals
- * Location updates are handled by the app's LocationTrackingService
+ * 
+ * Battery Optimization Features:
+ * - Aggressive caching with 10-minute expiry
+ * - WorkManager for periodic updates (respects Doze mode)
+ * - Location updates are handled by LocationTrackingService
+ * - Smart data invalidation when location changes
  */
 class LocationWidgetProvider : AppWidgetProvider() {
 
@@ -40,13 +47,33 @@ class LocationWidgetProvider : AppWidgetProvider() {
         private const val ACTION_SHARE_LOCATION = "com.example.coupleapp.SHARE_LOCATION_FROM_WIDGET"
         
         /**
-         * Force update all widgets
+         * Update all widgets using cached data (battery-efficient)
          */
         fun updateWidgets(context: Context) {
+            Log.d(TAG, "Requesting Location widget update")
             val intent = Intent(context, LocationWidgetProvider::class.java).apply {
                 action = ACTION_UPDATE_WIDGET
             }
             context.sendBroadcast(intent)
+        }
+        
+        /**
+         * Force update with fresh data
+         */
+        fun forceUpdateWidgets(context: Context) {
+            Log.d(TAG, "Force updating Location widgets")
+            WidgetDataRepository.invalidateLocationCache(context)
+            WidgetUpdateWorker.requestImmediateUpdate(context, WidgetUpdateWorker.WIDGET_TYPE_LOCATION)
+        }
+        
+        /**
+         * Notify that location changed - invalidate cache and update
+         * Called by LocationTrackingService when significant location change detected
+         */
+        fun onLocationChanged(context: Context) {
+            Log.d(TAG, "Location changed, invalidating cache")
+            WidgetDataRepository.invalidateLocationCache(context)
+            updateWidgets(context)
         }
     }
 
@@ -98,11 +125,19 @@ class LocationWidgetProvider : AppWidgetProvider() {
                 if (currentUser == null) {
                     showNoDataState(views, "Đăng nhập để xem vị trí")
                 } else {
-                    val data = loadLocationData(currentUser.uid)
-                    if (data != null) {
-                        showLocationData(views, data)
+                    // Use cached data for battery efficiency
+                    val cachedData = WidgetDataRepository.getLocationWidgetData(context)
+                    
+                    if (cachedData != null) {
+                        showLocationDataCached(views, cachedData)
                     } else {
-                        showNoDataState(views, "Chia sẻ vị trí để bắt đầu")
+                        // Fallback to direct Firebase query
+                        val data = loadLocationData(currentUser.uid)
+                        if (data != null) {
+                            showLocationData(views, data)
+                        } else {
+                            showNoDataState(views, "Chia sẻ vị trí để bắt đầu")
+                        }
                     }
                 }
                 
@@ -136,6 +171,57 @@ class LocationWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.location_share_button, sharePendingIntent)
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+    }
+    
+    private fun showLocationDataCached(views: RemoteViews, data: LocationWidgetCachedData) {
+        views.setViewVisibility(R.id.location_content_container, View.VISIBLE)
+        views.setViewVisibility(R.id.location_empty_container, View.GONE)
+        
+        // My location
+        views.setTextViewText(R.id.location_my_name, data.myName)
+        views.setTextViewText(R.id.location_my_location, data.myLocation)
+        
+        // Partner location
+        views.setTextViewText(R.id.location_partner_name, data.partnerName)
+        views.setTextViewText(R.id.location_partner_location, data.partnerLocation)
+        
+        // Distance
+        val distanceText = formatDistance(data.distance)
+        views.setTextViewText(R.id.location_distance_text, distanceText)
+        
+        // Status indicator
+        val statusText = if (data.isSharing) "📍 Đang chia sẻ" else "⭕ Tắt chia sẻ"
+        views.setTextViewText(R.id.location_status, statusText)
+        
+        // Partner last update time
+        val lastUpdateText = formatLastUpdate(data.partnerLastUpdate)
+        views.setTextViewText(R.id.location_last_update, lastUpdateText)
+    }
+    
+    private fun formatDistance(distance: Double?): String {
+        return if (distance != null) {
+            if (distance < 1.0) {
+                "${(distance * 1000).toInt()} m"
+            } else {
+                String.format("%.1f km", distance)
+            }
+        } else {
+            "-- km"
+        }
+    }
+    
+    private fun formatLastUpdate(timestamp: Long): String {
+        if (timestamp == 0L) return ""
+        
+        val diff = System.currentTimeMillis() - timestamp
+        val minutes = diff / (1000 * 60)
+        
+        return when {
+            minutes < 1 -> "Vừa xong"
+            minutes < 60 -> "$minutes phút trước"
+            minutes < 1440 -> "${minutes / 60} giờ trước"
+            else -> "${minutes / 1440} ngày trước"
         }
     }
 
@@ -278,6 +364,7 @@ class LocationWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         Log.d(TAG, "First Location widget added")
+        WidgetUpdateWorker.schedulePeriodicUpdates(context)
     }
 
     override fun onDisabled(context: Context) {

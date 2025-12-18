@@ -162,6 +162,8 @@ fun QuestScreen(
                             QuestTopBar(
                                 userCoins = uiState.userCoins,
                                 currentStreak = uiState.currentStreak,
+                                longestStreak = uiState.longestStreak,
+                                missedDays = uiState.missedDays,
                                 onBackClick = onBackClick
                             )
                         }

@@ -3,9 +3,11 @@ package com.example.coupleapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.widget.WidgetManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -402,6 +404,9 @@ class MissingViewModelFirebase : ViewModel() {
                 }
 
                 Log.d(TAG, "Missing sent successfully, new count: $newCount, hasSentToday: $hasSentToday")
+                
+                // Update widget immediately after sending missing
+                WidgetManager.onMissingUpdated(CoupleApplication.instance)
 
                 // Reload data to update history and streak
                 loadMissingData()

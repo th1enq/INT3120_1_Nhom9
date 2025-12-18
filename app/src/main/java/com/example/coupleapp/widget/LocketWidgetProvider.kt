@@ -15,6 +15,9 @@ import com.example.coupleapp.MainActivity
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.LocketPost
 import com.example.coupleapp.data.model.LocketType
+import com.example.coupleapp.widget.data.LocketWidgetCachedData
+import com.example.coupleapp.widget.data.WidgetDataRepository
+import com.example.coupleapp.widget.worker.WidgetUpdateWorker
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -24,15 +27,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.net.URL
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
 
 /**
- * Locket Widget Provider
+ * Locket Widget Provider - Battery Optimized
  * Displays the latest Locket content from your partner in a 4x2 widget
- * Battery optimized with 30-minute update intervals
+ * 
+ * Battery Optimization Features:
+ * - Aggressive caching with 5-minute expiry for real-time feel
+ * - WorkManager for periodic updates (respects Doze mode)
+ * - Smart data invalidation on new Locket
+ * - Fallback to cache when network unavailable
  */
 class LocketWidgetProvider : AppWidgetProvider() {
 
@@ -43,13 +52,32 @@ class LocketWidgetProvider : AppWidgetProvider() {
         private const val ACTION_SEND_LOCKET = "com.example.coupleapp.SEND_LOCKET_FROM_WIDGET"
         
         /**
-         * Force update all widgets
+         * Update all widgets using cached data (battery-efficient)
          */
         fun updateWidgets(context: Context) {
+            Log.d(TAG, "Requesting Locket widget update")
             val intent = Intent(context, LocketWidgetProvider::class.java).apply {
                 action = ACTION_UPDATE_WIDGET
             }
             context.sendBroadcast(intent)
+        }
+        
+        /**
+         * Force update with fresh data - call when new Locket received
+         */
+        fun forceUpdateWidgets(context: Context) {
+            Log.d(TAG, "Force updating Locket widgets")
+            WidgetDataRepository.invalidateLocketCache(context)
+            WidgetUpdateWorker.requestImmediateUpdate(context, WidgetUpdateWorker.WIDGET_TYPE_LOCKET)
+        }
+        
+        /**
+         * Notify that new Locket was received - invalidate cache and update
+         */
+        fun onNewLocketReceived(context: Context) {
+            Log.d(TAG, "New Locket received, invalidating cache")
+            WidgetDataRepository.invalidateLocketCache(context)
+            updateWidgets(context)
         }
     }
 
@@ -101,13 +129,19 @@ class LocketWidgetProvider : AppWidgetProvider() {
                 if (currentUser == null) {
                     showEmptyState(views, "Đăng nhập để xem Locket")
                 } else {
-                    // Get latest locket from partner
-                    val latestLocket = loadLatestLocket(currentUser.uid)
+                    // Use cached data for battery efficiency
+                    val cachedData = WidgetDataRepository.getLocketWidgetData(context)
                     
-                    if (latestLocket != null) {
-                        showLocketContent(context, views, latestLocket)
+                    if (cachedData != null && cachedData.type != "EMPTY") {
+                        showLocketContentCached(context, views, cachedData)
                     } else {
-                        showEmptyState(views, "Chưa có Locket mới")
+                        // Fallback to direct Firebase query
+                        val latestLocket = loadLatestLocket(currentUser.uid)
+                        if (latestLocket != null) {
+                            showLocketContent(context, views, latestLocket)
+                        } else {
+                            showEmptyState(views, "Chưa có Locket mới")
+                        }
                     }
                 }
                 
@@ -141,6 +175,74 @@ class LocketWidgetProvider : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.locket_send_button, sendPendingIntent)
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+    }
+    
+    private fun showLocketContentCached(context: Context, views: RemoteViews, data: LocketWidgetCachedData) {
+        views.setViewVisibility(R.id.locket_content_container, View.VISIBLE)
+        views.setViewVisibility(R.id.locket_empty_container, View.GONE)
+        
+        // Set sender name with new indicator
+        val senderDisplay = if (data.hasNewLocket) "💌 ${data.senderName}" else data.senderName
+        views.setTextViewText(R.id.locket_sender_name, senderDisplay)
+        
+        // Set timestamp
+        val timeText = formatTimestamp(data.timestamp)
+        views.setTextViewText(R.id.locket_timestamp, timeText)
+        
+        // Set content based on type
+        when (data.type) {
+            "EMOJI" -> {
+                views.setViewVisibility(R.id.locket_emoji_content, View.VISIBLE)
+                views.setViewVisibility(R.id.locket_text_content, View.GONE)
+                views.setViewVisibility(R.id.locket_image_content, View.GONE)
+                views.setTextViewText(R.id.locket_emoji_content, data.content)
+            }
+            "TEXT" -> {
+                views.setViewVisibility(R.id.locket_emoji_content, View.GONE)
+                views.setViewVisibility(R.id.locket_text_content, View.VISIBLE)
+                views.setViewVisibility(R.id.locket_image_content, View.GONE)
+                views.setTextViewText(R.id.locket_text_content, data.content)
+            }
+            "PHOTO", "DRAWING" -> {
+                views.setViewVisibility(R.id.locket_emoji_content, View.GONE)
+                views.setViewVisibility(R.id.locket_text_content, View.GONE)
+                views.setViewVisibility(R.id.locket_image_content, View.VISIBLE)
+                views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+            }
+            else -> {
+                views.setViewVisibility(R.id.locket_emoji_content, View.GONE)
+                views.setViewVisibility(R.id.locket_text_content, View.VISIBLE)
+                views.setViewVisibility(R.id.locket_image_content, View.GONE)
+                views.setTextViewText(R.id.locket_text_content, data.caption ?: "❤️")
+            }
+        }
+        
+        // Set caption if available
+        if (!data.caption.isNullOrEmpty() && data.type != "TEXT") {
+            views.setViewVisibility(R.id.locket_caption, View.VISIBLE)
+            views.setTextViewText(R.id.locket_caption, data.caption)
+        } else {
+            views.setViewVisibility(R.id.locket_caption, View.GONE)
+        }
+    }
+    
+    private fun formatTimestamp(timestamp: Long): String {
+        if (timestamp == 0L) return ""
+        
+        val localDateTime = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDateTime()
+        val now = LocalDateTime.now()
+        
+        return when {
+            localDateTime.toLocalDate() == now.toLocalDate() -> {
+                "Hôm nay ${localDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+            }
+            localDateTime.toLocalDate() == now.toLocalDate().minusDays(1) -> {
+                "Hôm qua ${localDateTime.format(DateTimeFormatter.ofPattern("HH:mm"))}"
+            }
+            else -> {
+                localDateTime.format(DateTimeFormatter.ofPattern("dd/MM HH:mm"))
+            }
         }
     }
 
@@ -270,6 +372,7 @@ class LocketWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         Log.d(TAG, "First Locket widget added")
+        WidgetUpdateWorker.schedulePeriodicUpdates(context)
     }
 
     override fun onDisabled(context: Context) {

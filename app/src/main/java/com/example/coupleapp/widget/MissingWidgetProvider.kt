@@ -6,11 +6,17 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
+import android.widget.Toast
 import com.example.coupleapp.MainActivity
 import com.example.coupleapp.R
+import com.example.coupleapp.widget.data.MissingWidgetCachedData
+import com.example.coupleapp.widget.data.WidgetDataRepository
+import com.example.coupleapp.widget.worker.WidgetUpdateWorker
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
@@ -23,9 +29,14 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 /**
- * Missing Widget Provider
+ * Missing Widget Provider - Battery Optimized
  * Displays the couple's missing streak and allows quick "I miss you" tap
- * Battery optimized with 30-minute update intervals
+ * 
+ * Battery Optimization Features:
+ * - Aggressive caching with 15-minute expiry
+ * - Immediate cache update on tap for responsive feel
+ * - WorkManager for periodic updates (respects Doze mode)
+ * - Haptic feedback for better UX
  */
 class MissingWidgetProvider : AppWidgetProvider() {
 
@@ -36,13 +47,32 @@ class MissingWidgetProvider : AppWidgetProvider() {
         private const val ACTION_SEND_MISSING = "com.example.coupleapp.SEND_MISSING_FROM_WIDGET"
         
         /**
-         * Force update all widgets
+         * Update all widgets using cached data (battery-efficient)
          */
         fun updateWidgets(context: Context) {
+            Log.d(TAG, "Requesting Missing widget update")
             val intent = Intent(context, MissingWidgetProvider::class.java).apply {
                 action = ACTION_UPDATE_WIDGET
             }
             context.sendBroadcast(intent)
+        }
+        
+        /**
+         * Force update with fresh data
+         */
+        fun forceUpdateWidgets(context: Context) {
+            Log.d(TAG, "Force updating Missing widgets")
+            WidgetDataRepository.invalidateMissingCache(context)
+            WidgetUpdateWorker.requestImmediateUpdate(context, WidgetUpdateWorker.WIDGET_TYPE_MISSING)
+        }
+        
+        /**
+         * Notify that missing was received from partner - update widget
+         */
+        fun onMissingReceived(context: Context) {
+            Log.d(TAG, "Missing received, invalidating cache")
+            WidgetDataRepository.invalidateMissingCache(context)
+            updateWidgets(context)
         }
     }
 
@@ -70,9 +100,19 @@ class MissingWidgetProvider : AppWidgetProvider() {
                 context.startActivity(mainIntent)
             }
             ACTION_SEND_MISSING -> {
-                // Quick send missing from widget
+                // Quick send missing from widget with haptic feedback
                 CoroutineScope(Dispatchers.IO).launch {
-                    sendMissingFromWidget(context)
+                    val success = sendMissingFromWidgetOptimized(context)
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            // Haptic feedback
+                            provideHapticFeedback(context)
+                            // Show toast
+                            Toast.makeText(context, "💕 Đã gửi nhớ!", Toast.LENGTH_SHORT).show()
+                        }
+                        // Update widget immediately
+                        updateWidgets(context)
+                    }
                 }
             }
             ACTION_UPDATE_WIDGET -> {
@@ -83,6 +123,26 @@ class MissingWidgetProvider : AppWidgetProvider() {
                 onUpdate(context, appWidgetManager, widgetIds)
             }
         }
+    }
+    
+    private fun provideHapticFeedback(context: Context) {
+        try {
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            vibrator?.let {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    it.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    it.vibrate(50)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Haptic feedback failed", e)
+        }
+    }
+    
+    private suspend fun sendMissingFromWidgetOptimized(context: Context): Boolean {
+        return WidgetDataRepository.incrementMissingCount(context)
     }
 
     private fun updateWidget(
@@ -100,15 +160,23 @@ class MissingWidgetProvider : AppWidgetProvider() {
                 if (currentUser == null) {
                     showData(views, 0, 0, 0, 0, false)
                 } else {
-                    val data = loadMissingData(currentUser.uid)
-                    showData(
-                        views,
-                        data.currentStreak,
-                        data.longestStreak,
-                        data.myTodayCount,
-                        data.partnerTodayCount,
-                        data.hasSentToday
-                    )
+                    // Use cached data for battery efficiency
+                    val cachedData = WidgetDataRepository.getMissingWidgetData(context)
+                    
+                    if (cachedData != null) {
+                        showDataCached(views, cachedData)
+                    } else {
+                        // Fallback to direct Firebase query
+                        val data = loadMissingData(currentUser.uid)
+                        showData(
+                            views,
+                            data.currentStreak,
+                            data.longestStreak,
+                            data.myTodayCount,
+                            data.partnerTodayCount,
+                            data.hasSentToday
+                        )
+                    }
                 }
                 
             } catch (e: Exception) {
@@ -142,6 +210,17 @@ class MissingWidgetProvider : AppWidgetProvider() {
             
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
+    }
+    
+    private fun showDataCached(views: RemoteViews, data: MissingWidgetCachedData) {
+        showData(
+            views,
+            data.currentStreak,
+            data.longestStreak,
+            data.myTodayCount,
+            data.partnerTodayCount,
+            data.hasSentToday
+        )
     }
 
     private suspend fun loadMissingData(userId: String): MissingWidgetData {
@@ -291,6 +370,7 @@ class MissingWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         Log.d(TAG, "First Missing widget added")
+        WidgetUpdateWorker.schedulePeriodicUpdates(context)
     }
 
     override fun onDisabled(context: Context) {

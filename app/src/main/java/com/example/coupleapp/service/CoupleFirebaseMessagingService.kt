@@ -11,14 +11,21 @@ import androidx.core.app.NotificationCompat
 import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.MainActivity
 import com.example.coupleapp.R
+import com.example.coupleapp.widget.LocketWidgetProvider
+import com.example.coupleapp.widget.MissingWidgetProvider
+import com.example.coupleapp.widget.data.WidgetDataRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Firebase Cloud Messaging Service for handling push notifications
  * This service receives notifications when the app is in background or killed
+ * Also triggers widget updates for real-time data sync
  */
 class CoupleFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -59,26 +66,52 @@ class CoupleFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         Log.d(TAG, "Message received from: ${remoteMessage.from}")
 
-        // Check if app is in foreground - if so, local notifications will handle it
-        if (CoupleApplication.isAppInForeground) {
-            Log.d(TAG, "App in foreground, skipping FCM notification")
-            return
-        }
-
-        // Handle data payload
+        // Handle data payload for widget updates
         if (remoteMessage.data.isNotEmpty()) {
             Log.d(TAG, "Message data: ${remoteMessage.data}")
-            handleDataMessage(remoteMessage.data)
+            
+            // Trigger widget updates based on message type
+            updateWidgetsFromMessage(remoteMessage.data)
+            
+            // Check if app is in foreground - if so, local notifications will handle it
+            if (!CoupleApplication.isAppInForeground) {
+                handleDataMessage(remoteMessage.data)
+            }
         }
 
         // Handle notification payload (when app is in background, system handles this automatically)
-        remoteMessage.notification?.let { notification ->
-            Log.d(TAG, "Notification: ${notification.title} - ${notification.body}")
-            showNotification(
-                title = notification.title ?: "Couple App",
-                body = notification.body ?: "Bạn có thông báo mới",
-                type = "general"
-            )
+        if (!CoupleApplication.isAppInForeground) {
+            remoteMessage.notification?.let { notification ->
+                Log.d(TAG, "Notification: ${notification.title} - ${notification.body}")
+                showNotification(
+                    title = notification.title ?: "Couple App",
+                    body = notification.body ?: "Bạn có thông báo mới",
+                    type = "general"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Update widgets when receiving FCM messages
+     * This enables real-time widget updates when partner sends data
+     */
+    private fun updateWidgetsFromMessage(data: Map<String, String>) {
+        val type = data["type"] ?: return
+        
+        CoroutineScope(Dispatchers.Main).launch {
+            when (type) {
+                "locket" -> {
+                    Log.d(TAG, "Updating Locket widget from FCM")
+                    WidgetDataRepository.invalidateLocketCache(this@CoupleFirebaseMessagingService)
+                    LocketWidgetProvider.updateWidgets(this@CoupleFirebaseMessagingService)
+                }
+                "missing" -> {
+                    Log.d(TAG, "Updating Missing widget from FCM")
+                    WidgetDataRepository.invalidateMissingCache(this@CoupleFirebaseMessagingService)
+                    MissingWidgetProvider.updateWidgets(this@CoupleFirebaseMessagingService)
+                }
+            }
         }
     }
 
