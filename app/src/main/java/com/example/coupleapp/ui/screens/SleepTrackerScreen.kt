@@ -27,9 +27,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.coupleapp.R
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -169,7 +171,7 @@ fun SleepTrackerScreen(
             modifier = modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen(message = "Loading sleep data...")
+                LoadingScreen(message = stringResource(R.string.loading_sleep_data))
             } else {
                 Box(
                     modifier = Modifier
@@ -254,13 +256,13 @@ fun SleepTrackerScreen(
                                                 )
                                                 Spacer(modifier = Modifier.height(16.dp))
                                                 Text(
-                                                    text = "No sleep data yet",
+                                                    text = stringResource(R.string.sleep_no_data),
                                                     style = MaterialTheme.typography.titleMedium,
                                                     color = Color(0xFF757575)
                                                 )
                                                 Spacer(modifier = Modifier.height(8.dp))
                                                 Text(
-                                                    text = "Click menu to insert mock data or sync from Health Connect",
+                                                    text = stringResource(R.string.sleep_no_data_subtitle),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = Color(0xFFB0B0B0),
                                                     textAlign = TextAlign.Center,
@@ -321,7 +323,7 @@ fun SleepTrackerScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Recent Sleep",
+                                            text = stringResource(R.string.recent_sleep),
                                             style = MaterialTheme.typography.titleLarge.copy(
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 22.sp
@@ -330,7 +332,7 @@ fun SleepTrackerScreen(
                                         )
 
                                         Text(
-                                            text = "View all →",
+                                            text = stringResource(R.string.view_all),
                                             style = MaterialTheme.typography.bodyMedium.copy(
                                                 fontWeight = FontWeight.Medium
                                             ),
@@ -472,7 +474,7 @@ fun SleepTrackerScreen(
                             // Check if Health Connect is available
                             val isAvailable = viewModel.checkHealthConnectAvailability()
                             if (!isAvailable) {
-                                snackbarHostState.showSnackbar("Health Connect is not available on this device")
+                                snackbarHostState.showSnackbar(context.getString(R.string.health_connect_unavailable))
                                 return@launch
                             }
                             
@@ -521,7 +523,7 @@ fun SleepTrackerScreen(
             when (uiState.timeEditorType) {
                 TimeEditorType.BED_TIME -> {
                     TimeEditorDialog(
-                        title = "Bed Time",
+                        title = stringResource(R.string.bed_time_title),
                         initialTime = uiState.settings?.idealBedTime ?: LocalTime.of(22, 0),
                         onDismiss = { viewModel.showTimeEditor(false, null) },
                         onConfirm = { newTime ->
@@ -532,7 +534,7 @@ fun SleepTrackerScreen(
                 }
                 TimeEditorType.WAKE_UP_TIME -> {
                     TimeEditorDialog(
-                        title = "Wake Up Time",
+                        title = stringResource(R.string.wake_up_time_title),
                         initialTime = uiState.settings?.idealWakeUpTime ?: LocalTime.of(7, 0),
                         onDismiss = { viewModel.showTimeEditor(false, null) },
                         onConfirm = { newTime ->
@@ -543,7 +545,7 @@ fun SleepTrackerScreen(
                 }
                 TimeEditorType.SLEEP_GOAL -> {
                     DurationEditorDialog(
-                        title = "Sleep Goal",
+                        title = stringResource(R.string.sleep_goal_title),
                         initialDurationMinutes = uiState.settings?.targetSleepDuration ?: 480,
                         onDismiss = { viewModel.showTimeEditor(false, null) },
                         onConfirm = { newDuration ->
@@ -612,7 +614,7 @@ private fun ActivityRecognitionPermissionDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Activity Recognition Required",
+                text = stringResource(R.string.activity_recognition_required),
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold
                 )
@@ -620,18 +622,18 @@ private fun ActivityRecognitionPermissionDialog(
         },
         text = {
             Text(
-                text = "To enable automatic sleep tracking with Google Sleep API, please grant Activity Recognition permission in the app settings.\n\nGo to: Settings > Apps > CoupleApp > Permissions > Physical activity",
+                text = stringResource(R.string.activity_recognition_message),
                 style = MaterialTheme.typography.bodyMedium
             )
         },
         confirmButton = {
             Button(onClick = onRequestPermission) {
-                Text("Open Settings")
+                Text(stringResource(R.string.open_settings))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Later")
+                Text(stringResource(R.string.later))
             }
         }
     )

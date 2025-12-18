@@ -65,11 +65,15 @@ enum class EmojiCategory {
 /**
  * Tab items for Locket feature
  */
-enum class LocketTab(val title: String, val iconName: String) {
-    PHOTO("Photo", "photo"),
-    EMOJI("Emoji", "emoji"),
-    DRAWING("Draw", "drawing"),
-    TEXT("Text", "text")
+enum class LocketTab(val title: String, val vietnameseTitle: String, val iconName: String) {
+    PHOTO("Photo", "Ảnh", "photo"),
+    EMOJI("Emoji", "Biểu tượng", "emoji"),
+    DRAWING("Draw", "Vẽ", "drawing"),
+    TEXT("Text", "Chữ", "text");
+    
+    fun getLocalizedTitle(isVietnamese: Boolean): String {
+        return if (isVietnamese && vietnameseTitle.isNotEmpty()) vietnameseTitle else title
+    }
 }
 
 /**

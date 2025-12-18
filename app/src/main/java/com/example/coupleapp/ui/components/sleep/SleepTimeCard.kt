@@ -15,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.sp
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -120,27 +122,27 @@ fun SleepTimesRow(
     ) {
         SleepTimeCard(
             icon = "🌙",
-            title = "Bedtime",
+            title = stringResource(R.string.bedtime),
             time = bedTime.format(timeFormatter),
-            description = "Bedtime",
+            description = stringResource(R.string.bedtime),
             onEdit = onEditBedTime,
             modifier = Modifier.weight(1f)
         )
         
         SleepTimeCard(
             icon = "☀️",
-            title = "Wake up",
+            title = stringResource(R.string.wake_up),
             time = wakeUpTime.format(timeFormatter),
-            description = "Wake up",
+            description = stringResource(R.string.wake_up),
             onEdit = onEditWakeUpTime,
             modifier = Modifier.weight(1f)
         )
         
         SleepTimeCard(
             icon = "⏱️",
-            title = "Duration",
+            title = stringResource(R.string.duration),
             time = durationText,
-            description = "Total sleep",
+            description = stringResource(R.string.total_sleep),
             onEdit = null, // No edit button for total sleep
             modifier = Modifier.weight(1f)
         )
@@ -175,7 +177,7 @@ fun SleepStagesCard(
             .padding(20.dp)
     ) {
         Text(
-            text = "Sleep Stages",
+            text = stringResource(R.string.sleep_stages),
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
@@ -202,7 +204,7 @@ fun SleepStagesCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 
                 Text(
-                    text = "Awake",
+                    text = stringResource(R.string.awake),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF2D2D2D)
                 )
@@ -236,7 +238,7 @@ fun SleepStagesCard(
                 Spacer(modifier = Modifier.width(12.dp))
                 
                 Text(
-                    text = "Sleep",
+                    text = stringResource(R.string.sleep),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF2D2D2D)
                 )

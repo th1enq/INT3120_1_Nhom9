@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.Anniversary
 import com.example.coupleapp.ui.screens.calendar.getEventColor
 import com.example.coupleapp.ui.theme.*
@@ -86,7 +88,7 @@ fun AnniversaryManagementScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "Quản lý kỷ niệm",
+                                    text = stringResource(R.string.manage_anniversaries),
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -139,8 +141,9 @@ fun AnniversaryManagementScreen(
                         // Event info or add button
                         if (eventsOnSelectedDate.isNotEmpty()) {
                             // Show events on selected date
+                            val formattedDate = selectedDate?.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) ?: ""
                             Text(
-                                text = "Sự kiện ngày ${selectedDate?.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))}",
+                                text = stringResource(R.string.event_on_date, formattedDate),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary,
@@ -255,7 +258,7 @@ private fun CalendarWithEvents(
                 }
                 
                 Text(
-                    text = "Tháng ${yearMonth.monthValue}/${yearMonth.year}",
+                    text = stringResource(R.string.month_year, yearMonth.monthValue, yearMonth.year),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -447,7 +450,7 @@ private fun EventListItem(
                         Chip(text = "Lặp lại", color = AccentBlue)
                     }
                     if (anniversary.reminderEnabled) {
-                        Chip(text = "Nhắc nhở", color = AccentGreen)
+                        Chip(text = stringResource(R.string.reminder_chip), color = AccentGreen)
                     }
                 }
             }
@@ -471,8 +474,8 @@ private fun EventListItem(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Xóa kỷ niệm?") },
-            text = { Text("Bạn có chắc muốn xóa \"${anniversary.title}\"?") },
+            title = { Text(stringResource(R.string.delete_anniversary)) },
+            text = { Text(stringResource(R.string.delete_anniversary_confirm, anniversary.title)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -480,12 +483,12 @@ private fun EventListItem(
                         showDeleteConfirm = false
                     }
                 ) {
-                    Text("Xóa", color = ErrorColor)
+                    Text(stringResource(R.string.delete), color = ErrorColor)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Hủy", color = TextSecondary)
+                    Text(stringResource(R.string.cancel), color = TextSecondary)
                 }
             }
         )

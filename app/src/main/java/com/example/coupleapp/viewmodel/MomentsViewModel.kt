@@ -101,6 +101,12 @@ class MomentsViewModel : ViewModel() {
                 // 5. Load Upcoming Events
                 loadUpcomingEvents(coupleId)?.let { allMoments.addAll(it) }
                 
+                // 6. Load Garden moments (plant milestones)
+                loadGardenMoments(coupleId, currentUser, partner)?.let { allMoments.addAll(it) }
+                
+                // 7. Load Message notifications
+                loadMessageMoments(currentUser, partner)?.let { allMoments.addAll(it) }
+                
                 // Group by date
                 val groupedMoments = groupMomentsByDate(allMoments)
                 
@@ -408,6 +414,205 @@ class MomentsViewModel : ViewModel() {
                 section = TimelineSection.from(date),
                 moments = items
             )
+        }
+    }
+    
+    /**
+     * Load garden moments from Firebase (plant events)
+     */
+    private suspend fun loadGardenMoments(coupleId: String, currentUser: FirebaseUser, partner: FirebaseUser?): List<GardenMoment>? {
+        return try {
+            val db = Firebase.firestore
+            val sevenDaysAgo = Date(System.currentTimeMillis() - 7 * 24 * 60 * 60 * 1000)
+            
+            // Load plant events from garden_events collection
+            val gardenSnapshot = db.collection("garden_events")
+                .whereEqualTo("coupleId", coupleId)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(20)
+                .get()
+                .await()
+            
+            gardenSnapshot.documents.mapNotNull { doc ->
+                try {
+                    val userId = doc.getString("userId") ?: return@mapNotNull null
+                    val plantName = doc.getString("plantName") ?: "Plant"
+                    val plantEmoji = doc.getString("plantEmoji") ?: "🌱"
+                    val eventTypeStr = doc.getString("eventType") ?: "WATERED"
+                    val growthStage = doc.getLong("growthStage")?.toInt() ?: 0
+                    val message = doc.getString("message") ?: ""
+                    val eventTimestamp = doc.getTimestamp("timestamp") ?: return@mapNotNull null
+                    
+                    val userName = if (userId == currentUser.id) currentUser.displayName else partner?.displayName ?: "Partner"
+                    
+                    val timestamp = LocalDateTime.ofInstant(
+                        eventTimestamp.toDate().toInstant(),
+                        java.time.ZoneId.systemDefault()
+                    )
+                    
+                    val eventType = try {
+                        GardenEventType.valueOf(eventTypeStr.uppercase())
+                    } catch (e: Exception) {
+                        GardenEventType.WATERED
+                    }
+                    
+                    GardenMoment(
+                        id = doc.id,
+                        timestamp = timestamp,
+                        userName = userName,
+                        userAvatar = if (userId == currentUser.id) "😊" else "💕",
+                        plantName = plantName,
+                        plantEmoji = plantEmoji,
+                        eventType = eventType,
+                        growthStage = growthStage,
+                        message = message
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing garden event", e)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading garden moments", e)
+            // If collection doesn't exist or query fails, check plants collection for recent activity
+            loadGardenMomentsFromPlants(coupleId, currentUser, partner)
+        }
+    }
+    
+    /**
+     * Fallback: Load garden moments from plants collection
+     */
+    private suspend fun loadGardenMomentsFromPlants(coupleId: String, currentUser: FirebaseUser, partner: FirebaseUser?): List<GardenMoment>? {
+        return try {
+            val db = Firebase.firestore
+            
+            // Get plants that have been updated recently
+            val plantsSnapshot = db.collection("plants")
+                .whereEqualTo("coupleId", coupleId)
+                .orderBy("lastWateredAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(10)
+                .get()
+                .await()
+            
+            val moments = mutableListOf<GardenMoment>()
+            
+            plantsSnapshot.documents.forEach { doc ->
+                try {
+                    val userId = doc.getString("userId") ?: return@forEach
+                    val plantName = doc.getString("name") ?: "Plant"
+                    val plantEmoji = doc.getString("emoji") ?: "🌱"
+                    val growthStage = doc.getLong("growthStage")?.toInt() ?: 0
+                    val lastWateredAt = doc.getTimestamp("lastWateredAt")
+                    val plantedAt = doc.getTimestamp("plantedAt")
+                    val isHarvested = doc.getBoolean("isHarvested") ?: false
+                    
+                    val userName = if (userId == currentUser.id) currentUser.displayName else partner?.displayName ?: "Partner"
+                    
+                    // Create moment based on plant status
+                    if (isHarvested) {
+                        val timestamp = lastWateredAt?.let {
+                            LocalDateTime.ofInstant(it.toDate().toInstant(), java.time.ZoneId.systemDefault())
+                        } ?: LocalDateTime.now()
+                        
+                        moments.add(GardenMoment(
+                            id = "${doc.id}_harvested",
+                            timestamp = timestamp,
+                            userName = userName,
+                            userAvatar = if (userId == currentUser.id) "😊" else "💕",
+                            plantName = plantName,
+                            plantEmoji = plantEmoji,
+                            eventType = GardenEventType.HARVESTED,
+                            growthStage = 100,
+                            message = "$plantName has been fully grown! 🎉"
+                        ))
+                    } else if (growthStage >= 80) {
+                        val timestamp = lastWateredAt?.let {
+                            LocalDateTime.ofInstant(it.toDate().toInstant(), java.time.ZoneId.systemDefault())
+                        } ?: LocalDateTime.now()
+                        
+                        moments.add(GardenMoment(
+                            id = "${doc.id}_evolved",
+                            timestamp = timestamp,
+                            userName = userName,
+                            userAvatar = if (userId == currentUser.id) "😊" else "💕",
+                            plantName = plantName,
+                            plantEmoji = plantEmoji,
+                            eventType = GardenEventType.EVOLVED,
+                            growthStage = growthStage,
+                            message = "$plantName is almost fully grown! ($growthStage%)"
+                        ))
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing plant for moment", e)
+                }
+            }
+            
+            moments.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading garden moments from plants", e)
+            null
+        }
+    }
+    
+    /**
+     * Load message notification moments from Firebase
+     */
+    private suspend fun loadMessageMoments(currentUser: FirebaseUser, partner: FirebaseUser?): List<MessageMoment>? {
+        return try {
+            val db = Firebase.firestore
+            val userId = currentUser.id
+            
+            // Query messages where current user is receiver and not read
+            val messagesSnapshot = db.collection("messages")
+                .whereEqualTo("receiverId", userId)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(10)
+                .get()
+                .await()
+            
+            // Group messages by sender and count unread
+            val messagesBySender = messagesSnapshot.documents
+                .groupBy { it.getString("senderId") }
+            
+            messagesBySender.mapNotNull { (senderId, docs) ->
+                try {
+                    if (senderId == null) return@mapNotNull null
+                    
+                    val unreadDocs = docs.filter { !(it.getBoolean("isRead") ?: true) }
+                    if (unreadDocs.isEmpty()) return@mapNotNull null
+                    
+                    val latestDoc = docs.first()
+                    val messagePreview = latestDoc.getString("content") ?: "New message"
+                    val latestTimestamp = latestDoc.getTimestamp("timestamp") ?: return@mapNotNull null
+                    
+                    val senderName = if (senderId == partner?.id) {
+                        partner.displayName
+                    } else {
+                        "Someone"
+                    }
+                    
+                    val timestamp = LocalDateTime.ofInstant(
+                        latestTimestamp.toDate().toInstant(),
+                        java.time.ZoneId.systemDefault()
+                    )
+                    
+                    MessageMoment(
+                        id = "messages_$senderId",
+                        timestamp = timestamp,
+                        senderName = senderName,
+                        senderAvatar = "💕",
+                        messagePreview = if (messagePreview.length > 50) messagePreview.take(50) + "..." else messagePreview,
+                        messageCount = unreadDocs.size,
+                        isRead = false
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing message moment", e)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading message moments", e)
+            null
         }
     }
     

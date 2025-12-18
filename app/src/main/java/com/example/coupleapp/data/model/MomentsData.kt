@@ -13,7 +13,9 @@ enum class MomentCardType {
     MISSING,
     LOCKET,
     EVENT,
-    ANNIVERSARY
+    ANNIVERSARY,
+    GARDEN,
+    MESSAGE
 }
 
 /**
@@ -203,3 +205,46 @@ data class MomentsGroup(
     val section: TimelineSection,
     val moments: List<MomentItem>
 )
+
+/**
+ * Garden moment card data - Shows plant growth milestones and achievements
+ */
+data class GardenMoment(
+    override val id: String,
+    override val timestamp: LocalDateTime,
+    val userName: String,
+    val userAvatar: String?,
+    val plantName: String,
+    val plantEmoji: String,
+    val eventType: GardenEventType,
+    val growthStage: Int, // 0-100
+    val message: String
+) : MomentItem() {
+    override val type = MomentCardType.GARDEN
+}
+
+/**
+ * Garden event types
+ */
+enum class GardenEventType {
+    PLANTED,      // New plant planted
+    WATERED,      // Plant watered
+    EVOLVED,      // Plant evolved to next stage
+    HARVESTED,    // Plant fully grown and harvested
+    WILTED        // Plant wilted due to neglect
+}
+
+/**
+ * Message notification moment card data
+ */
+data class MessageMoment(
+    override val id: String,
+    override val timestamp: LocalDateTime,
+    val senderName: String,
+    val senderAvatar: String?,
+    val messagePreview: String,
+    val messageCount: Int,
+    val isRead: Boolean
+) : MomentItem() {
+    override val type = MomentCardType.MESSAGE
+}

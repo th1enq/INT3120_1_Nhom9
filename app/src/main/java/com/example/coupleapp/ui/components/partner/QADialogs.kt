@@ -19,8 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.coupleapp.R
 import com.example.coupleapp.ui.theme.*
 
 /**
@@ -64,7 +66,7 @@ fun CreateQuestionDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "Ask a Question to $partnerName",
+                    text = stringResource(R.string.ask_question_to, partnerName),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
@@ -74,7 +76,7 @@ fun CreateQuestionDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Text(
-                    text = "Ask an interesting question to get to know each other better",
+                    text = stringResource(R.string.ask_interesting_question_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
@@ -92,7 +94,7 @@ fun CreateQuestionDialog(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
                         Text(
-                            text = "Ví dụ: Điều gì khiến em yêu anh?",
+                            text = stringResource(R.string.question_example_love),
                             color = TextLight
                         )
                     },
@@ -104,7 +106,7 @@ fun CreateQuestionDialog(
                     shape = RoundedCornerShape(12.dp),
                     isError = isError,
                     supportingText = if (isError) {
-                        { Text("Please enter a question", color = ErrorColor) }
+                        { Text(stringResource(R.string.please_enter_question), color = ErrorColor) }
                     } else null,
                     minLines = 3,
                     maxLines = 5
@@ -127,7 +129,7 @@ fun CreateQuestionDialog(
                             contentColor = TextSecondary
                         )
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     
                     Button(
@@ -152,7 +154,7 @@ fun CreateQuestionDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Send")
+                        Text(stringResource(R.string.send))
                     }
                 }
             }
@@ -178,7 +180,7 @@ fun SuggestedQuestions(
     
     Column(modifier = modifier) {
         Text(
-            text = "Question Suggestions:",
+            text = stringResource(R.string.question_suggestions),
             style = MaterialTheme.typography.labelMedium,
             color = TextSecondary,
             modifier = Modifier.padding(bottom = 8.dp)

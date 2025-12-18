@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.DrawingPath
@@ -166,7 +168,7 @@ fun LocketDrawingScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             
                             Text(
-                                text = "Draw here",
+                                text = stringResource(R.string.draw_here),
                                 color = Color(0xFFB0B0B0),
                                 fontSize = 16.sp
                             )
@@ -209,7 +211,7 @@ fun LocketDrawingScreen(
                 
                 // Color palette
                 Text(
-                    text = "Color",
+                    text = stringResource(R.string.color),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color(0xFF757575),
                     modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
@@ -232,7 +234,7 @@ fun LocketDrawingScreen(
                 
                 // Stroke width selector
                 Text(
-                    text = "Stroke Width",
+                    text = stringResource(R.string.stroke_width),
                     style = MaterialTheme.typography.labelMedium,
                     color = Color(0xFF757575),
                     modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
@@ -283,7 +285,7 @@ private fun DrawingTopBar(
         Spacer(modifier = Modifier.width(8.dp))
         
         Text(
-            text = "Draw",
+            text = stringResource(R.string.draw),
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold
             ),
@@ -319,7 +321,7 @@ private fun DrawingTopBar(
                 )
             ) {
                 Text(
-                    text = "Save",
+                    text = stringResource(R.string.save),
                     fontWeight = FontWeight.Bold
                 )
             }

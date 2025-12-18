@@ -26,12 +26,15 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.PurchaseType
 import com.example.coupleapp.data.model.StoreItem
+import java.util.Locale
 
 /**
  * Purchase confirmation dialog with quantity selector
@@ -51,6 +54,9 @@ fun PurchaseConfirmDialog(
     onPurchaseReal: (StoreItem) -> Unit
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    val isVietnamese = Locale.getDefault().language == "vi"
+    val localizedName = item.getLocalizedName(isVietnamese)
+    val localizedDescription = item.getLocalizedDescription(isVietnamese)
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -86,7 +92,7 @@ fun PurchaseConfirmDialog(
                     ) {
                         Image(
                             painter = painterResource(id = item.iconRes),
-                            contentDescription = item.name,
+                            contentDescription = localizedName,
                             modifier = Modifier
                                 .size(110.dp)
                                 .padding(6.dp),
@@ -118,7 +124,7 @@ fun PurchaseConfirmDialog(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "Quantity",
+                            text = stringResource(R.string.quantity),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF5D4037)
@@ -169,7 +175,7 @@ fun PurchaseConfirmDialog(
                         
                         // Quick select buttons (3, 5, 10)
                         Text(
-                            text = "Quick Select",
+                            text = stringResource(R.string.quick_select),
                             fontSize = 11.sp,
                             color = Color(0xFF8D6E63),
                             modifier = Modifier.padding(top = 2.dp)
@@ -215,7 +221,7 @@ fun PurchaseConfirmDialog(
                 
                 // Item name and description
                 Text(
-                    text = item.name,
+                    text = localizedName,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = Color(0xFF5D4037),
@@ -226,7 +232,7 @@ fun PurchaseConfirmDialog(
                 Spacer(modifier = Modifier.height(6.dp))
                 
                 Text(
-                    text = item.description,
+                    text = localizedDescription,
                     fontSize = 13.sp,
                     color = Color(0xFF8D6E63),
                     textAlign = TextAlign.Center,
@@ -315,7 +321,7 @@ fun PurchaseConfirmDialog(
                     .padding(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 Text(
-                    text = "Cancel",
+                    text = stringResource(R.string.cancel),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
                     color = Color(0xFF5D4037)

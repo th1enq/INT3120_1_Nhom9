@@ -14,7 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -50,7 +52,7 @@ fun NotificationSettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Notifications",
+                        text = stringResource(R.string.notifications),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -99,7 +101,7 @@ fun NotificationSettingsScreen(
                 ) {
                     Column {
                         Text(
-                            text = "General",
+                            text = stringResource(R.string.general),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF718096),
@@ -150,7 +152,7 @@ fun NotificationSettingsScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Features",
+                            text = stringResource(R.string.features_section),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF718096),

@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.DailyMissingHistory
 import com.example.coupleapp.data.model.DailyMissingSummary
 
@@ -39,7 +41,7 @@ fun MissingHistorySection(
                     slideInVertically(animationSpec = tween(300)) { it / 4 }
         ) {
             Text(
-                text = "History (Last 7 days)",
+                text = stringResource(R.string.history_last_7_days),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold
                 ),
@@ -243,7 +245,7 @@ fun MissingEmptyState(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "No missing records yet",
+            text = stringResource(R.string.no_missing_records),
             style = MaterialTheme.typography.titleMedium,
             color = Color(0xFF757575)
         )
@@ -251,7 +253,7 @@ fun MissingEmptyState(
         Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = "Tap the button to let your partner know you miss them!",
+            text = stringResource(R.string.tap_to_miss),
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFFB0B0B0)
         )

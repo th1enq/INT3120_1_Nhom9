@@ -8,6 +8,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,13 +67,20 @@ fun RegisterWithFirebaseScreen(
                     // Convert phone to email format for Firebase Auth
                     val email = "${phone}@coupleapp.temp"
                     
+                    // Format date of birth from DDMMYYYY to DD/MM/YYYY for storage
+                    val formattedDob = if (dateOfBirth.length == 8) {
+                        "${dateOfBirth.substring(0, 2)}/${dateOfBirth.substring(2, 4)}/${dateOfBirth.substring(4, 8)}"
+                    } else {
+                        dateOfBirth
+                    }
+                    
                     // Call AuthViewModel to register
                     authViewModel.registerUser(
                         email = email,
                         password = password,
                         fullName = fullName,
                         phoneNumber = phone,
-                        dateOfBirth = dateOfBirth,
+                        dateOfBirth = formattedDob,
                         gender = "" // Can add gender selection later
                     )
                 }
@@ -102,7 +111,7 @@ fun RegisterWithFirebaseScreen(
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Creating your account...",
+                            text = stringResource(R.string.creating_account),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -200,7 +209,7 @@ fun LoginWithFirebaseScreen(
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Logging in...",
+                            text = stringResource(R.string.logging_in),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )

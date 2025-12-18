@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import kotlinx.coroutines.delay
 import java.time.LocalTime
 
@@ -75,7 +77,7 @@ fun WhenToSleepScreen(
                 }
                 
                 Text(
-                    text = "When to Sleep",
+                    text = stringResource(R.string.when_to_sleep),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp
@@ -118,7 +120,7 @@ fun WhenToSleepScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                     
                     Text(
-                        text = "Set your ideal bedtime",
+                        text = stringResource(R.string.set_ideal_bedtime),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Medium,
                             fontSize = 18.sp
@@ -158,7 +160,7 @@ fun WhenToSleepScreen(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(
-                            text = "Save",
+                            text = stringResource(R.string.save),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             ),
@@ -222,7 +224,7 @@ fun SleepGoalScreen(
                 }
                 
                 Text(
-                    text = "Sleep Goal",
+                    text = stringResource(R.string.sleep_goal),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp
@@ -265,7 +267,7 @@ fun SleepGoalScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                     
                     Text(
-                        text = "Set your sleep goal",
+                        text = stringResource(R.string.set_sleep_goal),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Medium,
                             fontSize = 18.sp
@@ -276,7 +278,7 @@ fun SleepGoalScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Recommended: 7-9 hours",
+                        text = stringResource(R.string.recommended_sleep),
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color(0xFF757575),
                         fontSize = 14.sp
@@ -319,7 +321,7 @@ fun SleepGoalScreen(
                                     )
                                     
                                     Text(
-                                        text = "hours",
+                                        text = stringResource(R.string.hours),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFF757575)
                                     )
@@ -366,7 +368,7 @@ fun SleepGoalScreen(
                                     )
                                     
                                     Text(
-                                        text = "minutes",
+                                        text = stringResource(R.string.minutes),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color(0xFF757575)
                                     )
@@ -405,7 +407,7 @@ fun SleepGoalScreen(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(
-                            text = "Save",
+                            text = stringResource(R.string.save),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             ),

@@ -44,6 +44,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "sleep",
             name = "Sleep",
+            vietnameseName = "Giấc ngủ",
             iconName = "bedtime",
             route = "sleep_tracker",
             backgroundColor = 0xFFE8F5FF,
@@ -52,6 +53,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "locket",
             name = "Locket",
+            vietnameseName = "Ảnh",
             iconName = "photo_camera",
             route = "locket",
             backgroundColor = 0xFFFFF0F5,
@@ -60,6 +62,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "missing",
             name = "Missing",
+            vietnameseName = "Nhớ nhau",
             iconName = "favorite",
             route = "missing",
             backgroundColor = 0xFFFFE8E8,
@@ -68,6 +71,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "location",
             name = "Distance",
+            vietnameseName = "Khoảng cách",
             iconName = "location_on",
             route = "distance",
             backgroundColor = 0xFFE8FFE8,
@@ -76,6 +80,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "calendar",
             name = "Calendar",
+            vietnameseName = "Lịch",
             iconName = "event",
             route = "calendar",
             backgroundColor = 0xFFFFF8E1,
@@ -84,6 +89,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "garden",
             name = "Garden",
+            vietnameseName = "Vườn",
             iconName = "local_florist",
             route = "garden",
             backgroundColor = 0xFFE8F5E9,
@@ -92,6 +98,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "quest",
             name = "Quest",
+            vietnameseName = "Nhiệm vụ",
             iconName = "assignment",
             route = "quest",
             backgroundColor = 0xFFF3E5F5,
@@ -100,6 +107,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
         PartnerShortcut(
             id = "store",
             name = "Store",
+            vietnameseName = "Cửa hàng",
             iconName = "store",
             route = "store",
             backgroundColor = 0xFFE0F7FA,

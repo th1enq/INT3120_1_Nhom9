@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/location_widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <!-- Content container (shown when there's data) -->
+    <LinearLayout
+        android:id="@+id/location_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:weightSum="10">
+
+        <!-- Left: My location -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="3.5"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="4dp">
+
+            <!-- Location pin icon -->
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/distance"
+                android:contentDescription="My location" />
+
+            <!-- My name -->
+            <TextView
+                android:id="@+id/location_my_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Bạn"
+                android:textColor="#4CAF50"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <!-- My location -->
+            <TextView
+                android:id="@+id/location_my_location"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quận 1"
+                android:textColor="#666666"
+                android:textSize="9sp"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:gravity="center" />
+
+        </LinearLayout>
+
+        <!-- Center: Distance -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="3"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="4dp">
+
+            <!-- Distance value -->
+            <TextView
+                android:id="@+id/location_distance_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="5.2 km"
+                android:textColor="#9C27B0"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <!-- Distance icon -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↔️"
+                android:textSize="16sp" />
+
+            <!-- Status -->
+            <TextView
+                android:id="@+id/location_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="📍 Đang chia sẻ"
+                android:textColor="#4CAF50"
+                android:textSize="9sp" />
+
+        </LinearLayout>
+
+        <!-- Right: Partner location -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="3.5"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="4dp">
+
+            <!-- Location pin icon -->
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/distance"
+                android:contentDescription="Partner location" />
+
+            <!-- Partner name -->
+            <TextView
+                android:id="@+id/location_partner_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Người yêu"
+                android:textColor="#E91E63"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <!-- Partner location -->
+            <TextView
+                android:id="@+id/location_partner_location"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quận 7"
+                android:textColor="#666666"
+                android:textSize="9sp"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:gravity="center" />
+
+            <!-- Last update -->
+            <TextView
+                android:id="@+id/location_last_update"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="5 phút trước"
+                android:textColor="#999999"
+                android:textSize="8sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Share button (floating bottom right) -->
+    <TextView
+        android:id="@+id/location_share_button"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:layout_marginEnd="4dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/circle_blue_background"
+        android:gravity="center"
+        android:text="📍"
+        android:textSize="16sp" />
+
+    <!-- Empty state container -->
+    <LinearLayout
+        android:id="@+id/location_empty_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/distance"
+            android:alpha="0.5"
+            android:contentDescription="No location" />
+
+        <TextView
+            android:id="@+id/location_empty_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Chia sẻ vị trí để bắt đầu"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Nhấn để mở bản đồ"
+            android:textColor="#2196F3"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
+</RelativeLayout>

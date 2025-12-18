@@ -13,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
@@ -43,6 +46,7 @@ fun MissingScreen(
     questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
@@ -93,7 +97,7 @@ fun MissingScreen(
     LaunchedEffect(uiState.sendSuccess) {
         if (uiState.sendSuccess) {
             snackbarHostState.showSnackbar(
-                message = "Love sent to ${uiState.partnerUser?.name ?: "partner"}! 💕",
+                message = context.getString(R.string.love_sent_to, uiState.partnerUser?.name ?: "partner"),
                 duration = SnackbarDuration.Short
             )
         }
@@ -119,7 +123,7 @@ fun MissingScreen(
             modifier = modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen(message = "Loading...")
+                LoadingScreen(message = stringResource(R.string.loading))
             } else {
                 Box(
                     modifier = Modifier
@@ -148,7 +152,7 @@ fun MissingScreen(
                                     slideInVertically(animationSpec = tween(300)) { -it }
                         ) {
                             MissingTopBar(
-                                title = "Missing",
+                                title = stringResource(R.string.missing),
                                 onBackClick = onBackClick,
                                 streakCount = uiState.summary.currentStreak,
                                 isStreakActive = uiState.summary.hasSentToday

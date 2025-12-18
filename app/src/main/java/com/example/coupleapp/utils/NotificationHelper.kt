@@ -90,8 +90,8 @@ class NotificationHelper(private val context: Context) {
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL_ID_MESSAGES)
                     .setSmallIcon(R.drawable.ic_launcher_foreground)
-                    .setContentTitle("Couple App")
-                    .setContentText("Bạn có tin nhắn mới")
+                    .setContentTitle(context.getString(R.string.app_name))
+                    .setContentText(context.getString(R.string.new_message_received))
                     .build()
             )
             .apply {

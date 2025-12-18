@@ -23,12 +23,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.LocationHistory
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.ui.theme.*
@@ -181,7 +183,7 @@ private fun UserProfileHeader(
                         color = Color(0xFFE8F5E9)
                     ) {
                         Text(
-                            text = "Online",
+                            text = stringResource(R.string.online),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF4CAF50),
@@ -307,7 +309,7 @@ private fun CurrentLocationCard(user: UserLocation) {
             // Location details
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Current Location",
+                    text = stringResource(R.string.current_location),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = TextSecondary

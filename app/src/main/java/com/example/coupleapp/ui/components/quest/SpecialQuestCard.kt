@@ -15,12 +15,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.Quest
 import com.example.coupleapp.data.model.QuestStatus
+import java.util.Locale
 
 /**
  * Special quest card for new users (e.g., Link partner)
@@ -41,6 +44,7 @@ fun SpecialQuestCard(
     
     // Only clickable for navigation when NOT completed and NOT claimed
     val canNavigate = quest.status != QuestStatus.CLAIMED && quest.status != QuestStatus.COMPLETED
+    val isVietnamese = Locale.getDefault().language == "vi"
 
     Card(
         modifier = modifier
@@ -69,7 +73,7 @@ fun SpecialQuestCard(
                 Column(modifier = Modifier.weight(1f)) {
                     // Special badge
                     Text(
-                        text = "⭐ Special Quest",
+                        text = if (isVietnamese) "⭐ Nhiệm vụ đặc biệt" else "⭐ Special Quest",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -80,7 +84,7 @@ fun SpecialQuestCard(
 
                     // Title
                     Text(
-                        text = quest.title,
+                        text = quest.getLocalizedTitle(isVietnamese),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -94,7 +98,7 @@ fun SpecialQuestCard(
 
                     // Description
                     Text(
-                        text = quest.description,
+                        text = quest.getLocalizedDescription(isVietnamese),
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 13.sp
                         ),
@@ -167,7 +171,7 @@ fun SpecialQuestCard(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                         ) {
                             Text(
-                                text = "Claim",
+                                text = stringResource(R.string.claim),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
@@ -178,7 +182,7 @@ fun SpecialQuestCard(
                     else -> {
                         // Arrow indicator for clickable card
                         Text(
-                            text = "Go →",
+                            text = stringResource(R.string.go_arrow),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold
                             ),

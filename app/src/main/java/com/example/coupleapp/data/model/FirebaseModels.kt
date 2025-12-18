@@ -262,7 +262,10 @@ data class FirebaseMissingRecord(
 
 /**
  * Firebase User Wallet Model
- * Tracks user coins and points
+ * Tracks user coins, points, and quest streak
+ * 
+ * NOTE: currentStreak, longestStreak, and lastQuestClaimDate are nullable with defaults
+ * to support old wallets that don't have these fields yet (backward compatibility)
  */
 data class FirebaseUserWallet(
     @DocumentId
@@ -271,9 +274,16 @@ data class FirebaseUserWallet(
     val coins: Int = 0,
     val freeCoins: Int = 0,
     val lastFreeGiftDate: String? = null, // YYYY-MM-DD format
+    val lastQuestClaimDate: String? = null, // YYYY-MM-DD format for daily quest tracking (null = never claimed)
+    val currentStreak: Int? = null, // Current login/quest streak (null = 0 for old wallets)
+    val longestStreak: Int? = null, // Longest streak ever (null = 0 for old wallets)
     @ServerTimestamp
     val updatedAt: Date? = null
-)
+) {
+    // Helper to get safe streak values with defaults for old wallets
+    fun getCurrentStreakSafe(): Int = currentStreak ?: 0
+    fun getLongestStreakSafe(): Int = longestStreak ?: 0
+}
 
 /**
  * Firebase Purchase History Model

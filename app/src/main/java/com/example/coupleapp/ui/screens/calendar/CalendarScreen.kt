@@ -11,7 +11,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.CalendarViewMode
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.calendar.*
@@ -56,7 +58,7 @@ fun CalendarScreen(
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
-            LoadingScreen(message = "Loading calendar...")
+            LoadingScreen(message = stringResource(R.string.loading_calendar))
         } else {
             CalendarMainContent(
                 uiState = uiState,

@@ -89,6 +89,51 @@
                 android:resource="@xml/sleep_widget_info" />
         </receiver>
         
+        <!-- Locket Widget Provider -->
+        <receiver
+            android:name=".widget.LocketWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.coupleapp.LOCKET_WIDGET_CLICK" />
+                <action android:name="com.example.coupleapp.UPDATE_LOCKET_WIDGET" />
+                <action android:name="com.example.coupleapp.SEND_LOCKET_FROM_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/locket_widget_info" />
+        </receiver>
+        
+        <!-- Missing Widget Provider -->
+        <receiver
+            android:name=".widget.MissingWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.coupleapp.MISSING_WIDGET_CLICK" />
+                <action android:name="com.example.coupleapp.UPDATE_MISSING_WIDGET" />
+                <action android:name="com.example.coupleapp.SEND_MISSING_FROM_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/missing_widget_info" />
+        </receiver>
+        
+        <!-- Location Widget Provider -->
+        <receiver
+            android:name=".widget.LocationWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.coupleapp.LOCATION_WIDGET_CLICK" />
+                <action android:name="com.example.coupleapp.UPDATE_LOCATION_WIDGET" />
+                <action android:name="com.example.coupleapp.SHARE_LOCATION_FROM_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/location_widget_info" />
+        </receiver>
+        
         <!-- Google Sleep API Receiver -->
         <receiver
             android:name=".receiver.SleepReceiver"

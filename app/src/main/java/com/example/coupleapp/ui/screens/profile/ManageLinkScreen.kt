@@ -18,7 +18,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -103,7 +105,7 @@ fun ManageLinkScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Manage Link",
+                        text = stringResource(R.string.manage_link),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -183,7 +185,7 @@ fun ManageLinkScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "Your Link Code",
+                                    text = stringResource(R.string.your_link_code),
                                     fontSize = 14.sp,
                                     color = Color(0xFF718096)
                                 )
@@ -222,7 +224,7 @@ fun ManageLinkScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 
                                 Text(
-                                    text = "Share this code with your partner to link",
+                                    text = stringResource(R.string.share_code_message),
                                     fontSize = 12.sp,
                                     color = Color(0xFF718096),
                                     textAlign = TextAlign.Center
@@ -244,7 +246,7 @@ fun ManageLinkScreen(
                                     modifier = Modifier.padding(20.dp)
                                 ) {
                                     Text(
-                                        text = "Linked Partner",
+                                        text = stringResource(R.string.linked_partner),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFF2D3748)
@@ -276,7 +278,7 @@ fun ManageLinkScreen(
                                                 color = Color(0xFF2D3748)
                                             )
                                             Text(
-                                                text = "Linked since $linkedDate",
+                                                text = stringResource(R.string.linked_since, linkedDate),
                                                 fontSize = 12.sp,
                                                 color = Color(0xFF718096)
                                             )
@@ -312,7 +314,7 @@ fun ManageLinkScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
                                     
                                     Text(
-                                        text = "Chưa liên kết với ai",
+                                        text = stringResource(R.string.not_linked_yet),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFF2D3748),
@@ -322,7 +324,7 @@ fun ManageLinkScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     
                                     Text(
-                                        text = "Chia sẻ mã liên kết của bạn với người yêu để kết nối",
+                                        text = stringResource(R.string.share_link_message),
                                         fontSize = 14.sp,
                                         color = Color(0xFF718096),
                                         textAlign = TextAlign.Center

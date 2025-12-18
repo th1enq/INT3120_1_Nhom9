@@ -31,8 +31,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.repository.FirebaseStorageRepository
 import com.example.coupleapp.util.ImageCropHelper
 import com.example.coupleapp.viewmodel.ProfileViewModel
@@ -212,7 +214,7 @@ fun EditProfileScreen(
             onDismissRequest = { showImageSourcePicker = false },
             title = {
                 Text(
-                    text = "Chọn ảnh đại diện",
+                    text = stringResource(R.string.choose_avatar),
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2D3748)
                 )
@@ -249,12 +251,12 @@ fun EditProfileScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Chụp ảnh",
+                                    text = stringResource(R.string.take_photo_title),
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF2D3748)
                                 )
                                 Text(
-                                    text = "Sử dụng camera để chụp ảnh mới",
+                                    text = stringResource(R.string.take_photo_desc),
                                     fontSize = 12.sp,
                                     color = Color(0xFF718096)
                                 )
@@ -286,12 +288,12 @@ fun EditProfileScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Chọn từ thư viện",
+                                    text = stringResource(R.string.choose_from_gallery),
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF2D3748)
                                 )
                                 Text(
-                                    text = "Chọn ảnh từ bộ sưu tập của bạn",
+                                    text = stringResource(R.string.choose_from_gallery_desc),
                                     fontSize = 12.sp,
                                     color = Color(0xFF718096)
                                 )
@@ -303,7 +305,7 @@ fun EditProfileScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showImageSourcePicker = false }) {
-                    Text("Hủy", color = Color(0xFF718096))
+                    Text(stringResource(R.string.cancel), color = Color(0xFF718096))
                 }
             },
             containerColor = Color.White,
@@ -316,7 +318,7 @@ fun EditProfileScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Edit Profile",
+                        text = stringResource(R.string.edit_profile),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -474,7 +476,7 @@ fun EditProfileScreen(
                         OutlinedTextField(
                             value = displayName,
                             onValueChange = { displayName = it },
-                            label = { Text("Display Name") },
+                            label = { Text(stringResource(R.string.display_name)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Person,
@@ -496,7 +498,7 @@ fun EditProfileScreen(
                         OutlinedTextField(
                             value = email,
                             onValueChange = { email = it },
-                            label = { Text("Email") },
+                            label = { Text(stringResource(R.string.email)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Email,
@@ -519,7 +521,7 @@ fun EditProfileScreen(
                         OutlinedTextField(
                             value = phone,
                             onValueChange = { phone = it },
-                            label = { Text("Phone (Optional)") },
+                            label = { Text(stringResource(R.string.phone_optional)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Phone,
@@ -542,7 +544,7 @@ fun EditProfileScreen(
                         OutlinedTextField(
                             value = bio,
                             onValueChange = { bio = it },
-                            label = { Text("Bio (Optional)") },
+                            label = { Text(stringResource(R.string.bio_optional)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Description,
@@ -589,7 +591,7 @@ fun EditProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Profile updated successfully!",
+                                text = stringResource(R.string.profile_updated),
                                 color = Color.White,
                                 fontWeight = FontWeight.Medium
                             )

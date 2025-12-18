@@ -19,16 +19,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.R
 
 data class WidgetItem(
-    val title: String,
-    val description: String,
+    val titleResId: Int,
+    val descriptionResId: Int,
     val imageRes: Int,
-    val gradient: Brush
+    val gradient: Brush,
+    val navigateTo: String
 )
 
 @Composable
@@ -39,6 +41,8 @@ fun WidgetCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val title = stringResource(widget.titleResId)
+    val description = stringResource(widget.descriptionResId)
     
     // Simplified animation for better performance
     val scale by animateFloatAsState(
@@ -66,7 +70,7 @@ fun WidgetCard(
             // Title and description
             Column {
                 Text(
-                    text = widget.title,
+                    text = title,
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
@@ -77,7 +81,7 @@ fun WidgetCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 
                 Text(
-                    text = widget.description,
+                    text = description,
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 12.sp
                     ),
@@ -111,54 +115,56 @@ fun WidgetsGrid(
     onWidgetClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val widgets = remember {
-        listOf(
-            WidgetItem(
-                title = "Sleep",
-                description = "Track your sleep together",
-                imageRes = R.drawable.sleep_widget,
-                gradient = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFE8D6FF),
-                        Color(0xFFF0E8FF)
-                    )
+    val widgets = listOf(
+        WidgetItem(
+            titleResId = R.string.feature_sleep,
+            descriptionResId = R.string.widget_sleep_desc,
+            imageRes = R.drawable.sleep_widget,
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFE8D6FF),
+                    Color(0xFFF0E8FF)
                 )
             ),
-            WidgetItem(
-                title = "Locket",
-                description = "Share fun moments instantly",
-                imageRes = R.drawable.locket,
-                gradient = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF5E8),
-                        Color(0xFFFFFAF0)
-                    )
+            navigateTo = "Sleep"
+        ),
+        WidgetItem(
+            titleResId = R.string.feature_locket,
+            descriptionResId = R.string.widget_locket_desc,
+            imageRes = R.drawable.locket,
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFFFF5E8),
+                    Color(0xFFFFFAF0)
                 )
             ),
-            WidgetItem(
-                title = "Missing",
-                description = "See how much you miss each other",
-                imageRes = R.drawable.missing,
-                gradient = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFE8F0),
-                        Color(0xFFFFF0F5)
-                    )
+            navigateTo = "Locket"
+        ),
+        WidgetItem(
+            titleResId = R.string.feature_missing,
+            descriptionResId = R.string.widget_missing_desc,
+            imageRes = R.drawable.missing,
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFFFE8F0),
+                    Color(0xFFFFF0F5)
                 )
             ),
-            WidgetItem(
-                title = "Location",
-                description = "Know where your love is",
-                imageRes = R.drawable.distance,
-                gradient = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFE8F5FF),
-                        Color(0xFFF0F8FF)
-                    )
+            navigateTo = "Missing"
+        ),
+        WidgetItem(
+            titleResId = R.string.feature_location,
+            descriptionResId = R.string.widget_location_desc,
+            imageRes = R.drawable.distance,
+            gradient = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFFE8F5FF),
+                    Color(0xFFF0F8FF)
                 )
-            )
+            ),
+            navigateTo = "Location"
         )
-    }
+    )
     
     Column(
         modifier = modifier
@@ -173,12 +179,12 @@ fun WidgetsGrid(
         ) {
             WidgetCard(
                 widget = widgets[0],
-                onClick = { onWidgetClick(widgets[0].title) },
+                onClick = { onWidgetClick(widgets[0].navigateTo) },
                 modifier = Modifier.weight(1f)
             )
             WidgetCard(
                 widget = widgets[1],
-                onClick = { onWidgetClick(widgets[1].title) },
+                onClick = { onWidgetClick(widgets[1].navigateTo) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -190,12 +196,12 @@ fun WidgetsGrid(
         ) {
             WidgetCard(
                 widget = widgets[2],
-                onClick = { onWidgetClick(widgets[2].title) },
+                onClick = { onWidgetClick(widgets[2].navigateTo) },
                 modifier = Modifier.weight(1f)
             )
             WidgetCard(
                 widget = widgets[3],
-                onClick = { onWidgetClick(widgets[3].title) },
+                onClick = { onWidgetClick(widgets[3].navigateTo) },
                 modifier = Modifier.weight(1f)
             )
         }

@@ -15,8 +15,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.QuestReward
 
 /**
@@ -73,7 +75,7 @@ fun RewardClaimedDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "Congratulations! 🎉",
+                    text = stringResource(R.string.congratulations),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -88,7 +90,7 @@ fun RewardClaimedDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "You received",
+                    text = stringResource(R.string.you_received),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF757575)
                 )
@@ -136,7 +138,7 @@ fun RewardClaimedDialog(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Awesome!",
+                    text = stringResource(R.string.awesome),
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.SemiBold
                     ),
@@ -204,7 +206,7 @@ fun WatchAdButton(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "Watch Ad for Coins",
+            text = stringResource(R.string.watch_ad_for_coins),
             style = MaterialTheme.typography.bodyLarge.copy(
                 fontWeight = FontWeight.SemiBold
             ),
@@ -263,7 +265,7 @@ fun BonusRewardBanner(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Daily Bonus",
+                    text = stringResource(R.string.daily_bonus),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -296,7 +298,7 @@ fun BonusRewardBanner(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "Claim",
+                        text = stringResource(R.string.claim),
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )

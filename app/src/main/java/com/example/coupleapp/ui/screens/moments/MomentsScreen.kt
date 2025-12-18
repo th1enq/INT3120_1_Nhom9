@@ -20,7 +20,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.home.BottomNavItem
@@ -104,7 +106,7 @@ fun MomentsScreen(
             label = "LoadingCrossfade"
         ) { loading ->
             if (loading) {
-                LoadingScreen(message = "Loading moments...")
+                LoadingScreen(message = stringResource(R.string.loading_moments))
             } else {
                 Box(
                     modifier = Modifier
@@ -150,7 +152,7 @@ private fun MomentsTopBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Moments",
+                    text = stringResource(R.string.moments),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2D3748)
@@ -229,6 +231,8 @@ private fun MomentsTimeline(
                                     is LocketMoment -> LocketMomentCard(moment = moment)
                                     is EventMoment -> EventMomentCard(moment = moment)
                                     is AnniversaryMoment -> AnniversaryMomentCard(moment = moment)
+                                    is GardenMoment -> GardenMomentCard(moment = moment)
+                                    is MessageMoment -> MessageMomentCard(moment = moment)
                                 }
                             }
                         }
@@ -260,14 +264,14 @@ private fun EmptyMomentsState() {
             )
             
             Text(
-                text = "No moments yet",
+                text = stringResource(R.string.no_moments),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF2D3748)
             )
             
             Text(
-                text = "Start creating beautiful memories together!",
+                text = stringResource(R.string.moments_empty_subtitle),
                 fontSize = 14.sp,
                 color = Color(0xFF718096),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center

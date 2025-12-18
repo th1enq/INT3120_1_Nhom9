@@ -25,7 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.service.LocationTrackingService
@@ -168,7 +170,7 @@ fun DistanceScreen(
     ) { isLoading ->
         if (isLoading) {
             // Use lightweight loading instead of heavy Lottie for map screen
-            LightweightLoadingScreen(message = "Loading location...")
+            LightweightLoadingScreen(message = stringResource(R.string.loading_location))
         } else {
             Box(
                 modifier = Modifier
@@ -614,14 +616,14 @@ private fun PermissionRequestOverlay(
             )
             
             Text(
-                text = "Enable Location",
+                text = stringResource(R.string.enable_location),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             
             Text(
-                text = "We need your location to show where you and your partner are on the map 💕",
+                text = stringResource(R.string.location_request_message),
                 fontSize = 14.sp,
                 color = TextSecondary,
                 textAlign = TextAlign.Center,
@@ -637,7 +639,7 @@ private fun PermissionRequestOverlay(
                 contentPadding = PaddingValues(horizontal = 32.dp, vertical = 14.dp)
             ) {
                 Text(
-                    text = "Allow Location",
+                    text = stringResource(R.string.allow_location),
                     fontWeight = FontWeight.Medium
                 )
             }

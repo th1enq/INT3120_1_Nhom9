@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.CalendarSettings
 import com.example.coupleapp.data.model.CoupleProfile
 import com.example.coupleapp.ui.theme.*
@@ -181,7 +183,7 @@ fun CalendarSettingsDialog(
                                     ) {
                                         Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = null)
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Chọn hình nền từ thư viện")
+                                        Text(stringResource(R.string.select_background_gallery))
                                     }
                                 }
                                 
@@ -298,12 +300,12 @@ fun CalendarSettingsDialog(
                             showDatePicker = false
                         }
                     ) {
-                        Text("Xác nhận", color = AccentPink)
+                        Text(stringResource(R.string.confirm), color = AccentPink)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDatePicker = false }) {
-                        Text("Hủy")
+                        Text(stringResource(R.string.cancel))
                     }
                 }
             ) {
@@ -442,7 +444,7 @@ private fun NicknameField(
                     disabledTextColor = TextPrimary
                 ),
                 singleLine = true,
-                placeholder = { Text("Biệt danh") }
+                placeholder = { Text(stringResource(R.string.nickname)) }
             )
             
             if (isEditing) {

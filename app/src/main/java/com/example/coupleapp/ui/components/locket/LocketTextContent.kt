@@ -23,11 +23,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 
 /**
  * Text content view for Locket with color picker
@@ -105,7 +107,7 @@ fun LocketTextContent(
                     ) {
                         if (textContent.isEmpty()) {
                             Text(
-                                text = "Type a message\nfor your love... 💕",
+                                text = stringResource(R.string.type_message_love),
                                 color = Color(0xFFB0B0B0),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Medium,

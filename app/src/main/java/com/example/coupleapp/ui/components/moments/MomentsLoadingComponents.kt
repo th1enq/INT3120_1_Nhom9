@@ -15,8 +15,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import kotlinx.coroutines.delay
 
 /**
@@ -49,7 +51,7 @@ fun MomentsLoadingScreen(
             
             // Loading text
             Text(
-                text = "Loading moments...",
+                text = stringResource(R.string.loading_moments),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF718096)

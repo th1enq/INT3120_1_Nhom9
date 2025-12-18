@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,7 @@ import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.viewmodel.ProfileViewModel
 import com.example.coupleapp.util.createImageLoaderWithBase64Support
+import com.example.coupleapp.util.LanguageManager
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.delay
@@ -126,14 +129,14 @@ fun ProfileScreen(
             onDismissRequest = { showLogoutDialog = false },
             title = {
                 Text(
-                    text = "Đăng xuất",
+                    text = stringResource(R.string.logout),
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2D3748)
                 )
             },
             text = {
                 Text(
-                    text = "Bạn có chắc muốn đăng xuất khỏi tài khoản?",
+                    text = stringResource(R.string.logout_confirm),
                     color = Color(0xFF718096)
                 )
             },
@@ -147,7 +150,7 @@ fun ProfileScreen(
                     }
                 ) {
                     Text(
-                        text = "Đăng xuất",
+                        text = stringResource(R.string.logout),
                         color = Color(0xFFFF6B9D),
                         fontWeight = FontWeight.SemiBold
                     )
@@ -156,7 +159,7 @@ fun ProfileScreen(
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
                     Text(
-                        text = "Hủy",
+                        text = stringResource(R.string.cancel),
                         color = Color(0xFF718096)
                     )
                 }
@@ -295,7 +298,7 @@ fun ProfileScreen(
                         enter = fadeIn(animationSpec = tween(600, delayMillis = 400))
                     ) {
                         Text(
-                            text = "Couple App v1.0.0",
+                            text = stringResource(R.string.app_version),
                             fontSize = 12.sp,
                             color = Color(0xFFB0B0B0),
                             modifier = Modifier.fillMaxWidth(),
@@ -439,7 +442,7 @@ private fun ProfileHeader(
                 color = Color(0xFFFF6B9D).copy(alpha = 0.1f)
             ) {
                 Text(
-                    text = "💕 $daysTogethe days together",
+                    text = "💕 " + stringResource(R.string.days_together, daysTogethe),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color(0xFFFF6B9D),
@@ -455,7 +458,7 @@ private fun ProfileHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Link code:",
+                    text = stringResource(R.string.link_code) + ":",
                     fontSize = 12.sp,
                     color = Color(0xFF718096)
                 )
@@ -500,7 +503,7 @@ private fun AccountSettingsSection(
             .padding(horizontal = 24.dp)
     ) {
         Text(
-            text = "Account",
+            text = stringResource(R.string.account),
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF2D3748)
@@ -516,19 +519,19 @@ private fun AccountSettingsSection(
             Column {
                 SettingsItem(
                     icon = Icons.Filled.Person,
-                    title = "Edit Profile",
+                    title = stringResource(R.string.edit_profile),
                     onClick = onEditProfileClick
                 )
                 HorizontalDivider(color = Color(0xFFF0F0F0))
                 SettingsItem(
                     icon = Icons.Filled.Lock,
-                    title = "Change Password",
+                    title = stringResource(R.string.change_password),
                     onClick = onChangePasswordClick
                 )
                 HorizontalDivider(color = Color(0xFFF0F0F0))
                 SettingsItem(
                     icon = Icons.Filled.Link,
-                    title = "Manage Link",
+                    title = stringResource(R.string.manage_link),
                     onClick = onManageLinkClick
                 )
             }
@@ -543,13 +546,88 @@ private fun AppSettingsSection(
     onHelpClick: () -> Unit,
     onAboutClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var currentLanguage by remember { mutableStateOf(LanguageManager.getCurrentLanguage(context)) }
+    
+    // Language selection dialog
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.select_language),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2D3748)
+                )
+            },
+            text = {
+                Column {
+                    LanguageManager.Language.entries.forEach { language ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (currentLanguage != language) {
+                                        LanguageManager.setLanguage(context, language)
+                                        currentLanguage = language
+                                        showLanguageDialog = false
+                                        // Recreate activity to apply language change
+                                        (context as? android.app.Activity)?.recreate()
+                                    } else {
+                                        showLanguageDialog = false
+                                    }
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = currentLanguage == language,
+                                onClick = {
+                                    if (currentLanguage != language) {
+                                        LanguageManager.setLanguage(context, language)
+                                        currentLanguage = language
+                                        showLanguageDialog = false
+                                        // Recreate activity to apply language change
+                                        (context as? android.app.Activity)?.recreate()
+                                    } else {
+                                        showLanguageDialog = false
+                                    }
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFFFF6B9D)
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = language.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color(0xFF2D3748)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text(
+                        text = stringResource(R.string.close),
+                        color = Color(0xFFFF6B9D)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
     ) {
         Text(
-            text = "App Settings",
+            text = stringResource(R.string.app_settings),
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF2D3748)
@@ -565,26 +643,26 @@ private fun AppSettingsSection(
             Column {
                 SettingsItem(
                     icon = Icons.Filled.Notifications,
-                    title = "Notifications",
+                    title = stringResource(R.string.notifications),
                     onClick = onNotificationsClick
                 )
                 HorizontalDivider(color = Color(0xFFF0F0F0))
                 SettingsItem(
                     icon = Icons.Filled.Language,
-                    title = "Language",
-                    subtitle = "English",
-                    onClick = onLanguageClick
+                    title = stringResource(R.string.language),
+                    subtitle = currentLanguage.displayName,
+                    onClick = { showLanguageDialog = true }
                 )
                 HorizontalDivider(color = Color(0xFFF0F0F0))
                 SettingsItem(
                     icon = Icons.Filled.Help,
-                    title = "Help & Support",
+                    title = stringResource(R.string.help_support),
                     onClick = onHelpClick
                 )
                 HorizontalDivider(color = Color(0xFFF0F0F0))
                 SettingsItem(
                     icon = Icons.Filled.Info,
-                    title = "About App",
+                    title = stringResource(R.string.about_app),
                     onClick = onAboutClick
                 )
             }
@@ -699,7 +777,7 @@ private fun LogoutButton(onLogoutClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Logout",
+                text = stringResource(R.string.logout),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFFE53935)

@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +58,7 @@ fun LocketDrawingContent(
             if (hasDrawing) {
                 // Show saved drawing
                 Text(
-                    text = "Your drawing",
+                    text = stringResource(R.string.your_drawing),
                     color = Color(0xFF2D2D2D),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
@@ -79,7 +80,7 @@ fun LocketDrawingContent(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Draw something\nfor your love! 🎨",
+                        text = stringResource(R.string.draw_for_love),
                         color = Color(0xFF757575),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,

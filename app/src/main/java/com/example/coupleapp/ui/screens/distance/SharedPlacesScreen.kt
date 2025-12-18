@@ -30,7 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -185,7 +187,7 @@ private fun SharedPlacesTopBar(
                 
                 Column {
                     Text(
-                        text = "Our Journey",
+                        text = stringResource(R.string.our_journey),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
@@ -691,7 +693,7 @@ private fun TimelinePlaceCard(
                         Text(text = "📸", fontSize = 16.sp)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Tap to view memories",
+                            text = stringResource(R.string.tap_to_view_memories),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = SoftPink
@@ -772,14 +774,14 @@ private fun EmptySharedPlacesState(
             }
             
             Text(
-                text = "No Places Together Yet",
+                text = stringResource(R.string.no_places_yet),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             
             Text(
-                text = "When you both visit a place together\nfor 15+ minutes, it will appear here!",
+                text = stringResource(R.string.places_appear_message),
                 fontSize = 14.sp,
                 color = TextSecondary,
                 textAlign = TextAlign.Center,
@@ -799,7 +801,7 @@ private fun EmptySharedPlacesState(
                 ) {
                     Text(text = "🌸", fontSize = 18.sp)
                     Text(
-                        text = "Go explore together!",
+                        text = stringResource(R.string.go_explore),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = SoftPink

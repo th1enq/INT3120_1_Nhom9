@@ -30,12 +30,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.QAQuestion
 import com.example.coupleapp.data.model.QAStatus
 import com.example.coupleapp.ui.theme.*
@@ -118,7 +120,7 @@ private fun QAHeader(onAddClick: () -> Unit) {
                 color = TextPrimary
             )
             Text(
-                text = "Get to know each other better",
+                text = stringResource(R.string.get_to_know),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -165,7 +167,7 @@ private fun AddQuestionButton(onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "Questions",
+                text = stringResource(R.string.questions),
                 style = MaterialTheme.typography.labelMedium,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold
@@ -197,14 +199,14 @@ private fun EmptyQAContent() {
             Spacer(modifier = Modifier.height(12.dp))
             
             Text(
-                text = "No questions yet",
+                text = stringResource(R.string.no_questions_yet),
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 textAlign = TextAlign.Center
             )
             
             Text(
-                text = "Create questions to get to know each other better!",
+                text = stringResource(R.string.create_questions_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextLight,
                 textAlign = TextAlign.Center
@@ -521,7 +523,7 @@ private fun QAQuestionCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Answer",
+                                text = stringResource(R.string.answer),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -566,7 +568,7 @@ private fun QAQuestionCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Reject",
+                                    text = stringResource(R.string.reject),
                                     style = MaterialTheme.typography.labelMedium
                                 )
                             }
@@ -587,7 +589,7 @@ private fun QAQuestionCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Accept",
+                                    text = stringResource(R.string.accept),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -664,7 +666,7 @@ private fun AnswerInputField(
                     Box(modifier = Modifier.padding(8.dp)) {
                         if (value.isEmpty()) {
                             Text(
-                                text = "Enter your answer...",
+                                text = stringResource(R.string.enter_your_answer),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextLight
                             )
@@ -718,7 +720,7 @@ private fun RejectCommentField(
     
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Enter the correct answer:",
+            text = stringResource(R.string.enter_correct_answer),
             style = MaterialTheme.typography.labelSmall,
             color = TextSecondary,
             modifier = Modifier.padding(bottom = 4.dp)
@@ -750,7 +752,7 @@ private fun RejectCommentField(
                         Box(modifier = Modifier.padding(8.dp)) {
                             if (value.isEmpty()) {
                                 Text(
-                                    text = "The correct answer is...",
+                                    text = stringResource(R.string.correct_answer_hint),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TextLight
                                 )

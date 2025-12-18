@@ -26,7 +26,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.LocketPost
 import com.example.coupleapp.data.model.LocketType
 import com.example.coupleapp.ui.components.LoadingScreen
@@ -113,7 +115,7 @@ fun LocketHistoryScreen(
             modifier = modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen(message = "Loading history...")
+                LoadingScreen(message = stringResource(R.string.loading_history))
             } else {
                 Box(
                     modifier = Modifier
@@ -257,7 +259,7 @@ private fun HistoryTopBar(
             )
             
             Text(
-                text = "Message History",
+                text = stringResource(R.string.message_history),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF757575)
             )
@@ -646,7 +648,7 @@ fun LocketPostDetailDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text(
-                    text = "Đóng",
+                    text = stringResource(R.string.close),
                     color = Color(0xFF4CAF50),
                     fontWeight = FontWeight.SemiBold
                 )

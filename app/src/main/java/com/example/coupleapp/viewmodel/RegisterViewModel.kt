@@ -27,15 +27,20 @@ class RegisterViewModel : ViewModel() {
     
     /**
      * Update date of birth
+     * Stores only digits (DDMMYYYY), formatting is done by DateTextField VisualTransformation
      */
     fun updateDateOfBirth(date: String) {
-        // Format: DD/MM/YYYY
-        val cleaned = date.filter { char -> char.isDigit() }
-        val formatted = when {
-            cleaned.length <= 2 -> cleaned
-            cleaned.length <= 4 -> "${cleaned.substring(0, 2)}/${cleaned.substring(2)}"
-            else -> "${cleaned.substring(0, 2)}/${cleaned.substring(2, 4)}/${cleaned.substring(4, minOf(8, cleaned.length))}"
-        }
+        // Store only digits (max 8 for DDMMYYYY)
+        val digits = date.filter { it.isDigit() }.take(8)
+        _uiState.update { it.copy(dateOfBirth = digits, dateOfBirthError = null) }
+    }
+    
+    /**
+     * Set date of birth from DatePicker (already formatted)
+     */
+    fun setDateOfBirth(day: Int, month: Int, year: Int) {
+        // Store as digits only: DDMMYYYY
+        val formatted = String.format("%02d%02d%04d", day, month, year)
         _uiState.update { it.copy(dateOfBirth = formatted, dateOfBirthError = null) }
     }
     
@@ -79,11 +84,21 @@ class RegisterViewModel : ViewModel() {
         }
         if (nameError != null) isValid = false
         
-        // Validate date of birth
+        // Validate date of birth (now stored as 8 digits: DDMMYYYY)
         val dateError = when {
             state.dateOfBirth.isEmpty() -> "Date of birth is required"
-            !state.dateOfBirth.matches(Regex("^\\d{2}/\\d{2}/\\d{4}$")) -> "Invalid date format (DD/MM/YYYY)"
-            else -> null
+            state.dateOfBirth.length != 8 -> "Invalid date format (DD/MM/YYYY)"
+            !state.dateOfBirth.matches(Regex("^\\d{8}$")) -> "Invalid date format (DD/MM/YYYY)"
+            else -> {
+                // Validate day and month values
+                val day = state.dateOfBirth.substring(0, 2).toIntOrNull() ?: 0
+                val month = state.dateOfBirth.substring(2, 4).toIntOrNull() ?: 0
+                when {
+                    day < 1 || day > 31 -> "Invalid day (01-31)"
+                    month < 1 || month > 12 -> "Invalid month (01-12)"
+                    else -> null
+                }
+            }
         }
         if (dateError != null) isValid = false
         

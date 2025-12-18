@@ -161,9 +161,25 @@ class SleepTrackerViewModelFirebase(
                 // Load sleep history
                 val historyResult = sleepRepository.getSleepHistory(userId, 7)
                 val firebaseHistory = historyResult.getOrElse { emptyList() }
-                val sleepHistory = firebaseHistory.map { sleepRepository.convertToSleepRecord(it) }
                 
-                Log.d(TAG, "loadUserData: Found ${sleepHistory.size} history records")
+                // Deduplicate by date - keep only the most recent record for each date
+                val deduplicatedHistory = firebaseHistory
+                    .groupBy { record ->
+                        record.date?.toDate()?.toInstant()
+                            ?.atZone(java.time.ZoneId.systemDefault())
+                            ?.toLocalDate()
+                    }
+                    .mapValues { (_, records) ->
+                        // Keep the most recent record (by createdAt timestamp)
+                        records.maxByOrNull { it.createdAt ?: com.google.firebase.Timestamp.now() }
+                    }
+                    .values
+                    .filterNotNull()
+                    .sortedByDescending { it.date }
+                
+                val sleepHistory = deduplicatedHistory.map { sleepRepository.convertToSleepRecord(it) }
+                
+                Log.d(TAG, "loadUserData: Found ${sleepHistory.size} history records (after deduplication)")
                 
                 // If no today's record, use most recent record from history for display
                 if (sleepRecord == null && sleepHistory.isNotEmpty()) {

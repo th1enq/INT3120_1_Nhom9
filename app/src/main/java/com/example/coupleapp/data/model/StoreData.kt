@@ -28,7 +28,9 @@ enum class PurchaseType {
 data class StoreItem(
     val id: String,
     val name: String,
+    val vietnameseName: String = "",
     val description: String,
+    val vietnameseDescription: String = "",
     @DrawableRes val iconRes: Int,
     val type: StoreItemType,
     val purchaseType: PurchaseType,
@@ -38,7 +40,21 @@ data class StoreItem(
     val durationHours: Int? = null,  // For fertilizers
     val isAvailable: Boolean = true,
     val cooldownDays: Int? = null    // For free items
-)
+) {
+    /**
+     * Get localized name based on language
+     */
+    fun getLocalizedName(isVietnamese: Boolean): String {
+        return if (isVietnamese && vietnameseName.isNotBlank()) vietnameseName else name
+    }
+    
+    /**
+     * Get localized description based on language
+     */
+    fun getLocalizedDescription(isVietnamese: Boolean): String {
+        return if (isVietnamese && vietnameseDescription.isNotBlank()) vietnameseDescription else description
+    }
+}
 
 /**
  * Store category for grouping items

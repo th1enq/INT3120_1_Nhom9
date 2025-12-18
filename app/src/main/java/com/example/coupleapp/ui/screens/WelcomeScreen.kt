@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.GradientButton
 import com.example.coupleapp.ui.components.OutlinedCustomButton
 import kotlinx.coroutines.delay
@@ -81,7 +83,7 @@ fun WelcomeScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Text(
-                        text = "Widgetable",
+                        text = stringResource(R.string.app_title),
                         style = MaterialTheme.typography.displaySmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 42.sp
@@ -92,7 +94,7 @@ fun WelcomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "Connect hearts, closer every day",
+                        text = stringResource(R.string.app_tagline),
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF757575),
                         textAlign = TextAlign.Center,
@@ -113,7 +115,7 @@ fun WelcomeScreen(
                 ) {
                     // Google Login Button
                     OutlinedCustomButton(
-                        text = "Continue with Google",
+                        text = stringResource(R.string.continue_with_google),
                         onClick = onGoogleLoginClick,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -142,7 +144,7 @@ fun WelcomeScreen(
                     
                     // Phone Login Button
                     GradientButton(
-                        text = "Login with phone number",
+                        text = stringResource(R.string.login_with_phone),
                         onClick = onPhoneLoginClick,
                         modifier = Modifier.fillMaxWidth(),
                         gradient = Brush.horizontalGradient(
@@ -161,12 +163,12 @@ fun WelcomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Don't have an account? ",
+                            text = stringResource(R.string.no_account_signup) + " ",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF757575)
                         )
                         Text(
-                            text = "Sign up now",
+                            text = stringResource(R.string.sign_up_now),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium
                             ),

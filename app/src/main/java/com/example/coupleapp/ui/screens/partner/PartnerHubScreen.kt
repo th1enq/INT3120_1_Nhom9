@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
@@ -38,6 +40,7 @@ import com.example.coupleapp.util.createImageLoaderWithBase64Support
 import com.example.coupleapp.viewmodel.PartnerHubViewModel
 import com.example.coupleapp.viewmodel.PartnerHubViewModelFirebase
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 
 @Composable
@@ -206,7 +209,7 @@ private fun PendingRequestsDialog(
                     modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "Lời mời kết nối",
+                    text = stringResource(R.string.partner_link_requests),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -229,7 +232,7 @@ private fun PendingRequestsDialog(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Không có lời mời nào",
+                        text = stringResource(R.string.partner_no_requests),
                         color = TextSecondary,
                         textAlign = TextAlign.Center
                     )
@@ -252,7 +255,7 @@ private fun PendingRequestsDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text(
-                    text = "Đóng",
+                    text = stringResource(R.string.close),
                     color = Color(0xFF4CAF50),
                     fontWeight = FontWeight.SemiBold
                 )
@@ -311,7 +314,7 @@ private fun PendingRequestItem(
                         color = TextPrimary
                     )
                     Text(
-                        text = "Muốn kết nối với bạn",
+                        text = stringResource(R.string.partner_wants_to_connect),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -332,7 +335,7 @@ private fun PendingRequestItem(
                         contentColor = TextSecondary
                     )
                 ) {
-                    Text("Từ chối", fontSize = 13.sp)
+                    Text(stringResource(R.string.decline), fontSize = 13.sp)
                 }
                 
                 Button(
@@ -343,7 +346,7 @@ private fun PendingRequestItem(
                         containerColor = Color(0xFF4CAF50)
                     )
                 ) {
-                    Text("Chấp nhận", fontSize = 13.sp)
+                    Text(stringResource(R.string.accept), fontSize = 13.sp)
                 }
             }
         }
@@ -365,7 +368,7 @@ private fun PartnerHubLoading() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Đang tải...",
+                text = stringResource(R.string.loading),
                 color = TextSecondary,
                 fontSize = 14.sp
             )
@@ -453,7 +456,7 @@ private fun PendingRequestsScreenFirebase(
                             onClick = { onReject(request) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Từ chối")
+                            Text(stringResource(R.string.decline))
                         }
                         
                         Button(
@@ -463,7 +466,7 @@ private fun PendingRequestsScreenFirebase(
                                 containerColor = Color(0xFFFF6B9D)
                             )
                         ) {
-                            Text("Chấp nhận")
+                            Text(stringResource(R.string.accept))
                         }
                     }
                 }
@@ -629,14 +632,14 @@ private fun NotConnectedContentGreen(
         Spacer(modifier = Modifier.height(20.dp))
         
         Text(
-            text = "Kết nối với người ấy",
+            text = stringResource(R.string.connect_partner),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
         
         Text(
-            text = "Chia sẻ mã của bạn hoặc nhập mã của người ấy",
+            text = stringResource(R.string.partner_connect_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = TextSecondary,
             textAlign = TextAlign.Center,
@@ -656,7 +659,7 @@ private fun NotConnectedContentGreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Mã của bạn",
+                    text = stringResource(R.string.your_code),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF4CAF50)
@@ -702,7 +705,7 @@ private fun NotConnectedContentGreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Đã sao chép!",
+                            text = stringResource(R.string.copied),
                             color = Color(0xFF4CAF50),
                             fontSize = 12.sp
                         )
@@ -725,7 +728,7 @@ private fun NotConnectedContentGreen(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sao chép mã")
+                    Text(stringResource(R.string.copy_code))
                 }
             }
         }
@@ -739,7 +742,7 @@ private fun NotConnectedContentGreen(
         ) {
             HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE0E0E0))
             Text(
-                text = "hoặc",
+                text = stringResource(R.string.or_divider),
                 modifier = Modifier.padding(horizontal = 16.dp),
                 color = TextSecondary,
                 fontSize = 14.sp
@@ -767,7 +770,7 @@ private fun NotConnectedContentGreen(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = "Nhập mã người ấy",
+                text = stringResource(R.string.enter_partner_code),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -875,7 +878,7 @@ private fun LinkedPartnerScreenFirebase(
             } else {
                 android.util.Log.e("LinkedPartnerScreen", "[PARTNER] ❌ Partner user is null")
                 Text(
-                    text = "Partner data not available",
+                    text = stringResource(R.string.partner_data_unavailable),
                     color = Color.Gray,
                     modifier = Modifier.padding(16.dp)
                 )
@@ -1189,7 +1192,7 @@ private fun PendingRequestSentContent(partnerName: String) {
         Spacer(modifier = Modifier.height(32.dp))
         
         Text(
-            text = "Waiting for Response",
+            text = stringResource(R.string.partner_waiting_response),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -1198,7 +1201,7 @@ private fun PendingRequestSentContent(partnerName: String) {
         Spacer(modifier = Modifier.height(12.dp))
         
         Text(
-            text = "Link request sent to\n$partnerName",
+            text = stringResource(R.string.link_request_sent_to, partnerName),
             style = MaterialTheme.typography.bodyLarge,
             color = TextSecondary,
             textAlign = TextAlign.Center
@@ -1244,7 +1247,7 @@ private fun PendingRequestReceivedContent(
         Spacer(modifier = Modifier.height(24.dp))
         
         Text(
-            text = "Yêu cầu liên kết",
+            text = stringResource(R.string.partner_link_requests),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -1292,7 +1295,7 @@ private fun PendingRequestReceivedContent(
                 )
             ) {
                 Text(
-                    text = "Reject",
+                    text = stringResource(R.string.decline),
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -1308,7 +1311,7 @@ private fun PendingRequestReceivedContent(
                 )
             ) {
                 Text(
-                    text = "Accept",
+                    text = stringResource(R.string.accept),
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -1324,6 +1327,9 @@ private fun ShortcutItemSimple(
     shortcut: PartnerShortcut,
     onClick: () -> Unit
 ) {
+    val isVietnamese = Locale.getDefault().language == "vi"
+    val localizedName = shortcut.getLocalizedName(isVietnamese)
+    
     Column(
         modifier = Modifier
             .size(70.dp)
@@ -1346,7 +1352,7 @@ private fun ShortcutItemSimple(
                 "store" -> Icons.Default.Store
                 else -> Icons.Default.Star
             },
-            contentDescription = shortcut.name,
+            contentDescription = localizedName,
             tint = Color(shortcut.iconColor),
             modifier = Modifier.size(28.dp)
         )
@@ -1354,7 +1360,7 @@ private fun ShortcutItemSimple(
         Spacer(modifier = Modifier.height(4.dp))
         
         Text(
-            text = shortcut.name,
+            text = localizedName,
             style = MaterialTheme.typography.labelSmall,
             color = Color(shortcut.iconColor),
             fontWeight = FontWeight.Medium,

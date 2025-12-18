@@ -21,10 +21,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.EmojiCategory
 import com.example.coupleapp.data.model.EmojiItem
 
@@ -80,7 +82,7 @@ fun LocketEmojiContent(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Choose an emoji",
+                        text = stringResource(R.string.choose_emoji_title),
                         color = Color.White.copy(alpha = 0.8f),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
@@ -178,7 +180,7 @@ fun EmojiPickerContent(
             }
             
             Text(
-                text = "Choose an Emoji",
+                text = stringResource(R.string.choose_emoji_title),
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold

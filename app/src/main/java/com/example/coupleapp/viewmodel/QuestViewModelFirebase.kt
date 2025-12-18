@@ -77,14 +77,39 @@ class QuestViewModelFirebase : ViewModel() {
                 val seed = todayString.replace("-", "").toLong()
 
                 // Select 5 random quests from pool with saved progress
-                val dailyQuests = selectDailyQuestsWithProgress(seed, questProgress)
+                var dailyQuests = selectDailyQuestsWithProgress(seed, questProgress)
                 Log.d(TAG, "Generated ${dailyQuests.size} daily quests")
                 
-                // Auto-save login quest progress if it was auto-completed
+                // Check if daily reward can be claimed (prevent exploit)
+                val canClaimToday = canClaimDailyReward(userId)
+                Log.d(TAG, "[DAILY CHECK] Can claim daily reward today: $canClaimToday")
+                
+                // Only auto-complete login quest if not claimed today
                 val loginQuest = dailyQuests.find { it.type == QuestType.DAILY_LOGIN }
-                if (loginQuest != null && loginQuest.status == QuestStatus.COMPLETED && questProgress[loginQuest.id] == null) {
-                    Log.d(TAG, "Auto-completing and saving login quest")
-                    saveQuestProgressToFirebase(loginQuest)
+                if (loginQuest != null) {
+                    if (canClaimToday) {
+                        // Can claim today - mark as completed if not already saved
+                        if (questProgress[loginQuest.id] == null || questProgress[loginQuest.id]?.status != QuestStatus.CLAIMED) {
+                            Log.d(TAG, "[DAILY] Login quest: marking as COMPLETED (not claimed yet)")
+                            dailyQuests = dailyQuests.map { quest ->
+                                if (quest.type == QuestType.DAILY_LOGIN) {
+                                    quest.copy(currentProgress = 1, status = QuestStatus.COMPLETED)
+                                } else {
+                                    quest
+                                }
+                            }
+                        }
+                    } else {
+                        // Already claimed today - mark as CLAIMED
+                        Log.d(TAG, "[DAILY] Login quest: already claimed today, marking as CLAIMED")
+                        dailyQuests = dailyQuests.map { quest ->
+                            if (quest.type == QuestType.DAILY_LOGIN) {
+                                quest.copy(currentProgress = 1, status = QuestStatus.CLAIMED)
+                            } else {
+                                quest
+                            }
+                        }
+                    }
                 }
 
                 // Check partner link status
@@ -175,6 +200,12 @@ class QuestViewModelFirebase : ViewModel() {
                     } else {
                         Log.d(TAG, "[QUEST] Wallet loaded from user_wallets/$userId")
                         Log.d(TAG, "[QUEST] Wallet has ${wallet.coins} coins")
+                        
+                        // Migrate old wallets: add streak fields if missing
+                        if (wallet.lastQuestClaimDate == null && wallet.currentStreak == 0 && wallet.longestStreak == 0) {
+                            Log.d(TAG, "[QUEST] Old wallet detected, will initialize streak fields on first claim")
+                        }
+                        
                         wallet.coins
                     }
                 },
@@ -202,6 +233,9 @@ class QuestViewModelFirebase : ViewModel() {
                 coins = 1000,
                 freeCoins = 0,
                 lastFreeGiftDate = null,
+                lastQuestClaimDate = null,
+                currentStreak = 0,
+                longestStreak = 0,
                 updatedAt = Date()
             )
             
@@ -308,12 +342,197 @@ class QuestViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Load current streak from Firebase
+     * Load current streak from Firebase wallet
+     * Also updates streak based on last claim date
      */
     private suspend fun loadStreakFromFirebase(userId: String): Int {
-        // TODO: Implement streak tracking in Firebase
-        // For now, return default value
-        return 3
+        return try {
+            val result = firestoreRepository.getDocument(
+                collection = "user_wallets",
+                documentId = userId,
+                clazz = FirebaseUserWallet::class.java
+            )
+
+            result.fold(
+                onSuccess = { wallet ->
+                    if (wallet == null) {
+                        Log.d(TAG, "[STREAK] No wallet found, returning 0")
+                        return@fold 0
+                    }
+                    
+                    val todayString = dateFormat.format(Date())
+                    val lastClaimDate = wallet.lastQuestClaimDate
+                    val currentStreak = wallet.getCurrentStreakSafe()  // Use helper for null-safe access
+                    
+                    Log.d(TAG, "[STREAK] Today: $todayString, LastClaim: $lastClaimDate, CurrentStreak: $currentStreak")
+                    
+                    if (lastClaimDate == null) {
+                        // First time, start at 0
+                        return@fold 0
+                    }
+                    
+                    // Check if streak should be reset (missed a day)
+                    try {
+                        val lastDate = java.time.LocalDate.parse(lastClaimDate, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                        val today = java.time.LocalDate.now()
+                        val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(lastDate, today)
+                        
+                        Log.d(TAG, "[STREAK] Days since last claim: $daysDiff")
+                        
+                        when {
+                            daysDiff == 0L -> {
+                                // Same day - return current streak
+                                currentStreak
+                            }
+                            daysDiff == 1L -> {
+                                // Consecutive day - streak is valid
+                                currentStreak
+                            }
+                            else -> {
+                                // Missed days - reset streak
+                                Log.d(TAG, "[STREAK] Streak reset due to missed days")
+                                0
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[STREAK] Error parsing date", e)
+                        0
+                    }
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "[STREAK] Error loading wallet: ${e.message}")
+                    0
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "[STREAK] Exception loading streak", e)
+            0
+        }
+    }
+
+    /**
+     * Update streak when claiming daily reward
+     * Returns the new streak value and whether this is a new day claim
+     */
+    private suspend fun updateStreakOnClaim(userId: String): Pair<Int, Boolean> {
+        return try {
+            val result = firestoreRepository.getDocument(
+                collection = "user_wallets",
+                documentId = userId,
+                clazz = FirebaseUserWallet::class.java
+            )
+
+            result.fold(
+                onSuccess = { wallet ->
+                    if (wallet == null) {
+                        return@fold Pair(1, true) // First claim
+                    }
+                    
+                    val todayString = dateFormat.format(Date())
+                    val lastClaimDate = wallet.lastQuestClaimDate
+                    
+                    // Check if already claimed today
+                    if (lastClaimDate == todayString) {
+                        Log.d(TAG, "[STREAK] Already claimed today, no streak update")
+                        return@fold Pair(wallet.getCurrentStreakSafe(), false)
+                    }
+                    
+                    var newStreak = 1 // Default for first claim or reset
+                    
+                    if (lastClaimDate != null) {
+                        try {
+                            val lastDate = java.time.LocalDate.parse(lastClaimDate, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                            val today = java.time.LocalDate.now()
+                            val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(lastDate, today)
+                            
+                            newStreak = if (daysDiff == 1L) {
+                                // Consecutive day - increment streak
+                                wallet.getCurrentStreakSafe() + 1  // Use helper
+                            } else {
+                                // Missed days - reset to 1
+                                1
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "[STREAK] Error calculating streak", e)
+                        }
+                    }
+                    
+                    val newLongestStreak = maxOf(wallet.getLongestStreakSafe(), newStreak)  // Use helper
+                    
+                    // Update wallet with new streak
+                    val updates = mapOf(
+                        "lastQuestClaimDate" to todayString,
+                        "currentStreak" to newStreak,
+                        "longestStreak" to newLongestStreak,
+                        "updatedAt" to com.google.firebase.Timestamp.now()
+                    )
+                    
+                    firestoreRepository.updateDocument(
+                        collection = "user_wallets",
+                        documentId = userId,
+                        updates = updates
+                    )
+                    
+                    Log.d(TAG, "[STREAK] Updated streak to $newStreak (longest: $newLongestStreak)")
+                    
+                    Pair(newStreak, true)
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "[STREAK] Error: ${e.message}")
+                    Pair(1, true)
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "[STREAK] Exception", e)
+            Pair(1, true)
+        }
+    }
+
+    /**
+     * Calculate streak multiplier for reward
+     * Higher streak = higher multiplier
+     */
+    private fun calculateStreakMultiplier(streak: Int): Float {
+        return when {
+            streak >= 30 -> 2.0f  // 30+ days: 2x
+            streak >= 14 -> 1.5f  // 14+ days: 1.5x
+            streak >= 7 -> 1.3f   // 7+ days: 1.3x
+            streak >= 3 -> 1.1f   // 3+ days: 1.1x
+            else -> 1.0f          // Default: 1x
+        }
+    }
+
+    /**
+     * Check if user can claim daily reward (haven't claimed today)
+     */
+    private suspend fun canClaimDailyReward(userId: String): Boolean {
+        return try {
+            val result = firestoreRepository.getDocument(
+                collection = "user_wallets",
+                documentId = userId,
+                clazz = FirebaseUserWallet::class.java
+            )
+
+            result.fold(
+                onSuccess = { wallet ->
+                    if (wallet == null) return@fold true
+                    
+                    val todayString = dateFormat.format(Date())
+                    // Null-safe check: if lastQuestClaimDate is null (old wallet), allow claim
+                    val canClaim = wallet.lastQuestClaimDate != todayString
+                    
+                    Log.d(TAG, "[DAILY] Today: $todayString, LastClaim: ${wallet.lastQuestClaimDate ?: "null (first time)"}, CanClaim: $canClaim")
+                    canClaim
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "[DAILY] Error: ${e.message}")
+                    true
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "[DAILY] Exception", e)
+            true
+        }
     }
 
     /**
@@ -355,6 +574,7 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Select daily quests from pool with user progress
+     * NOTE: Login quest is NOT auto-completed here anymore - it's handled after checking claim status
      */
     private fun selectDailyQuestsWithProgress(seed: Long, savedProgress: Map<String, SavedQuestProgress>): List<Quest> {
         val selectedQuests = QuestPool.selectDailyQuests(count = 5, seed = seed)
@@ -367,12 +587,8 @@ class QuestViewModelFirebase : ViewModel() {
                     status = saved.status
                 )
             } else {
-                // Auto-complete login quest
-                if (quest.type == QuestType.DAILY_LOGIN) {
-                    quest.copy(currentProgress = 1, status = QuestStatus.COMPLETED)
-                } else {
-                    quest
-                }
+                // DON'T auto-complete login quest here - will be handled after claim check
+                quest
             }
         }
     }
@@ -439,6 +655,7 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Claim reward for completed quest and update Firebase wallet
+     * Applies streak multiplier to daily quests
      */
     fun claimReward(quest: Quest) {
         if (quest.status != QuestStatus.COMPLETED) return
@@ -474,37 +691,59 @@ class QuestViewModelFirebase : ViewModel() {
                 return@launch
             }
 
-            // Regular quest reward
+            // For daily login quest, update streak and apply multiplier
+            val (newStreak, isNewDayClaim) = if (quest.type == QuestType.DAILY_LOGIN) {
+                updateStreakOnClaim(userId)
+            } else {
+                Pair(_uiState.value.currentStreak, true)
+            }
+            
+            // Calculate reward with streak multiplier
+            val multiplier = calculateStreakMultiplier(newStreak)
+            val baseReward = quest.reward.coins
+            val finalReward = (baseReward * multiplier).toInt()
+            
+            Log.d(TAG, "[REWARD] Base: $baseReward, Streak: $newStreak, Multiplier: $multiplier, Final: $finalReward")
+
+            // Regular quest reward - prepare updated quest first
+            val claimedQuest = quest.copy(status = QuestStatus.CLAIMED)
+            
+            // IMPORTANT: Save quest progress to Firebase FIRST before updating UI
+            // This prevents the exploit where user can claim again if they navigate away
+            saveQuestProgressToFirebase(claimedQuest)
+            
             val updatedQuests = _uiState.value.quests.map {
                 if (it.id == quest.id) {
-                    it.copy(status = QuestStatus.CLAIMED)
+                    claimedQuest
                 } else {
                     it
                 }
             }
 
-            val success = addCoinsToWallet(userId, quest.reward.coins)
+            val success = addCoinsToWallet(userId, finalReward)
             if (success) {
-                val newCoins = _uiState.value.userCoins + quest.reward.coins
+                val newCoins = _uiState.value.userCoins + finalReward
                 val newSummary = calculateDailySummary(updatedQuests)
 
                 _uiState.update {
                     it.copy(
                         quests = updatedQuests,
                         userCoins = newCoins,
+                        currentStreak = newStreak,
                         dailySummary = newSummary,
                         showRewardDialog = true,
-                        claimedReward = quest.reward
+                        claimedReward = if (multiplier > 1.0f) {
+                            quest.reward.copy(
+                                coins = finalReward,
+                                bonusItem = "Chuỗi ${newStreak} ngày! (x${String.format("%.1f", multiplier)})"
+                            )
+                        } else {
+                            quest.reward.copy(coins = finalReward)
+                        }
                     )
                 }
 
-                // Save quest progress to Firebase
-                val claimedQuest = updatedQuests.find { it.id == quest.id }
-                if (claimedQuest != null) {
-                    saveQuestProgressToFirebase(claimedQuest)
-                }
-
-                Log.d(TAG, "Quest reward claimed successfully, new balance: $newCoins")
+                Log.d(TAG, "Quest reward claimed successfully, new balance: $newCoins, streak: $newStreak")
             }
         }
     }
@@ -567,6 +806,7 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Claim all completed rewards at once
+     * Applies streak multiplier to total rewards
      */
     fun claimAllRewards() {
         viewModelScope.launch {
@@ -582,20 +822,38 @@ class QuestViewModelFirebase : ViewModel() {
                 return@launch
             }
 
-            val totalCoins = completedQuests.sumOf { it.reward.coins }
-            Log.d(TAG, "Claiming all rewards: ${completedQuests.size} quests, $totalCoins coins")
+            // Check if any quest is login quest to update streak
+            val hasLoginQuest = completedQuests.any { it.type == QuestType.DAILY_LOGIN }
+            val (newStreak, _) = if (hasLoginQuest) {
+                updateStreakOnClaim(userId)
+            } else {
+                Pair(_uiState.value.currentStreak, false)
+            }
+            
+            // Calculate total with streak multiplier
+            val multiplier = calculateStreakMultiplier(newStreak)
+            val baseCoins = completedQuests.sumOf { it.reward.coins }
+            val totalCoins = (baseCoins * multiplier).toInt()
+            
+            Log.d(TAG, "[CLAIM ALL] Base: $baseCoins, Streak: $newStreak, Multiplier: $multiplier, Total: $totalCoins")
 
             val success = addCoinsToWallet(userId, totalCoins)
             if (success) {
+                // IMPORTANT: Save quest progress to Firebase FIRST before updating UI
+                // This prevents the exploit where user can claim again if they navigate away
                 val updatedQuests = _uiState.value.quests.map {
                     if (it.status == QuestStatus.COMPLETED) {
-                        val claimed = it.copy(status = QuestStatus.CLAIMED)
-                        // Save each quest progress
-                        saveQuestProgressToFirebase(claimed)
-                        claimed
+                        it.copy(status = QuestStatus.CLAIMED)
                     } else {
                         it
                     }
+                }
+                
+                // Save all claimed quests to Firebase first
+                updatedQuests.filter { it.status == QuestStatus.CLAIMED && 
+                    _uiState.value.quests.find { q -> q.id == it.id }?.status == QuestStatus.COMPLETED 
+                }.forEach { claimed ->
+                    saveQuestProgressToFirebase(claimed)
                 }
 
                 val newCoins = _uiState.value.userCoins + totalCoins
@@ -605,13 +863,21 @@ class QuestViewModelFirebase : ViewModel() {
                     it.copy(
                         quests = updatedQuests,
                         userCoins = newCoins,
+                        currentStreak = newStreak,
                         dailySummary = newSummary,
                         showRewardDialog = true,
-                        claimedReward = QuestReward(coins = totalCoins)
+                        claimedReward = if (multiplier > 1.0f) {
+                            QuestReward(
+                                coins = totalCoins,
+                                bonusItem = "Chuỗi ${newStreak} ngày! (x${String.format("%.1f", multiplier)})"
+                            )
+                        } else {
+                            QuestReward(coins = totalCoins)
+                        }
                     )
                 }
 
-                Log.d(TAG, "All rewards claimed successfully, new balance: $newCoins")
+                Log.d(TAG, "All rewards claimed successfully, new balance: $newCoins, streak: $newStreak")
             }
         }
     }
@@ -641,6 +907,7 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Show bonus reward for completing all quests
+     * Applies streak multiplier to bonus reward
      */
     fun showBonusReward() {
         if (!_uiState.value.dailySummary.bonusRewardUnlocked) return
@@ -652,22 +919,30 @@ class QuestViewModelFirebase : ViewModel() {
                 return@launch
             }
 
-            // Calculate bonus based on streak
-            val streakBonus = _uiState.value.currentStreak * 10
-            val bonusCoins = 50 + streakBonus
-            Log.d(TAG, "Showing bonus reward: $bonusCoins coins")
+            // Calculate bonus based on streak with multiplier
+            val currentStreak = _uiState.value.currentStreak
+            val multiplier = calculateStreakMultiplier(currentStreak)
+            val baseBonus = 50
+            val streakBonus = currentStreak * 10
+            val totalBonus = ((baseBonus + streakBonus) * multiplier).toInt()
+            
+            Log.d(TAG, "[BONUS] Base: $baseBonus, StreakBonus: $streakBonus, Multiplier: $multiplier, Total: $totalBonus")
 
-            val success = addCoinsToWallet(userId, bonusCoins)
+            val success = addCoinsToWallet(userId, totalBonus)
             if (success) {
-                val newCoins = _uiState.value.userCoins + bonusCoins
+                val newCoins = _uiState.value.userCoins + totalBonus
 
                 _uiState.update {
                     it.copy(
                         userCoins = newCoins,
                         showRewardDialog = true,
                         claimedReward = QuestReward(
-                            coins = bonusCoins,
-                            bonusItem = "Thưởng hoàn thành tất cả!"
+                            coins = totalBonus,
+                            bonusItem = if (multiplier > 1.0f) {
+                                "Thưởng hoàn thành! Chuỗi ${currentStreak} ngày (x${String.format("%.1f", multiplier)})"
+                            } else {
+                                "Thưởng hoàn thành tất cả!"
+                            }
                         ),
                         dailySummary = it.dailySummary.copy(bonusRewardUnlocked = false)
                     )

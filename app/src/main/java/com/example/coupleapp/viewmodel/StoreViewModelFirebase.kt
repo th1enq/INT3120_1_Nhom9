@@ -195,7 +195,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "combo_free",
                         name = "Free Package",
+                        vietnameseName = "Gói miễn phí",
                         description = "Claim free every 3 days",
+                        vietnameseDescription = "Nhận miễn phí mỗi 3 ngày",
                         iconRes = R.drawable.combo1,
                         type = StoreItemType.CARE_PACKAGE,
                         purchaseType = PurchaseType.FREE_DAILY,
@@ -204,7 +206,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "combo_ad",
                         name = "Ad Package",
+                        vietnameseName = "Gói quảng cáo",
                         description = "Watch ad to claim",
+                        vietnameseDescription = "Xem quảng cáo để nhận",
                         iconRes = R.drawable.combo2,
                         type = StoreItemType.CARE_PACKAGE,
                         purchaseType = PurchaseType.WATCH_AD
@@ -212,7 +216,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "combo_premium",
                         name = "Premium Package",
+                        vietnameseName = "Gói cao cấp",
                         description = "Premium plant care bundle",
+                        vietnameseDescription = "Bộ chăm sóc cây cao cấp",
                         iconRes = R.drawable.combo3,
                         type = StoreItemType.CARE_PACKAGE,
                         purchaseType = PurchaseType.COIN,
@@ -229,7 +235,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "seed_normal",
                         name = "Normal Seed",
+                        vietnameseName = "Hạt giống thường",
                         description = "Basic plant seed",
+                        vietnameseDescription = "Hạt giống cơ bản",
                         iconRes = R.drawable.normal_seed,
                         type = StoreItemType.SEED,
                         purchaseType = PurchaseType.COIN,
@@ -239,7 +247,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "seed_rare",
                         name = "Rare Seed",
+                        vietnameseName = "Hạt giống hiếm",
                         description = "Rare plant seed",
+                        vietnameseDescription = "Hạt giống hiếm",
                         iconRes = R.drawable.rare_seed,
                         type = StoreItemType.SEED,
                         purchaseType = PurchaseType.COIN,
@@ -249,7 +259,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "seed_super_rare",
                         name = "Super Rare Seed",
+                        vietnameseName = "Hạt giống siêu hiếm",
                         description = "Special plant seed",
+                        vietnameseDescription = "Hạt giống đặc biệt",
                         iconRes = R.drawable.super_rare_seed,
                         type = StoreItemType.SEED,
                         purchaseType = PurchaseType.COIN,
@@ -267,7 +279,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "fertilizer_4h",
                         name = "4h Fertilizer",
+                        vietnameseName = "Phân bón 4h",
                         description = "Speed up growth by 4 hours",
+                        vietnameseDescription = "Tăng tốc 4 giờ",
                         iconRes = R.drawable.phan4h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
@@ -277,7 +291,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "fertilizer_8h",
                         name = "8h Fertilizer",
+                        vietnameseName = "Phân bón 8h",
                         description = "Speed up growth by 8 hours",
+                        vietnameseDescription = "Tăng tốc 8 giờ",
                         iconRes = R.drawable.phan8h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
@@ -287,7 +303,9 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "fertilizer_24h",
                         name = "24h Fertilizer",
+                        vietnameseName = "Phân bón 24h",
                         description = "Speed up growth by 24 hours",
+                        vietnameseDescription = "Tăng tốc 24 giờ",
                         iconRes = R.drawable.phan24h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
@@ -305,17 +323,21 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "tool_sun",
                         name = "Sun Lamp",
+                        vietnameseName = "Đèn mặt trời",
                         description = "Provide light for plants",
+                        vietnameseDescription = "Cung cấp ánh sáng cho cây",
                         iconRes = R.drawable.sun,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
                         coinPrice = 100
                     ),
                     StoreItem(
-                        id = "tool_keo",
+                        id = "tool_xoa",
                         name = "Watering Can",
+                        vietnameseName = "Bình tưới",
                         description = "Water your plants",
-                        iconRes = R.drawable.keo,
+                        vietnameseDescription = "Tưới nước cho cây",
+                        iconRes = R.drawable.xoa,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
                         coinPrice = 100
@@ -323,17 +345,21 @@ class StoreViewModelFirebase(
                     StoreItem(
                         id = "tool_xit",
                         name = "Pesticide",
+                        vietnameseName = "Thuốc trừ sâu",
                         description = "Protect plants from pests",
+                        vietnameseDescription = "Bảo vệ cây khỏi sâu bệnh",
                         iconRes = R.drawable.xit,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
                         coinPrice = 100
                     ),
                     StoreItem(
-                        id = "tool_xoa",
-                        name = "Plant Scrubber",
-                        description = "Clean your plants",
-                        iconRes = R.drawable.xoa,
+                        id = "tool_keo",
+                        name = "Scissors",
+                        vietnameseName = "Kéo cắt tỉa",
+                        description = "Trim branches and leaves",
+                        vietnameseDescription = "Cắt tỉa cành lá",
+                        iconRes = R.drawable.keo,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
                         coinPrice = 100
@@ -489,10 +515,10 @@ class StoreViewModelFirebase(
                             updates["fertilizer12h"] = current + quantity
                             Log.d(TAG, "[STORE→GARDEN] Fertilizer 24h update (stored as fertilizer12h): $current → ${current + quantity}")
                         }
-                        "tool_keo", "watering_can" -> {
-                            val current = inventoryDoc?.wateringCan ?: 0
-                            updates["wateringCan"] = current + quantity
-                            Log.d(TAG, "[STORE→GARDEN] Watering can update: $current → ${current + quantity}")
+                        "tool_keo" -> {
+                            val current = inventoryDoc?.scissors ?: 0
+                            updates["scissors"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Scissors update: $current → ${current + quantity}")
                         }
                         "tool_sun", "sunlight_bottle" -> {
                             val current = inventoryDoc?.sunlightBottle ?: 0
@@ -504,7 +530,12 @@ class StoreViewModelFirebase(
                             updates["pesticide"] = current + quantity
                             Log.d(TAG, "[STORE→GARDEN] Pesticide update: $current → ${current + quantity}")
                         }
-                        "tool_xoa", "scissors" -> {
+                        "tool_xoa", "watering_can" -> {
+                            val current = inventoryDoc?.wateringCan ?: 0
+                            updates["wateringCan"] = current + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Watering can update: $current → ${current + quantity}")
+                        }
+                        "scissors" -> {
                             val current = inventoryDoc?.scissors ?: 0
                             updates["scissors"] = current + quantity
                             Log.d(TAG, "[STORE→GARDEN] Scissors update: $current → ${current + quantity}")

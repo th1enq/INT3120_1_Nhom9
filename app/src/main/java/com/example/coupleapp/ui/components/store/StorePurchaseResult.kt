@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.PurchaseResult
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 /**
  * Purchase result dialog showing success or error
@@ -44,6 +45,7 @@ fun PurchaseResultDialog(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var visible by remember { mutableStateOf(false) }
+    val isVietnamese = Locale.getDefault().language == "vi"
     
     LaunchedEffect(Unit) {
         delay(100)
@@ -53,45 +55,71 @@ fun PurchaseResultDialog(
     
     val (isSuccess, title, message, iconColor, bgColor) = when (result) {
         is PurchaseResult.Success -> {
+            val itemName = result.item.getLocalizedName(isVietnamese)
+            val successTitle = if (isVietnamese) "Mua thành công! 🎉" else "Purchase Successful! 🎉"
+            val successMsg = if (isVietnamese) {
+                "Bạn đã nhận được $itemName!\nSố dư mới: ${result.newBalance} xu"
+            } else {
+                "You have received $itemName!\nNew balance: ${result.newBalance} coins"
+            }
             Quintuple(
                 true,
-                "Purchase Successful! 🎉",
-                "You have received ${result.item.name}!\nNew balance: ${result.newBalance} coins",
+                successTitle,
+                successMsg,
                 Color(0xFF4CAF50),
                 Color(0xFFE8F5E9)
             )
         }
         is PurchaseResult.InsufficientFunds -> {
+            val insufficientTitle = if (isVietnamese) "Không đủ xu 💰" else "Insufficient Funds 💰"
+            val insufficientMsg = if (isVietnamese) {
+                "Bạn cần ${result.required} xu nhưng chỉ có ${result.current} xu.\nHãy kiếm thêm xu!"
+            } else {
+                "You need ${result.required} coins but only have ${result.current} coins.\nPlease earn more coins first!"
+            }
             Quintuple(
                 false,
-                "Insufficient Funds 💰",
-                "You need ${result.required} coins but only have ${result.current} coins.\nPlease earn more coins first!",
+                insufficientTitle,
+                insufficientMsg,
                 Color(0xFFF44336),
                 Color(0xFFFFEBEE)
             )
         }
         is PurchaseResult.OnCooldown -> {
+            val cooldownTitle = if (isVietnamese) "Đang chờ ⏳" else "On Cooldown ⏳"
+            val cooldownMsg = if (isVietnamese) {
+                "Vật phẩm này đang trong thời gian chờ.\nVui lòng đợi trước khi nhận lại!"
+            } else {
+                "This item is still on cooldown.\nPlease wait before claiming again!"
+            }
             Quintuple(
                 false,
-                "On Cooldown ⏳",
-                "This item is still on cooldown.\nPlease wait before claiming again!",
+                cooldownTitle,
+                cooldownMsg,
                 Color(0xFFFF9800),
                 Color(0xFFFFF3E0)
             )
         }
         is PurchaseResult.AdNotAvailable -> {
+            val adTitle = if (isVietnamese) "Không có quảng cáo 📺" else "Ad Not Available 📺"
+            val adMsg = if (isVietnamese) {
+                "Hiện không có quảng cáo.\nVui lòng thử lại sau!"
+            } else {
+                "No ads available at the moment.\nPlease try again later!"
+            }
             Quintuple(
                 false,
-                "Ad Not Available 📺",
-                "No ads available at the moment.\nPlease try again later!",
+                adTitle,
+                adMsg,
                 Color(0xFF9C27B0),
                 Color(0xFFF3E5F5)
             )
         }
         is PurchaseResult.Error -> {
+            val errorTitle = if (isVietnamese) "Có lỗi xảy ra ⚠️" else "Error Occurred ⚠️"
             Quintuple(
                 false,
-                "Error Occurred ⚠️",
+                errorTitle,
                 result.message,
                 Color(0xFFF44336),
                 Color(0xFFFFEBEE)

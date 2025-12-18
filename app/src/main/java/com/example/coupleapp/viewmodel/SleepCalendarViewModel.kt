@@ -52,7 +52,23 @@ class SleepCalendarViewModel(
                 
                 // Get sleep history from Firebase (last 90 days for calendar view)
                 val historyResult = firebaseRepository.getSleepHistory(userId, days = 90)
-                val sleepHistory = historyResult.getOrElse { emptyList() }
+                val rawSleepHistory = historyResult.getOrElse { emptyList() }
+                
+                // Deduplicate by date - keep only the most recent record for each date
+                val sleepHistory = rawSleepHistory
+                    .groupBy { record ->
+                        record.date?.let { timestamp ->
+                            timestamp.toDate().toInstant()
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                        }
+                    }
+                    .mapValues { (_, records) ->
+                        // Keep the most recent record (by createdAt timestamp)
+                        records.maxByOrNull { it.createdAt ?: com.google.firebase.Timestamp.now() }
+                    }
+                    .values
+                    .filterNotNull()
                 
                 val currentMonth = YearMonth.now()
                 

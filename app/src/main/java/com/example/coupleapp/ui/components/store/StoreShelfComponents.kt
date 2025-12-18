@@ -31,6 +31,7 @@ import com.example.coupleapp.R
 import com.example.coupleapp.data.model.StoreCategory
 import com.example.coupleapp.data.model.StoreItem
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 /**
  * Shelves content with all categories
@@ -203,6 +204,8 @@ fun ShelfItem(
     val itemSize = if (isSmaller) 82.dp else 100.dp
     val itemWidth = if (isSmaller) 105.dp else 115.dp
     val spacing = if (isSmaller) 3.dp else 6.dp
+    val isVietnamese = Locale.getDefault().language == "vi"
+    val localizedName = item.getLocalizedName(isVietnamese)
 
     Column(
         modifier = Modifier
@@ -224,7 +227,7 @@ fun ShelfItem(
         ) {
             Image(
                 painter = painterResource(id = item.iconRes),
-                contentDescription = item.name,
+                contentDescription = localizedName,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )

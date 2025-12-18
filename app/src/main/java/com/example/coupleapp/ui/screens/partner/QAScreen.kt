@@ -29,7 +29,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.QAQuestion
 import com.example.coupleapp.data.model.QAStatus
 import com.example.coupleapp.ui.theme.*
@@ -170,13 +172,13 @@ private fun QAHeader(
             
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Hỏi & Đáp",
+                    text = stringResource(R.string.qa_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "Cùng nhau tìm hiểu về người ấy",
+                    text = stringResource(R.string.qa_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -272,7 +274,7 @@ private fun EmptyQAState(selectedTab: Int) {
         Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = "Start asking questions to get to know each other better!",
+            text = stringResource(R.string.start_asking_questions),
             style = MaterialTheme.typography.bodyMedium,
             color = TextLight,
             textAlign = TextAlign.Center
@@ -418,7 +420,7 @@ private fun QACard(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Are you satisfied with this answer?",
+                        text = stringResource(R.string.are_you_satisfied),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                         modifier = Modifier.padding(bottom = 8.dp)
@@ -442,7 +444,7 @@ private fun QACard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Not Correct")
+                            Text(stringResource(R.string.not_correct))
                         }
                         
                         Button(
@@ -459,7 +461,7 @@ private fun QACard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Accept")
+                            Text(stringResource(R.string.accept))
                         }
                     }
                 }
@@ -478,7 +480,7 @@ private fun QACard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Answer has been approved",
+                            text = stringResource(R.string.answer_approved),
                             style = MaterialTheme.typography.bodySmall,
                             color = AccentGreen
                         )
@@ -496,7 +498,7 @@ private fun QACard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Answer not satisfactory",
+                            text = stringResource(R.string.answer_not_satisfactory),
                             style = MaterialTheme.typography.bodySmall,
                             color = ErrorColor
                         )
@@ -522,7 +524,7 @@ private fun QACard(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Answer This Question")
+                    Text(stringResource(R.string.answer_this_question))
                 }
             }
         }
@@ -569,13 +571,13 @@ private fun CreateQuestionDialog(
         title = {
             Column {
                 Text(
-                    text = "Ask a Question to $partnerName",
+                    text = stringResource(R.string.ask_question_to, partnerName),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "Ask interesting questions!",
+                    text = stringResource(R.string.ask_interesting_questions),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
@@ -590,7 +592,7 @@ private fun CreateQuestionDialog(
                     .height(120.dp),
                 placeholder = {
                     Text(
-                        text = "Ví dụ: Điều gì khiến em thích anh?",
+                        text = stringResource(R.string.question_example),
                         color = TextLight
                     )
                 },
@@ -617,13 +619,13 @@ private fun CreateQuestionDialog(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Gửi câu hỏi")
+                    Text(stringResource(R.string.send_question))
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Hủy", color = TextSecondary)
+                Text(stringResource(R.string.cancel), color = TextSecondary)
             }
         }
     )
@@ -645,7 +647,7 @@ private fun AnswerQuestionDialog(
         title = {
             Column {
                 Text(
-                    text = "Trả lời câu hỏi",
+                    text = stringResource(R.string.answer_question_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -673,7 +675,7 @@ private fun AnswerQuestionDialog(
                     .height(150.dp),
                 placeholder = {
                     Text(
-                        text = "Nhập câu trả lời của bạn...",
+                        text = stringResource(R.string.enter_your_answer),
                         color = TextLight
                     )
                 },
@@ -700,13 +702,13 @@ private fun AnswerQuestionDialog(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Gửi câu trả lời")
+                    Text(stringResource(R.string.send_answer))
                 }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Hủy", color = TextSecondary)
+                Text(stringResource(R.string.cancel), color = TextSecondary)
             }
         }
     )

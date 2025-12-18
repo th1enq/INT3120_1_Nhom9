@@ -34,9 +34,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import coil.Coil
 import coil.compose.AsyncImage
+import com.example.coupleapp.R
 import coil.request.ImageRequest
 import com.example.coupleapp.data.model.LocationType
 import com.example.coupleapp.data.model.SharedPlace
@@ -102,7 +104,7 @@ fun SharedPlacesHorizontalList(
                     fontSize = 18.sp
                 )
                 Text(
-                    text = "Places Together",
+                    text = stringResource(R.string.places_together),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
@@ -111,7 +113,7 @@ fun SharedPlacesHorizontalList(
             
             TextButton(onClick = onSeeAllClick) {
                 Text(
-                    text = "See all →",
+                    text = stringResource(R.string.see_all),
                     fontSize = 13.sp,
                     color = SoftPink
                 )
@@ -506,7 +508,7 @@ fun SharedPlaceBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "View All (${place.photosCount})",
+                        text = stringResource(R.string.view_all_count, place.photosCount),
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -531,7 +533,7 @@ fun SharedPlaceBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Add Photo",
+                        text = stringResource(R.string.add_photo),
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -710,7 +712,7 @@ private fun PhotoPreviewItem(
                     modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "Photo ${index + 1}",
+                    text = stringResource(R.string.photo_index, index + 1),
                     fontSize = 10.sp,
                     color = TextSecondary
                 )
@@ -762,7 +764,7 @@ private fun AddPhotoButton(onClick: () -> Unit) {
                     modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "Add",
+                    text = stringResource(R.string.add),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = SoftPink

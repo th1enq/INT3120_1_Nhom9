@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,10 +29,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class SlideData(
-    val title: String,
+    val titleResId: Int,
     val imageRes: Int,
     val gradient: Brush,
-    val buttonText: String
+    val buttonTextResId: Int,
+    val navigateTo: String = "" // Navigation destination
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -44,18 +46,18 @@ fun AutoImageSlider(
 ) {
     val pagerState = rememberPagerState(pageCount = { slides.size })
     val coroutineScope = rememberCoroutineScope()
-
-    // Auto-slide disabled to improve performance
-    // Users can still swipe manually
-    // LaunchedEffect(pagerState.currentPage) {
-    //     delay(autoSlideDelay)
-    //     val nextPage = (pagerState.currentPage + 1) % slides.size
-    //     coroutineScope.launch {
-    //         pagerState.animateScrollToPage(nextPage,
-    //             animationSpec = tween(600)
-    //         )
-    //     }
-    // }
+    
+    // Auto-scroll effect - enabled
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(autoSlideDelay)
+            val nextPage = (pagerState.currentPage + 1) % slides.size
+            pagerState.animateScrollToPage(
+                page = nextPage,
+                animationSpec = tween(durationMillis = 600, easing = EaseInOutCubic)
+            )
+        }
+    }
     
     Box(
         modifier = modifier
@@ -82,8 +84,12 @@ fun AutoImageSlider(
         ) {
             repeat(slides.size) { index ->
                 val isSelected = pagerState.currentPage == index
-                // Simplified - no animation for better performance
-                val width = if (isSelected) 24.dp else 6.dp
+                // Animated width for smooth transition
+                val width by animateDpAsState(
+                    targetValue = if (isSelected) 24.dp else 6.dp,
+                    animationSpec = tween(300),
+                    label = "indicator_width"
+                )
                 
                 Box(
                     modifier = Modifier
@@ -106,6 +112,9 @@ private fun SlideContent(
     slide: SlideData,
     onButtonClick: () -> Unit
 ) {
+    val title = stringResource(slide.titleResId)
+    val buttonText = stringResource(slide.buttonTextResId)
+    
     Row(
         modifier = Modifier
             .fillMaxSize()
@@ -122,7 +131,7 @@ private fun SlideContent(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = slide.title,
+                text = title,
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -145,7 +154,7 @@ private fun SlideContent(
                 modifier = Modifier.height(36.dp)
             ) {
                 Text(
-                    text = slide.buttonText,
+                    text = buttonText,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White
@@ -167,41 +176,54 @@ private fun SlideContent(
 
 @Composable
 fun rememberSlides(): List<SlideData> {
-    return remember {
-        listOf(
-            SlideData(
-                title = "Locket\nShare your moments",
-                imageRes = R.drawable.funny_moment,
-                gradient = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF4E0),
-                        Color(0xFFFFE8C5)
-                    )
-                ),
-                buttonText = "Join now"
+    return listOf(
+        SlideData(
+            titleResId = R.string.slider_locket_title,
+            imageRes = R.drawable.funny_moment,
+            gradient = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFFFFF4E0),
+                    Color(0xFFFFE8C5)
+                )
             ),
-            SlideData(
-                title = "Sleep\nTrack and compare sleep",
-                imageRes = R.drawable.sleep_tracker,
-                gradient = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFFE8D6FF),
-                        Color(0xFFD4C5F9)
-                    )
-                ),
-                buttonText = "Track sleep"
+            buttonTextResId = R.string.slider_locket_button,
+            navigateTo = "Locket"
+        ),
+        SlideData(
+            titleResId = R.string.slider_sleep_title,
+            imageRes = R.drawable.sleep_tracker,
+            gradient = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFFE8D6FF),
+                    Color(0xFFD4C5F9)
+                )
             ),
-            SlideData(
-                title = "Schedule \n Manage time together",
-                imageRes = R.drawable.schedular,
-                gradient = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFFFFE8F0),
-                        Color(0xFFFFC9DC)
-                    )
-                ),
-                buttonText = "View calendar"
-            )
+            buttonTextResId = R.string.slider_sleep_button,
+            navigateTo = "Sleep"
+        ),
+        SlideData(
+            titleResId = R.string.slider_garden_title,
+            imageRes = R.drawable.schedular,
+            gradient = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFFD4F5D4),
+                    Color(0xFFB8E8B8)
+                )
+            ),
+            buttonTextResId = R.string.slider_garden_button,
+            navigateTo = "Garden"
+        ),
+        SlideData(
+            titleResId = R.string.slider_calendar_title,
+            imageRes = R.drawable.schedular,
+            gradient = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFFFFE8F0),
+                    Color(0xFFFFC9DC)
+                )
+            ),
+            buttonTextResId = R.string.slider_calendar_button,
+            navigateTo = "Calendar"
         )
-    }
+    )
 }

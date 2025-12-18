@@ -12,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import com.example.coupleapp.data.model.DailyQuestSummary
 
@@ -48,7 +50,7 @@ fun DailySummaryCard(
             ) {
                 Column {
                     Text(
-                        text = "Today's Progress",
+                        text = stringResource(R.string.todays_progress),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold
                         ),
@@ -141,7 +143,7 @@ fun DailySummaryCard(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = "Claim All",
+                            text = stringResource(R.string.claim_all),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),

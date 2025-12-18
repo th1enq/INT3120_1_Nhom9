@@ -68,14 +68,14 @@ fun AnimatedPlantDisplay(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        // Thought bubble
+        // Thought bubble - positioned to the left of the plant
         AnimatedVisibility(
             visible = plantThought != null,
             enter = fadeIn(tween(300)) + scaleIn(tween(300)),
             exit = fadeOut(tween(300)) + scaleOut(tween(300)),
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 40.dp, y = (-20).dp)
+                .align(Alignment.TopStart)
+                .offset(x = (130).dp, y = (-20).dp)
         ) {
             ThoughtBubble(
                 statusType = plantThought,

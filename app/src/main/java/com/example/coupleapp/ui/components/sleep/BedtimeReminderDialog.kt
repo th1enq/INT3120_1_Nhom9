@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.res.stringResource
 import com.airbnb.lottie.compose.*
 import com.example.coupleapp.R
 import java.time.LocalTime
@@ -68,7 +69,7 @@ fun BedtimeReminderDialog(
                 
                 // Title
                 Text(
-                    text = "Time to sleep!",
+                    text = stringResource(R.string.time_to_sleep),
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 28.sp
@@ -79,7 +80,7 @@ fun BedtimeReminderDialog(
                 
                 // Bedtime info
                 Text(
-                    text = "Sleep goal: ${bedTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                    text = stringResource(R.string.sleep_goal_time, bedTime.format(DateTimeFormatter.ofPattern("HH:mm"))),
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = 16.sp
                     ),
@@ -102,7 +103,7 @@ fun BedtimeReminderDialog(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
-                        text = "Sleep now",
+                        text = stringResource(R.string.sleep_now),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -116,7 +117,7 @@ fun BedtimeReminderDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Later",
+                        text = stringResource(R.string.later),
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = 16.sp
                         ),

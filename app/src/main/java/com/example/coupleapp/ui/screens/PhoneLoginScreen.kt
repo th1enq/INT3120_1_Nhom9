@@ -14,7 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -90,7 +92,7 @@ fun PhoneLoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Login",
+                        text = stringResource(R.string.login),
                         style = MaterialTheme.typography.displaySmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 36.sp
@@ -101,7 +103,7 @@ fun PhoneLoginScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "Enter your information to continue",
+                        text = stringResource(R.string.enter_info_continue),
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF757575),
                         textAlign = TextAlign.Center
@@ -152,7 +154,7 @@ fun PhoneLoginScreen(
                         horizontalArrangement = Arrangement.End
                     ) {
                         Text(
-                            text = "Forgot password?",
+                            text = stringResource(R.string.forgot_password),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Medium
                             ),
@@ -165,7 +167,7 @@ fun PhoneLoginScreen(
                     
                     // Login Button
                     GradientButton(
-                        text = "Login",
+                        text = stringResource(R.string.login),
                         onClick = { 
                             viewModel.login {
                                 onLoginClick(uiState.phoneNumber, uiState.password)
@@ -186,7 +188,7 @@ fun PhoneLoginScreen(
                     
                     // Decorative text
                     Text(
-                        text = "Or login with",
+                        text = stringResource(R.string.or_login_with),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFB0B0B0),
                         modifier = Modifier.padding(vertical = 16.dp)

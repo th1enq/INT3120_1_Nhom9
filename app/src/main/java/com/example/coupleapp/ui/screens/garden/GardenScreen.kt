@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
@@ -120,7 +121,7 @@ fun GardenScreen(
         label = "LoadingCrossfade"
     ) { loading ->
         if (loading) {
-            LoadingScreen(message = "Loading garden...")
+            LoadingScreen(message = stringResource(R.string.loading_garden))
         } else {
             Box(
                 modifier = Modifier.fillMaxSize()
@@ -144,7 +145,7 @@ fun GardenScreen(
                             .statusBarsPadding()
                     ) {
                         GardenTopBar(
-                            plantName = uiState.plant?.name ?: "Garden",
+                            plantName = uiState.plant?.name ?: stringResource(R.string.garden),
                             onBackClick = onBackClick,
                             onMenuClick = { viewModel.showSettingsMenu(true) },
                             showMenu = uiState.showSettingsMenu,
@@ -232,7 +233,7 @@ fun GardenScreen(
                                     ),
                                     shape = RoundedCornerShape(20.dp)
                                 ) {
-                                    Text("Plant New Seed")
+                                    Text(stringResource(R.string.plant_new_seed))
                                 }
                             }
                         }

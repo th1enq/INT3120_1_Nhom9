@@ -17,7 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -184,7 +186,7 @@ fun ErrorState(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "An error occurred",
+            text = stringResource(R.string.error_occurred),
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp
@@ -211,7 +213,7 @@ fun ErrorState(
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = "Retry",
+                text = stringResource(R.string.retry),
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Bold
                 ),

@@ -14,11 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 // Import ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.viewmodel.HomeViewModel
 import com.example.coupleapp.ui.components.home.*
 import kotlinx.coroutines.delay
@@ -94,14 +96,15 @@ fun HomeScreen(
 
                 // Slider Section (no animation)
                 item(key = "slider_section") {
+                            val slides = rememberSlides()
                             AutoImageSlider(
-                                slides = rememberSlides(),
+                                slides = slides,
                                 modifier = Modifier,
                                 onButtonClick = { index ->
-                                    when (index) {
-                                        0 -> onNavigateToFeature("Pets")
-                                        1 -> onNavigateToFeature("Sleep")
-                                        2 -> onNavigateToFeature("Calendar")
+                                    // Navigate based on slide's navigateTo property
+                                    val destination = slides.getOrNull(index)?.navigateTo ?: ""
+                                    if (destination.isNotEmpty()) {
+                                        onNavigateToFeature(destination)
                                     }
                                 }
                             )
@@ -130,7 +133,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Your Widgets",
+                                    text = stringResource(R.string.your_widgets),
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 22.sp

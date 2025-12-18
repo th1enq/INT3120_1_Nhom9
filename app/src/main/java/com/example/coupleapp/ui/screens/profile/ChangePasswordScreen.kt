@@ -21,6 +21,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import kotlinx.coroutines.delay
 
 /**
@@ -54,7 +56,7 @@ fun ChangePasswordScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Change Password",
+                        text = stringResource(R.string.change_password),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -119,7 +121,7 @@ fun ChangePasswordScreen(
                         }
                         
                         Text(
-                            text = "Create a strong password with at least 6 characters",
+                            text = stringResource(R.string.create_strong_password),
                             fontSize = 14.sp,
                             color = Color(0xFF718096),
                             modifier = Modifier.padding(bottom = 8.dp)
@@ -129,7 +131,7 @@ fun ChangePasswordScreen(
                         OutlinedTextField(
                             value = currentPassword,
                             onValueChange = { currentPassword = it },
-                            label = { Text("Current Password") },
+                            label = { Text(stringResource(R.string.current_password)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.Lock,
@@ -168,7 +170,7 @@ fun ChangePasswordScreen(
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { newPassword = it },
-                            label = { Text("New Password") },
+                            label = { Text(stringResource(R.string.new_password)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.LockOpen,
@@ -203,7 +205,7 @@ fun ChangePasswordScreen(
                             ),
                             isError = newPassword.isNotEmpty() && newPassword.length < 6,
                             supportingText = if (newPassword.isNotEmpty() && newPassword.length < 6) {
-                                { Text("Password must be at least 6 characters") }
+                                { Text(stringResource(R.string.password_min_length_error)) }
                             } else null
                         )
                         
@@ -211,7 +213,7 @@ fun ChangePasswordScreen(
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { confirmPassword = it },
-                            label = { Text("Confirm New Password") },
+                            label = { Text(stringResource(R.string.confirm_new_password)) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Filled.LockOpen,
@@ -246,7 +248,7 @@ fun ChangePasswordScreen(
                             ),
                             isError = confirmPassword.isNotEmpty() && !passwordsMatch,
                             supportingText = if (confirmPassword.isNotEmpty() && !passwordsMatch) {
-                                { Text("Passwords do not match") }
+                                { Text(stringResource(R.string.passwords_not_match_error)) }
                             } else null
                         )
                         
@@ -266,7 +268,7 @@ fun ChangePasswordScreen(
                             )
                         ) {
                             Text(
-                                text = "Update Password",
+                                text = stringResource(R.string.update_password),
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
                             )

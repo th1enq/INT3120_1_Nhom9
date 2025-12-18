@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -56,7 +58,7 @@ fun WidgetInstructionDialog(
                 
                 // Title
                 Text(
-                    text = "Add Sleep Widget",
+                    text = stringResource(R.string.add_sleep_widget),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp
@@ -67,12 +69,7 @@ fun WidgetInstructionDialog(
                 
                 // Instructions
                 Text(
-                    text = "To add the Sleep Widget to your home screen:\n\n" +
-                            "1. Long press on an empty space on your home screen\n" +
-                            "2. Tap \"Widgets\"\n" +
-                            "3. Find \"CoupleApp\" in the widget list\n" +
-                            "4. Select \"Sleep Tracker\" widget\n" +
-                            "5. Drag it to your desired location",
+                    text = stringResource(R.string.add_widget_instructions),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 14.sp,
                         lineHeight = 20.sp
@@ -97,7 +94,7 @@ fun WidgetInstructionDialog(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "Got it!",
+                        text = stringResource(R.string.got_it),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp

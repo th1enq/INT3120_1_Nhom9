@@ -44,9 +44,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.Coil
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.SharedPlacePhoto
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.theme.*
+import androidx.compose.ui.res.stringResource
 import com.example.coupleapp.util.Base64ImageDecoder
 import com.example.coupleapp.util.LocationUtils
 import com.example.coupleapp.viewmodel.DistanceViewModel
@@ -161,7 +163,7 @@ fun PlacePhotosScreen(
         label = "loadingCrossfade"
     ) { isLoading ->
         if (isLoading) {
-            LoadingScreen(message = "Loading photos...")
+            LoadingScreen(message = stringResource(R.string.loading_photos))
         } else {
             Scaffold(
                 topBar = {
@@ -301,7 +303,7 @@ fun PlacePhotosScreen(
                                     CircularProgressIndicator(color = SoftPink)
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = "Adding photo...",
+                                        text = stringResource(R.string.adding_photo),
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
@@ -342,14 +344,14 @@ fun PlacePhotosScreen(
             },
             title = {
                 Text(
-                    text = "Delete ${selectedPhotoIds.size} photo${if (selectedPhotoIds.size > 1) "s" else ""}?",
+                    text = stringResource(R.string.delete_photos_title, selectedPhotoIds.size, if (selectedPhotoIds.size > 1) "s" else ""),
                     fontWeight = FontWeight.Bold,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             },
             text = {
                 Text(
-                    text = "This action cannot be undone. These photos will be permanently removed from this place.",
+                    text = stringResource(R.string.delete_photos_message),
                     fontSize = 14.sp,
                     color = TextSecondary,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -366,14 +368,14 @@ fun PlacePhotosScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Delete All")
+                    Text(stringResource(R.string.delete_all))
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showDeleteConfirmation = false }
                 ) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(stringResource(R.string.cancel), color = TextSecondary)
                 }
             },
             containerColor = Color.White,
@@ -684,14 +686,14 @@ private fun PhotoCard(
             },
             title = {
                 Text(
-                    text = "Delete Photo?",
+                    text = stringResource(R.string.delete_photo_title),
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
             },
             text = {
                 Text(
-                    text = "This photo will be permanently removed from this memory. This action cannot be undone.",
+                    text = stringResource(R.string.delete_photo_message),
                     fontSize = 14.sp,
                     color = TextSecondary,
                     textAlign = TextAlign.Center
@@ -708,14 +710,14 @@ private fun PhotoCard(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showDeleteDialog = false }
                 ) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(stringResource(R.string.cancel), color = TextSecondary)
                 }
             }
         )
@@ -802,7 +804,7 @@ private fun PhotoCard(
                                 modifier = Modifier.size(32.dp)
                             )
                             Text(
-                                text = "Photo",
+                                text = stringResource(R.string.photo),
                                 fontSize = 10.sp,
                                 color = TextSecondary
                             )
@@ -978,14 +980,14 @@ private fun EmptyPhotosState(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "No Photos Yet",
+            text = stringResource(R.string.no_photos_yet),
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
         
         Text(
-            text = "Add your favorite memories\nfrom this place!",
+            text = stringResource(R.string.add_photos_message),
             fontSize = 14.sp,
             color = TextSecondary,
             textAlign = TextAlign.Center,
@@ -1009,7 +1011,7 @@ private fun EmptyPhotosState(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Add Photos",
+                text = stringResource(R.string.add_photos),
                 fontWeight = FontWeight.Medium
             )
         }
@@ -1033,7 +1035,7 @@ private fun AddPhotoDialog(
             ) {
                 Text(text = "📸", fontSize = 24.sp)
                 Text(
-                    text = "Add Photo",
+                    text = stringResource(R.string.add_photo),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -1043,7 +1045,7 @@ private fun AddPhotoDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Choose how to add photos to this memory:",
+                    text = stringResource(R.string.choose_how_to_add),
                     fontSize = 14.sp,
                     color = TextSecondary
                 )
@@ -1069,7 +1071,7 @@ private fun AddPhotoDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(
-                    text = "Cancel",
+                    text = stringResource(R.string.cancel),
                     color = TextSecondary
                 )
             }

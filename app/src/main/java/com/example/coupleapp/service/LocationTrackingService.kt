@@ -336,8 +336,8 @@ class LocationTrackingService : Service() {
         )
         
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("Couple App")
-            .setContentText("Sharing your location with your partner 💕")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.sharing_location))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

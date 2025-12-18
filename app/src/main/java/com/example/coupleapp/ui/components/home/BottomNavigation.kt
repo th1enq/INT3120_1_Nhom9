@@ -19,13 +19,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.coupleapp.R
 
-enum class BottomNavItem(val icon: ImageVector, val iconSelected: ImageVector, val label: String) {
-    HOME(Icons.Outlined.Home, Icons.Filled.Home, "Home"),
-    FRIENDS(Icons.Outlined.Person, Icons.Filled.Person, "Partner"),
-    ACTIVITIES(Icons.Outlined.DateRange, Icons.Filled.DateRange, "Activities"),
-    PROFILE(Icons.Outlined.AccountCircle, Icons.Filled.AccountCircle, "Profile")
+enum class BottomNavItem(val icon: ImageVector, val iconSelected: ImageVector, val labelResId: Int) {
+    HOME(Icons.Outlined.Home, Icons.Filled.Home, R.string.nav_home),
+    FRIENDS(Icons.Outlined.Person, Icons.Filled.Person, R.string.nav_partner),
+    ACTIVITIES(Icons.Outlined.DateRange, Icons.Filled.DateRange, R.string.nav_activities),
+    PROFILE(Icons.Outlined.AccountCircle, Icons.Filled.AccountCircle, R.string.nav_profile)
 }
 
 @Composable
@@ -61,6 +63,7 @@ private fun BottomNavItemView(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val label = stringResource(item.labelResId)
     
     // Icon color animation
     val iconColor by animateColorAsState(
@@ -101,7 +104,7 @@ private fun BottomNavItemView(
         // Icon
         Icon(
             imageVector = if (isSelected) item.iconSelected else item.icon,
-            contentDescription = item.label,
+            contentDescription = label,
             tint = iconColor,
             modifier = Modifier.size(26.dp)
         )

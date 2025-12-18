@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import com.example.coupleapp.ui.theme.*
 import kotlinx.coroutines.delay
 
@@ -135,14 +137,14 @@ private fun WelcomeHeader() {
         
         Column {
             Text(
-                text = "Xin chào!",
+                text = stringResource(R.string.hello),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             
             Text(
-                text = "Invite your friends and your loved one!",
+                text = stringResource(R.string.invite_friends_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary
             )
@@ -169,7 +171,7 @@ private fun AddByCodeSection(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Thêm bằng mã",
+                text = stringResource(R.string.add_by_code),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF4CAF50)
@@ -216,7 +218,7 @@ private fun AddByCodeSection(
                         decorationBox = { innerTextField ->
                             if (linkCode.isEmpty()) {
                                 Text(
-                                    text = "Nhập mã bạn bè...",
+                                    text = stringResource(R.string.enter_friend_code),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TextLight
                                 )
@@ -306,7 +308,7 @@ private fun ShareInviteSection(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Share & Invite",
+                text = stringResource(R.string.share_invite),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF4CAF50)
@@ -375,7 +377,7 @@ private fun ProfileCodeCard(
             
             // App name
             Text(
-                text = "CoupleApp",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.TopStart)
@@ -440,7 +442,7 @@ private fun ProfileCodeCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Mã: $linkCode",
+                            text = stringResource(R.string.code_label, linkCode),
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White,
                             fontWeight = FontWeight.Medium
@@ -502,7 +504,7 @@ private fun ShareLinkButton(onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(8.dp))
             
             Text(
-                text = "Share via link",
+                text = stringResource(R.string.share_via_link),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White

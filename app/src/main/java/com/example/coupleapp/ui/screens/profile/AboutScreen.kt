@@ -16,7 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,7 +45,7 @@ fun AboutScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "About App",
+                        text = stringResource(R.string.about_app),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -117,14 +119,14 @@ fun AboutScreen(
                         
                         // App name
                         Text(
-                            text = "Couple App",
+                            text = stringResource(R.string.couple_app),
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF2D3748)
                         )
                         
                         Text(
-                            text = "Version 1.0.0",
+                            text = stringResource(R.string.version_number),
                             fontSize = 14.sp,
                             color = Color(0xFF718096)
                         )
@@ -143,7 +145,7 @@ fun AboutScreen(
                     ) {
                         // Description
                         Text(
-                            text = "Stay connected with your loved one through shared moments, activities, and memories.",
+                            text = stringResource(R.string.about_description),
                             fontSize = 15.sp,
                             color = Color(0xFF718096),
                             textAlign = TextAlign.Center,
@@ -232,7 +234,7 @@ fun AboutScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Made with ❤️ for couples",
+                            text = stringResource(R.string.made_with_love),
                             fontSize = 13.sp,
                             color = Color(0xFFB0B0B0)
                         )

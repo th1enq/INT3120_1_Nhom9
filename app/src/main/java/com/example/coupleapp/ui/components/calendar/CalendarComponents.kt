@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -176,7 +177,7 @@ fun CircleLoveDaysDisplay(totalDays: Long) {
             Spacer(modifier = Modifier.height(8.dp))
             
             Text(
-                text = "NGÀY",
+                text = stringResource(R.string.day_label),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF757575),
@@ -221,7 +222,7 @@ fun SquareLoveDaysDisplay(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Chúng ta đã yêu nhau",
+                text = stringResource(R.string.we_have_loved),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF757575)

@@ -125,11 +125,16 @@ enum class QAStatus {
 data class PartnerShortcut(
     val id: String,
     val name: String,
+    val vietnameseName: String = "",
     val iconName: String,
     val route: String,
     val backgroundColor: Long,
     val iconColor: Long
-)
+) {
+    fun getLocalizedName(isVietnamese: Boolean): String {
+        return if (isVietnamese && vietnameseName.isNotEmpty()) vietnameseName else name
+    }
+}
 
 /**
  * State tổng hợp cho Partner Hub

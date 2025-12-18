@@ -15,7 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -61,7 +63,7 @@ fun SleepSettingsBottomSheet(
         
         // Title
         Text(
-            text = "Sleep Settings",
+            text = stringResource(R.string.sleep_settings),
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 22.sp
@@ -75,7 +77,7 @@ fun SleepSettingsBottomSheet(
         // Settings items
         SettingsItem(
             icon = Icons.Default.Add,
-            title = "Add Widget",
+            title = stringResource(R.string.add_widget),
             currentValue = "",
             onClick = onAddWidgetClick
         )
@@ -87,7 +89,7 @@ fun SleepSettingsBottomSheet(
         
         SettingsItem(
             icon = Icons.Default.DateRange,
-            title = "When to Sleep",
+            title = stringResource(R.string.when_to_sleep),
             currentValue = bedTime,
             onClick = onWhenToSleepClick
         )
@@ -99,7 +101,7 @@ fun SleepSettingsBottomSheet(
         
         SettingsItem(
             icon = Icons.Default.CheckCircle,
-            title = "Sleep Goal",
+            title = stringResource(R.string.sleep_goal),
             currentValue = sleepGoal,
             onClick = onSleepGoalClick
         )
@@ -111,7 +113,7 @@ fun SleepSettingsBottomSheet(
         
         SettingsItem(
             icon = Icons.AutoMirrored.Filled.List,
-            title = "My History",
+            title = stringResource(R.string.my_history),
             currentValue = "",
             onClick = onMyHistoryClick
         )
@@ -123,8 +125,8 @@ fun SleepSettingsBottomSheet(
         
         SettingsItemWithSwitch(
             icon = Icons.Default.Notifications,
-            title = "Google Sleep API",
-            description = "Auto-track sleep in background",
+            title = stringResource(R.string.google_sleep_api),
+            description = stringResource(R.string.auto_track_sleep),
             isEnabled = isGoogleSleepApiEnabled,
             onToggle = onToggleGoogleSleepApi
         )
@@ -136,7 +138,7 @@ fun SleepSettingsBottomSheet(
         
         SettingsItem(
             icon = Icons.Default.Refresh,
-            title = "Sync Health Connect",
+            title = stringResource(R.string.sync_health_connect),
             currentValue = "",
             onClick = onSyncHealthConnectClick
         )
@@ -148,7 +150,7 @@ fun SleepSettingsBottomSheet(
         
         SettingsItem(
             icon = Icons.Default.Edit,
-            title = "Insert Mock Data (Test)",
+            title = stringResource(R.string.insert_mock_data),
             currentValue = "",
             onClick = onInsertMockDataClick
         )

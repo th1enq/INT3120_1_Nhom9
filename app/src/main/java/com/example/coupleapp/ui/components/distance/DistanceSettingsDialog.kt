@@ -16,7 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -75,7 +77,7 @@ fun DistanceSettingsDialog(
                         }
                         
                         Text(
-                            text = "Location Settings",
+                            text = stringResource(R.string.location_settings),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
@@ -156,7 +158,7 @@ fun DistanceSettingsDialog(
                         )
                     ) {
                         Text(
-                            text = "Cancel",
+                            text = stringResource(R.string.cancel),
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -173,7 +175,7 @@ fun DistanceSettingsDialog(
                         )
                     ) {
                         Text(
-                            text = "Save",
+                            text = stringResource(R.string.save),
                             fontWeight = FontWeight.Medium
                         )
                     }

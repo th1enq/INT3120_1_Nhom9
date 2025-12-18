@@ -20,6 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,7 +76,7 @@ fun HelpScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Help & Support",
+                        text = stringResource(R.string.help_support),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -124,7 +126,7 @@ fun HelpScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Contact Us",
+                                text = stringResource(R.string.contact_us),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF718096),
@@ -172,7 +174,7 @@ fun HelpScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Frequently Asked Questions",
+                                text = stringResource(R.string.faq),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF718096),
@@ -213,7 +215,7 @@ fun HelpScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Feedback",
+                                text = stringResource(R.string.feedback),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF718096),

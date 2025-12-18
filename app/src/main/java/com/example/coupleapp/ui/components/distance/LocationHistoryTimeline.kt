@@ -22,7 +22,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,7 +61,7 @@ fun LocationHistoryTimeline(
                 modifier = Modifier.size(20.dp)
             )
             Text(
-                text = "Location History",
+                text = stringResource(R.string.location_history),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary
@@ -85,12 +87,12 @@ fun LocationHistoryTimeline(
                         modifier = Modifier.size(32.dp)
                     )
                     Text(
-                        text = "No location history yet",
+                        text = stringResource(R.string.no_location_history),
                         fontSize = 14.sp,
                         color = TextSecondary
                     )
                     Text(
-                        text = "Locations will appear after staying\n5+ minutes at a place",
+                        text = stringResource(R.string.location_appear_message),
                         fontSize = 12.sp,
                         color = TextSecondary.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center
@@ -308,7 +310,7 @@ private fun TimelineItem(
                                     .background(Color(0xFF4CAF50).copy(alpha = alpha))
                             )
                             Text(
-                                text = "Currently here",
+                                text = stringResource(R.string.currently_here),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF4CAF50)

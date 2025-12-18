@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -168,7 +169,7 @@ fun TodayMissCountCard(
                     .padding(20.dp)
             ) {
                 Text(
-                    text = "Today's Love 💕",
+                    text = stringResource(R.string.todays_love),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -335,7 +336,7 @@ fun MissingButton(
                 tint = Color.White
             )
             Text(
-                text = "Miss You",
+                text = stringResource(R.string.miss_you),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold
                 ),

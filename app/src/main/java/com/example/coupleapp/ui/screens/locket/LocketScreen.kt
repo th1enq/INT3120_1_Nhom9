@@ -28,7 +28,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.LocketTab
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.home.BottomNavItem
@@ -128,7 +130,7 @@ fun LocketScreen(
     LaunchedEffect(uiState.sendSuccess) {
         if (uiState.sendSuccess) {
             snackbarHostState.showSnackbar(
-                message = "Sent successfully! 💕",
+                message = context.getString(R.string.locket_sent_success),
                 duration = SnackbarDuration.Short
             )
         }
@@ -138,7 +140,7 @@ fun LocketScreen(
     LaunchedEffect(uiState.error) {
         uiState.error?.let { error ->
             snackbarHostState.showSnackbar(
-                message = "Error: $error",
+                message = context.getString(R.string.error) + ": $error",
                 duration = SnackbarDuration.Long
             )
         }
@@ -188,7 +190,7 @@ fun LocketScreen(
                 modifier = modifier.fillMaxSize()
             ) { loading ->
                 if (loading) {
-                    LoadingScreen(message = "Loading...")
+                    LoadingScreen(message = stringResource(R.string.loading))
                 } else {
                     Box(
                         modifier = Modifier
@@ -239,7 +241,7 @@ fun LocketScreen(
                                             slideInVertically(animationSpec = tween(300)) { -it }
                                 ) {
                                     LocketTopBar(
-                                        title = "Pin",
+                                        title = stringResource(R.string.pin),
                                         onBackClick = onBackClick,
                                         onMenuClick = { viewModel.showSettings(true) }
                                     )
@@ -377,7 +379,7 @@ fun LocketScreen(
                                         Spacer(modifier = Modifier.height(16.dp))
                                         
                                         Text(
-                                            text = "Sending...",
+                                            text = stringResource(R.string.sending),
                                             color = Color(0xFF2D2D2D),
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Medium
@@ -526,7 +528,7 @@ fun LocketSettingsBottomSheet(
         Spacer(modifier = Modifier.height(24.dp))
         
         Text(
-            text = "Locket Settings",
+            text = stringResource(R.string.locket_settings),
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold
             ),
@@ -538,26 +540,26 @@ fun LocketSettingsBottomSheet(
         // Settings options
         SettingsItem(
             icon = Icons.Default.Notifications,
-            title = "Notifications",
-            subtitle = "Get notified when you receive a message"
+            title = stringResource(R.string.notifications),
+            subtitle = stringResource(R.string.get_notified_subtitle)
         )
         
         SettingsItem(
             icon = Icons.Default.Save,
-            title = "Auto Save",
-            subtitle = "Save photos to gallery after sending"
+            title = stringResource(R.string.auto_save),
+            subtitle = stringResource(R.string.auto_save_subtitle)
         )
         
         SettingsItem(
             icon = Icons.Default.History,
-            title = "History",
-            subtitle = "View all sent messages"
+            title = stringResource(R.string.history),
+            subtitle = stringResource(R.string.view_sent_messages)
         )
         
         SettingsItem(
             icon = Icons.Default.Info,
-            title = "Help",
-            subtitle = "How to use Locket"
+            title = stringResource(R.string.help_support),
+            subtitle = stringResource(R.string.how_to_use_locket)
         )
         
         Spacer(modifier = Modifier.height(16.dp))

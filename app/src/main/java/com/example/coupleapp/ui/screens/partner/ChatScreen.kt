@@ -27,8 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.ChatMessage
 import com.example.coupleapp.data.model.MessageType
 import com.example.coupleapp.ui.theme.*
@@ -277,7 +279,7 @@ private fun ChatHeader(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Đang hoạt động",
+                        text = stringResource(R.string.active_now),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -459,7 +461,7 @@ private fun ChatInputArea(
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = {
                             Text(
-                                text = "Nhập tin nhắn...",
+                                text = stringResource(R.string.enter_message),
                                 color = TextLight
                             )
                         },
@@ -566,14 +568,14 @@ private fun AuthenticationRequiredScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Xác thực để truy cập tin nhắn",
+                text = stringResource(R.string.authenticate_to_access),
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 color = Color(0xFF2D3748)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Vui lòng xác thực bằng vân tay, Face ID hoặc mã PIN để tiếp tục.",
+                text = stringResource(R.string.authenticate_message),
                 color = Color(0xFF718096),
                 textAlign = TextAlign.Center
             )
@@ -584,10 +586,10 @@ private fun AuthenticationRequiredScreen(
             Spacer(modifier = Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B9D))) {
-                    Text("Thử lại", color = Color.White)
+                    Text(stringResource(R.string.retry), color = Color.White)
                 }
                 OutlinedButton(onClick = onBack) {
-                    Text("Quay lại")
+                    Text(stringResource(R.string.go_back))
                 }
             }
         }

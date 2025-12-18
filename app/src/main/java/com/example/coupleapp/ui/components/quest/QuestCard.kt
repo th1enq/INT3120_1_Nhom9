@@ -15,12 +15,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.Quest
 import com.example.coupleapp.data.model.QuestStatus
+import java.util.Locale
 
 /**
  * Single quest card component - Larger size, clickable to navigate
@@ -37,6 +40,7 @@ fun QuestCard(
     val isClaimed = quest.status == QuestStatus.CLAIMED
     // Only clickable for navigation when NOT completed and NOT claimed
     val canNavigate = quest.canNavigate && quest.status != QuestStatus.CLAIMED && quest.status != QuestStatus.COMPLETED
+    val isVietnamese = Locale.getDefault().language == "vi"
 
     Card(
         modifier = modifier
@@ -87,7 +91,7 @@ fun QuestCard(
             // Quest info
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = quest.title,
+                    text = quest.getLocalizedTitle(isVietnamese),
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp
@@ -100,7 +104,7 @@ fun QuestCard(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = quest.description,
+                    text = quest.getLocalizedDescription(isVietnamese),
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontSize = 13.sp
                     ),
@@ -203,7 +207,7 @@ fun QuestCard(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = "Claim",
+                            text = stringResource(R.string.claim),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold
                             ),
@@ -215,7 +219,7 @@ fun QuestCard(
                     // Show "Go" indicator for navigable quests
                     if (quest.canNavigate) {
                         Text(
-                            text = "Go →",
+                            text = stringResource(R.string.go_arrow),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold
                             ),

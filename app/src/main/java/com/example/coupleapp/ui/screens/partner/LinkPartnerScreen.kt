@@ -33,9 +33,11 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.FirebaseUser
 import com.example.coupleapp.ui.theme.*
@@ -122,7 +124,7 @@ fun LinkPartnerScreen(
                     color = Color(0xFFE0E0E0)
                 )
                 Text(
-                    text = "hoặc",
+                    text = stringResource(R.string.or_text),
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = TextSecondary,
                     fontSize = 14.sp
@@ -191,7 +193,7 @@ fun LinkPartnerScreen(
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "Đã sao chép mã liên kết",
+                        text = stringResource(R.string.link_code_copied),
                         color = Color.White,
                         fontSize = 14.sp
                     )
@@ -220,7 +222,7 @@ private fun LinkPartnerHeader(onBackClick: () -> Unit) {
         }
         
         Text(
-            text = "Liên kết Partner",
+            text = stringResource(R.string.link_partner),
             modifier = Modifier.align(Alignment.Center),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
@@ -284,7 +286,7 @@ private fun MyLinkCodeSection(
             Spacer(modifier = Modifier.height(8.dp))
             
             Text(
-                text = "Chia sẻ mã này với người ấy để liên kết",
+                text = stringResource(R.string.share_code_to_link),
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 textAlign = TextAlign.Center
@@ -370,7 +372,7 @@ private fun EnterLinkCodeSection(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Nhập mã liên kết của người ấy",
+            text = stringResource(R.string.enter_partner_link_code),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary
@@ -585,14 +587,14 @@ private fun FoundUserCard(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "Đã gửi yêu cầu!",
+                    text = stringResource(R.string.request_sent),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = AccentGreen
                 )
                 
                 Text(
-                    text = "Đang chờ ${user.displayName ?: "người dùng"} chấp nhận",
+                    text = stringResource(R.string.waiting_for_user, user.displayName ?: stringResource(R.string.user)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary,
                     modifier = Modifier.padding(top = 4.dp)

@@ -17,7 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import com.example.coupleapp.R
 
 /**
  * Dialog to guide user to enable Health Connect permissions
@@ -54,7 +56,7 @@ fun HealthConnectPermissionDialog(
                 
                 // Title
                 Text(
-                    text = "Health Connect Permissions",
+                    text = stringResource(R.string.health_connect_permissions),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold
                     ),
@@ -66,13 +68,7 @@ fun HealthConnectPermissionDialog(
                 
                 // Description
                 Text(
-                    text = "To sync sleep data, you need to:\n\n" +
-                            "1. Install Health Connect app from Play Store\n" +
-                            "2. Open Health Connect\n" +
-                            "3. Go to App permissions\n" +
-                            "4. Select this app\n" +
-                            "5. Enable Sleep permissions\n\n" +
-                            "Then come back and try syncing again.",
+                    text = stringResource(R.string.health_connect_instructions),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF757575),
                     textAlign = TextAlign.Start,
@@ -94,7 +90,7 @@ fun HealthConnectPermissionDialog(
                             contentColor = Color(0xFF757575)
                         )
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     
                     // Open Health Connect button
@@ -126,7 +122,7 @@ fun HealthConnectPermissionDialog(
                             containerColor = Color(0xFFFF9ECE)
                         )
                     ) {
-                        Text("Open Settings")
+                        Text(stringResource(R.string.open_settings))
                     }
                 }
             }

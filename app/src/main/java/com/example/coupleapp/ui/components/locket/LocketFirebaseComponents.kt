@@ -8,6 +8,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,7 +87,7 @@ fun LocketImageFromUrl(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Failed to load",
+                                text = stringResource(R.string.failed_to_load),
                                 fontSize = 10.sp,
                                 color = Color.Gray
                             )
@@ -421,7 +423,7 @@ fun LocketDetailWithFirebase(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "From $senderName",
+                text = stringResource(R.string.from_sender, senderName),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color(0xFF2D2D2D)

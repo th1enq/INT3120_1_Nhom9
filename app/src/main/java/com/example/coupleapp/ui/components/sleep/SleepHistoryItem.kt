@@ -38,9 +38,9 @@ fun SleepHistoryItem(
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
     val (qualityColor, qualityLabel, qualityIcon) = when (record.quality) {
-        SleepQuality.EXCELLENT -> Triple(Color(0xFF4CAF50), "Excellent", R.drawable.excellent)
-        SleepQuality.GOOD -> Triple(Color(0xFFFF9800), "Good", R.drawable.good)
-        SleepQuality.POOR -> Triple(Color(0xFFF44336), "Poor", R.drawable.bad)
+        SleepQuality.EXCELLENT -> Triple(Color(0xFF4CAF50), "Tuyệt vời", R.drawable.excellent)
+        SleepQuality.GOOD -> Triple(Color(0xFFFF9800), "Tốt", R.drawable.good)
+        SleepQuality.POOR -> Triple(Color(0xFFF44336), "Kém", R.drawable.bad)
     }
     
     Box(

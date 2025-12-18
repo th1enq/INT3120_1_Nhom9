@@ -145,7 +145,9 @@ class MissingViewModelFirebase : ViewModel() {
                 val totalMissing = historyList.sumOf { day ->
                     day.summaries.sumOf { it.missCount }
                 }
-                val currentStreak = calculateStreak(historyList, currentUserId, partnerId)
+                
+                // Calculate streak with longest
+                val (currentStreak, longestStreak) = calculateStreakWithLongest(historyList, currentUserId, partnerId)
                 
                 // Check if both users sent today
                 val hasSentToday = myTodayResult.todayCount > 0 && partnerTodayResult.todayCount > 0
@@ -154,7 +156,7 @@ class MissingViewModelFirebase : ViewModel() {
                     totalMissCount = totalMissing,
                     todayMissCount = myTodayResult.todayCount + partnerTodayResult.todayCount,
                     currentStreak = currentStreak,
-                    longestStreak = currentStreak, // Simplified for now
+                    longestStreak = longestStreak,
                     hasSentToday = hasSentToday,
                     myTodayCount = myTodayResult.todayCount,
                     partnerTodayCount = partnerTodayResult.todayCount
@@ -250,23 +252,77 @@ class MissingViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Calculate current streak
+     * Calculate current streak - both users must send hearts on consecutive days
+     * Returns a pair of (currentStreak, longestStreak)
+     */
+    private fun calculateStreakWithLongest(
+        history: List<DailyMissingHistory>,
+        currentUserId: String,
+        partnerId: String
+    ): Pair<Int, Int> {
+        if (history.isEmpty()) return Pair(0, 0)
+        
+        var currentStreak = 0
+        var longestStreak = 0
+        var tempStreak = 0
+        var lastDate: LocalDate? = null
+        
+        // Sort history by date descending (most recent first)
+        val sortedHistory = history.sortedByDescending { it.date }
+        
+        for (day in sortedHistory) {
+            val bothSent = day.summaries.all { it.missCount > 0 }
+            
+            if (bothSent) {
+                if (lastDate == null) {
+                    // First day with both sending
+                    tempStreak = 1
+                } else {
+                    // Check if consecutive day
+                    val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastDate)
+                    if (daysDiff == 1L) {
+                        tempStreak++
+                    } else {
+                        // Gap in days, save longest if needed and reset
+                        longestStreak = maxOf(longestStreak, tempStreak)
+                        tempStreak = 1
+                    }
+                }
+                lastDate = day.date
+            } else {
+                // Day where not both sent - end current streak
+                if (tempStreak > 0) {
+                    // Only break current streak if this is a more recent day
+                    if (currentStreak == 0) {
+                        // This gap means the current streak is what we've counted so far
+                        currentStreak = tempStreak
+                    }
+                    longestStreak = maxOf(longestStreak, tempStreak)
+                    tempStreak = 0
+                    lastDate = null
+                }
+            }
+        }
+        
+        // Final check
+        longestStreak = maxOf(longestStreak, tempStreak)
+        if (currentStreak == 0) {
+            currentStreak = tempStreak
+        }
+        
+        Log.d(TAG, "[STREAK] Current: $currentStreak, Longest: $longestStreak")
+        return Pair(currentStreak, longestStreak)
+    }
+
+    /**
+     * Calculate current streak - legacy method for backward compatibility
      */
     private fun calculateStreak(
         history: List<DailyMissingHistory>,
         currentUserId: String,
         partnerId: String
     ): Int {
-        var streak = 0
-        for (day in history) {
-            val bothSent = day.summaries.all { it.missCount > 0 }
-            if (bothSent) {
-                streak++
-            } else {
-                break
-            }
-        }
-        return streak
+        return calculateStreakWithLongest(history, currentUserId, partnerId).first
     }
 
     /**

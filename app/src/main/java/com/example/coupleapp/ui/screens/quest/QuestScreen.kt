@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
@@ -109,7 +110,7 @@ fun QuestScreen(
             modifier = Modifier.fillMaxSize()
         ) { loading ->
             if (loading) {
-                LoadingScreen(message = "Loading quests...")
+                LoadingScreen(message = stringResource(R.string.loading_quests))
             } else {
                 Box(
                     modifier = Modifier.fillMaxSize()

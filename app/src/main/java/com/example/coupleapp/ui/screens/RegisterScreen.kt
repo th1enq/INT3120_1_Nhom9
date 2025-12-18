@@ -1,5 +1,6 @@
 package com.example.coupleapp.ui.screens
 
+import android.app.DatePickerDialog
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -7,7 +8,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -16,18 +22,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.ui.components.CustomTextField
+import com.example.coupleapp.ui.components.DateTextField
 import com.example.coupleapp.ui.components.GradientButton
 import com.example.coupleapp.ui.components.CustomSnackbar
 import com.example.coupleapp.ui.components.SnackbarType
 import com.example.coupleapp.viewmodel.RegisterViewModel
 import kotlinx.coroutines.delay
+import java.util.Calendar
 
 @Composable
 fun RegisterScreen(
@@ -72,7 +83,7 @@ fun RegisterScreen(
                 horizontalArrangement = Arrangement.Start
             ) {
                 Text(
-                    text = "← Back",
+                    text = stringResource(R.string.back_arrow),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF757575),
                     modifier = Modifier.clickable { onBackClick() }
@@ -116,7 +127,7 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Create Account",
+                        text = stringResource(R.string.create_account),
                         style = MaterialTheme.typography.displaySmall.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 32.sp
@@ -127,7 +138,7 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "Fill in the information to start your journey",
+                        text = stringResource(R.string.register_subtitle),
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color(0xFF757575),
                         textAlign = TextAlign.Center
@@ -159,15 +170,71 @@ fun RegisterScreen(
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // Date of Birth Field
-                    CustomTextField(
-                        value = uiState.dateOfBirth,
-                        onValueChange = { viewModel.updateDateOfBirth(it) },
-                        placeholder = "Date of birth (DD/MM/YYYY)",
-                        keyboardType = KeyboardType.Number,
+                    // Date of Birth Field with DatePicker
+                    val context = LocalContext.current
+                    val calendar = remember { Calendar.getInstance() }
+                    
+                    // Set default to 18 years ago
+                    LaunchedEffect(Unit) {
+                        calendar.add(Calendar.YEAR, -18)
+                    }
+                    
+                    val datePickerDialog = remember {
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                viewModel.setDateOfBirth(dayOfMonth, month + 1, year)
+                            },
+                            calendar.get(Calendar.YEAR),
+                            calendar.get(Calendar.MONTH),
+                            calendar.get(Calendar.DAY_OF_MONTH)
+                        ).apply {
+                            // Set max date to today (user cannot be born in the future)
+                            datePicker.maxDate = System.currentTimeMillis()
+                            // Set min date to 120 years ago
+                            val minCalendar = Calendar.getInstance()
+                            minCalendar.add(Calendar.YEAR, -120)
+                            datePicker.minDate = minCalendar.timeInMillis
+                        }
+                    }
+                    
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        errorMessage = uiState.dateOfBirthError
-                    )
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        DateTextField(
+                            value = uiState.dateOfBirth,
+                            onValueChange = { viewModel.updateDateOfBirth(it) },
+                            placeholder = "Ngày sinh (DD/MM/YYYY)",
+                            modifier = Modifier.weight(1f),
+                            errorMessage = uiState.dateOfBirthError
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        // Calendar button to open DatePicker
+                        IconButton(
+                            onClick = { datePickerDialog.show() },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFB8D6),
+                                            Color(0xFFFFD6E8)
+                                        )
+                                    )
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = "Chọn ngày sinh",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
@@ -222,7 +289,7 @@ fun RegisterScreen(
                     
                     // Register Button
                     GradientButton(
-                        text = "Sign Up",
+                        text = stringResource(R.string.sign_up),
                         onClick = { 
                             viewModel.register {
                                 onRegisterClick(
@@ -253,12 +320,12 @@ fun RegisterScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Already have an account? ",
+                            text = stringResource(R.string.already_have_account) + " ",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF757575)
                         )
                         Text(
-                            text = "Login",
+                            text = stringResource(R.string.login),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.SemiBold
                             ),

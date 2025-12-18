@@ -1,6 +1,7 @@
 package com.example.coupleapp
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +21,7 @@ import com.example.coupleapp.manager.MessageNotificationManager
 import com.example.coupleapp.navigation.NavGraph
 import com.example.coupleapp.service.LocationTrackingService
 import com.example.coupleapp.ui.theme.CoupleAppTheme
+import com.example.coupleapp.util.LanguageManager
 import com.example.coupleapp.worker.PhotoSyncManager
 
 /**
@@ -29,6 +31,13 @@ class MainActivity : FragmentActivity() {
     
     companion object {
         private const val TAG = "MainActivity"
+    }
+    
+    /**
+     * Apply saved language setting before context is attached
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LanguageManager.updateContextLocale(newBase))
     }
     
     private val lifecycleObserver = object : DefaultLifecycleObserver {

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -74,7 +75,7 @@ fun WakeUpDialog(
                 
                 // Title
                 Text(
-                    text = "Good Morning!",
+                    text = stringResource(R.string.good_morning),
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 28.sp
@@ -85,7 +86,7 @@ fun WakeUpDialog(
                 
                 // Sleep info
                 Text(
-                    text = "You've been sleeping",
+                    text = stringResource(R.string.youve_been_sleeping),
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontSize = 16.sp
                     ),
@@ -106,7 +107,7 @@ fun WakeUpDialog(
                 
                 // Sleep start time
                 Text(
-                    text = "Since ${sleepStartTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                    text = stringResource(R.string.since_time, sleepStartTime.format(DateTimeFormatter.ofPattern("HH:mm"))),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = 14.sp
                     ),
@@ -129,7 +130,7 @@ fun WakeUpDialog(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
-                        text = "I'm awake!",
+                        text = stringResource(R.string.im_awake),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
@@ -143,7 +144,7 @@ fun WakeUpDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Still sleeping...",
+                        text = stringResource(R.string.still_sleeping),
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = 16.sp
                         ),

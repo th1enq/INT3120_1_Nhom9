@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
+import com.example.coupleapp.R
 import com.example.coupleapp.data.repository.FirebaseStorageRepository
 import com.example.coupleapp.data.repository.LocationRepository
 import com.example.coupleapp.service.LocationTrackingService
@@ -160,7 +161,7 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                             myLocation = myLocation,
                             partnerLocation = null,
                             distanceInMeters = 0.0,
-                            distanceText = "Not paired yet",
+                            distanceText = context.getString(R.string.not_paired_yet),
                             lastSyncTime = formatLastSync(LocalDateTime.now()),
                             currentUserId = userId,
                             error = if (myLocation == null) "Could not get your location" else null
@@ -1057,7 +1058,9 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
     
     private fun formatLastSync(dateTime: LocalDateTime): String {
         val formatter = DateTimeFormatter.ofPattern("HH:mm")
-        return "Updated ${dateTime.format(formatter)}"
+        val isVietnamese = java.util.Locale.getDefault().language == "vi"
+        val prefix = if (isVietnamese) "Cập nhật" else "Updated"
+        return "$prefix ${dateTime.format(formatter)}"
     }
     
     /**

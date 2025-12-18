@@ -31,9 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -167,7 +169,7 @@ fun LocketCameraPreview(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Text(
-                        text = "Camera access required",
+                        text = stringResource(R.string.camera_access_required),
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 14.sp
                     )
@@ -178,7 +180,7 @@ fun LocketCameraPreview(
                         onClick = { cameraPermissionState.launchPermissionRequest() }
                     ) {
                         Text(
-                            text = "Grant Permission",
+                            text = stringResource(R.string.grant_permission),
                             color = Color(0xFF4CAF50)
                         )
                     }

@@ -1,10 +1,578 @@
 <resources>
     <string name="app_name">CoupleApp</string>
     
+    <!-- Common -->
+    <string name="back">Back</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">OK</string>
+    <string name="loading">Loading…</string>
+    <string name="error">Error</string>
+    <string name="success">Success</string>
+    <string name="retry">Retry</string>
+    <string name="delete">Delete</string>
+    <string name="confirm">Confirm</string>
+    <string name="close">Close</string>
+    <string name="send">Send</string>
+    <string name="done">Done</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="accept">Accept</string>
+    <string name="decline">Decline</string>
+    <string name="copy">Copy</string>
+    <string name="share">Share</string>
+    <string name="edit">Edit</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="not_correct">Not Correct</string>
+    <string name="copied">Copied!</string>
+    <string name="delete_all">Delete All</string>
+    <string name="go_back">Go Back</string>
+    <string name="hello">Hello!</string>
+    <string name="invite_friends_subtitle">Invite your friends and your loved one!</string>
+    <string name="add_by_code">Add by code</string>
+    <string name="enter_friend_code">Enter friend code…</string>
+    <string name="share_invite">Share &amp; Invite</string>
+    <string name="copy_code">Copy code</string>
+    <string name="share_link">Share Link</string>
+    <string name="friends">Friends</string>
+    
+    <!-- Auth - Login -->
+    <string name="welcome_back">Welcome Back!</string>
+    <string name="login_subtitle">Sign in to continue your journey</string>
+    <string name="phone_number">Phone number</string>
+    <string name="password">Password</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="login">Login</string>
+    <string name="no_account">Don\'t have an account?</string>
+    <string name="sign_up">Sign Up</string>
+    
+    <!-- Auth - Register -->
+    <string name="create_account">Create Account</string>
+    <string name="register_subtitle">Fill in the information to start your journey</string>
+    <string name="full_name">Full name</string>
+    <string name="date_of_birth">Date of birth (DD/MM/YYYY)</string>
+    <string name="confirm_password">Confirm password</string>
+    <string name="passwords_match">✓ Passwords match</string>
+    <string name="passwords_not_match">✗ Passwords do not match</string>
+    <string name="already_have_account">Already have an account?</string>
+    
+    <!-- Validation errors -->
+    <string name="error_full_name_required">Full name is required</string>
+    <string name="error_full_name_min_length">Full name must be at least 3 characters</string>
+    <string name="error_date_required">Date of birth is required</string>
+    <string name="error_date_invalid">Invalid date format (DD/MM/YYYY)</string>
+    <string name="error_phone_required">Phone number is required</string>
+    <string name="error_phone_invalid">Invalid phone number</string>
+    <string name="error_password_required">Password is required</string>
+    <string name="error_password_min_length">Password must be at least 6 characters</string>
+    <string name="error_confirm_password">Please confirm your password</string>
+    
+    <!-- Home -->
+    <string name="your_widgets">Your Widgets</string>
+    <string name="features">Features</string>
+    
+    <!-- Slider -->
+    <string name="slider_locket_title">Locket\nShare your moments</string>
+    <string name="slider_locket_button">Send now</string>
+    <string name="slider_sleep_title">Sleep\nTrack and compare sleep</string>
+    <string name="slider_sleep_button">Track sleep</string>
+    <string name="slider_garden_title">Garden\nGrow plants together</string>
+    <string name="slider_garden_button">Visit garden</string>
+    <string name="slider_calendar_title">Calendar\nManage time together</string>
+    <string name="slider_calendar_button">View calendar</string>
+    
+    <!-- Bottom Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_friends">Friends</string>
+    <string name="nav_activities">Activities</string>
+    <string name="nav_profile">Profile</string>
+    
+    <!-- Features -->
+    <string name="feature_calendar">Calendar</string>
+    <string name="feature_locket">Locket</string>
+    <string name="feature_sleep">Sleep</string>
+    <string name="feature_garden">Garden</string>
+    <string name="feature_missing">Missing</string>
+    <string name="feature_distance">Distance</string>
+    <string name="feature_store">Store</string>
+    <string name="feature_quest">Quest</string>
+    <string name="feature_location">Location</string>
+    <string name="nav_partner">Partner</string>
+    
+    <!-- Widget Descriptions -->
+    <string name="widget_sleep_desc">Track your sleep together</string>
+    <string name="widget_locket_desc">Share fun moments instantly</string>
+    <string name="widget_missing_desc">See how much you miss each other</string>
+    <string name="widget_location_desc">Know where your love is</string>
+    
+    <!-- Sleep Tracker -->
+    <string name="sleep_tracker">Sleep Tracker</string>
+    <string name="sleep_history">Sleep History</string>
+    <string name="bed_time">Bed time</string>
+    <string name="wake_up_time">Wake up time</string>
+    <string name="sleep_duration">Sleep duration</string>
+    <string name="sleep_quality">Sleep quality</string>
+    <string name="excellent">Excellent</string>
+    <string name="good">Good</string>
+    <string name="poor">Poor</string>
+    
+    <!-- Garden -->
+    <string name="garden">Garden</string>
+    <string name="plant_now">Plant now</string>
+    <string name="water_plant">Water</string>
+    <string name="harvest">Harvest</string>
+    <string name="growth_progress">Growth: %d%%</string>
+    
+    <!-- Locket -->
+    <string name="locket">Locket</string>
+    <string name="send_locket">Send Locket</string>
+    <string name="take_photo">Take photo</string>
+    <string name="choose_emoji">Choose emoji</string>
+    <string name="draw_something">Draw something</string>
+    <string name="write_text">Write text</string>
+    
+    <!-- Moments -->
+    <string name="moments">Moments</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="no_moments">No moments yet</string>
+    <string name="no_moments_description">Your activities will appear here</string>
+    
+    <!-- Profile -->
+    <string name="profile">Profile</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="settings">Settings</string>
+    <string name="language">Language</string>
+    <string name="english">English</string>
+    <string name="vietnamese">Tiếng Việt</string>
+    <string name="logout">Logout</string>
+    <string name="logout_confirm">Are you sure you want to logout?</string>
+    <string name="account">Account</string>
+    <string name="change_password">Change Password</string>
+    <string name="manage_link">Manage Link</string>
+    <string name="app_settings">App Settings</string>
+    <string name="notifications">Notifications</string>
+    <string name="help_support">Help &amp; Support</string>
+    <string name="about_app">About App</string>
+    <string name="select_language">Select Language</string>
+    <string name="days_together">%d days together</string>
+    <string name="link_code">Link code</string>
+    <string name="no_partner">No Partner</string>
+    
     <!-- Widget related strings -->
     <string name="widget_sleep_tracker_description">Compare sleep quality with your partner</string>
+    <string name="widget_locket_description">View and send Lockets to your partner</string>
+    <string name="widget_missing_description">Send love to your partner and track your streak</string>
+    <string name="widget_location_description">See distance and location of your partner</string>
     <string name="avatar_left">Left user avatar</string>
     <string name="avatar_right">Right user avatar</string>
     <string name="sleep_status">Sleep status indicator</string>
     <string name="bedtime_reminder">Bedtime reminder</string>
+    
+    <!-- Calendar -->
+    <string name="calendar">Calendar</string>
+    <string name="add_event">Add Event</string>
+    <string name="event_title">Event title</string>
+    <string name="event_description">Description</string>
+    <string name="event_date">Date</string>
+    <string name="upcoming_events">Upcoming Events</string>
+    
+    <!-- Missing -->
+    <string name="missing_you">Missing You</string>
+    <string name="send_missing">Send Missing</string>
+    <string name="hearts_sent">%d hearts sent</string>
+    
+    <!-- Partner Hub -->
+    <string name="partner_hub">Partner Hub</string>
+    <string name="connect_partner">Connect with Partner</string>
+    <string name="enter_code">Enter partner code</string>
+    <string name="your_code">Your code</string>
+    <string name="share_code">Share code</string>
+    <string name="partner_link_requests">Link Requests</string>
+    <string name="partner_no_requests">No requests</string>
+    <string name="partner_wants_to_connect">wants to connect with you</string>
+    <string name="partner_connect_subtitle">Share your code or enter your partner\'s code</string>
+    <string name="partner_waiting_response">Waiting for Response</string>
+    <string name="partner_link_request_sent">Link request sent to</string>
+    <string name="partner_data_unavailable">Partner data not available</string>
+    <string name="or_divider">or</string>
+    <string name="enter_partner_code">Enter partner code</string>
+    <string name="location_unknown">Unknown</string>
+    
+    <!-- Moments -->
+    <string name="loading_moments">Loading moments…</string>
+    <string name="moments_empty_subtitle">Start creating beautiful memories together!</string>
+    
+    <!-- Sleep Tracker additional -->
+    <string name="loading_sleep_data">Loading sleep data…</string>
+    <string name="sleep_no_data">No sleep data yet</string>
+    <string name="sleep_no_data_subtitle">Click menu to insert mock data or sync from Health Connect</string>
+    <string name="recent_sleep">Recent Sleep</string>
+    <string name="view_all">View all →</string>
+    <string name="health_connect_unavailable">Health Connect is not available on this device</string>
+    <string name="sleep_goal">Sleep Goal</string>
+    <string name="activity_recognition_required">Activity Recognition Required</string>
+    <string name="activity_recognition_message">To enable automatic sleep tracking with Google Sleep API, please grant Activity Recognition permission in the app settings.\n\nGo to: Settings > Apps > CoupleApp > Permissions > Physical activity</string>
+    <string name="later">Later</string>
+    
+    <!-- Locket additional -->
+    <string name="locket_sent_success">Sent successfully! 💕</string>
+    <string name="sending">Sending…</string>
+    <string name="locket_settings">Locket Settings</string>
+    <string name="get_notified_subtitle">Get notified when you receive a message</string>
+    <string name="auto_save">Auto Save</string>
+    <string name="auto_save_subtitle">Save photos to gallery after sending</string>
+    <string name="history">History</string>
+    <string name="view_sent_messages">View all sent messages</string>
+    <string name="how_to_use_locket">How to use Locket</string>
+    <string name="pin">Pin</string>
+    
+    <!-- Garden additional -->
+    <string name="loading_garden">Loading garden…</string>
+    <string name="plant_new_seed">Plant New Seed</string>
+    
+    <!-- Calendar additional -->
+    <string name="loading_calendar">Loading calendar…</string>
+    
+    <!-- Missing additional -->
+    <string name="missing">Missing</string>
+    <string name="love_sent_to">Love sent to %s! 💕</string>
+    <string name="tap_heart_to_send">Tap the heart to send your love!</string>
+    <string name="missing_count">%d times</string>
+    
+    <!-- Distance additional -->
+    <string name="loading_location">Loading location…</string>
+    <string name="distance_between_us">Distance Between Us</string>
+    <string name="your_location">Your Location</string>
+    <string name="partner_location">Partner\'s Location</string>
+    <string name="km_apart">%.1f km apart</string>
+    <string name="location_permission_required">Location permission is required</string>
+    <string name="enable_location">Enable Location</string>
+    
+    <!-- Store -->
+    <string name="store">Store</string>
+    <string name="loading_store">Loading store…</string>
+    <string name="coins">%d coins</string>
+    <string name="buy">Buy</string>
+    <string name="owned">Owned</string>
+    
+    <!-- Quest -->
+    <string name="quests">Quests</string>
+    <string name="loading_quests">Loading quests…</string>
+    <string name="daily_quests">Daily Quests</string>
+    <string name="weekly_quests">Weekly Quests</string>
+    <string name="quest_completed">Quest completed!</string>
+    <string name="claim_reward">Claim Reward</string>
+    
+    <!-- History -->
+    <string name="loading_history">Loading history…</string>
+    
+    <!-- Photos -->
+    <string name="loading_photos">Loading photos…</string>
+    
+    <!-- Common dialog titles -->
+    <string name="bed_time_title">Bed Time</string>
+    <string name="wake_up_time_title">Wake Up Time</string>
+    <string name="sleep_goal_title">Sleep Goal</string>
+    
+    <!-- Edit Profile -->
+    <string name="display_name">Display Name</string>
+    <string name="email">Email</string>
+    <string name="phone_optional">Phone (Optional)</string>
+    <string name="bio_optional">Bio (Optional)</string>
+    
+    <!-- Change Password -->
+    <string name="current_password">Current Password</string>
+    <string name="new_password">New Password</string>
+    <string name="confirm_new_password">Confirm New Password</string>
+    <string name="password_min_length_error">Password must be at least 6 characters</string>
+    <string name="passwords_not_match_error">Passwords do not match</string>
+    
+    <!-- QA Screen -->
+    <string name="answer_this_question">Answer This Question</string>
+    <string name="send_question">Send Question</string>
+    <string name="send_answer">Send Answer</string>
+    <string name="please_enter_question">Please enter a question</string>
+    
+    <!-- Garden -->
+    <string name="bloomed">Bloomed! 🌸</string>
+    <string name="plant_name">Plant Name</string>
+    
+    <!-- Calendar dialogs -->
+    <string name="delete_anniversary">Delete anniversary?</string>
+    <string name="delete_anniversary_confirm">Are you sure you want to delete \"%s\"?</string>
+    <string name="select_background_gallery">Select background from gallery</string>
+    <string name="nickname">Nickname</string>
+    <string name="title_required">Title *</string>
+    <string name="description_label">Description</string>
+    
+    <!-- Location Tracking -->
+    <string name="sharing_location">Sharing your location with your partner 💕</string>
+    <string name="new_message_received">You have a new message</string>
+    
+    <!-- Welcome Screen -->
+    <string name="app_title">Widgetable</string>
+    <string name="app_tagline">Connect hearts, closer every day</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="login_with_phone">Login with phone number</string>
+    <string name="no_account_signup">Don\'t have an account?</string>
+    <string name="sign_up_now">Sign up now</string>
+    
+    <!-- Register Screen -->
+    <string name="back_arrow">← Back</string>
+    
+    <!-- Partner Hub -->
+    <string name="link_request_sent_to">Link request sent to\n%s</string>
+    <string name="share_via_link">Share via link</string>
+    <string name="code_label">Code: %s</string>
+    
+    <!-- Distance Screen -->
+    <string name="location_request_message">We need your location to show where you and your partner are on the map 💕</string>
+    <string name="allow_location">Allow Location</string>
+    <string name="not_paired_yet">Not paired yet</string>
+    
+    <!-- Place Photos Screen -->
+    <string name="adding_photo">Adding photo...</string>
+    <string name="delete_photos_title">Delete %d photo%s?</string>
+    <string name="delete_photos_message">This action cannot be undone. These photos will be permanently removed from this place.</string>
+    <string name="delete_photo_title">Delete Photo?</string>
+    <string name="delete_photo_message">This photo will be permanently removed from this memory. This action cannot be undone.</string>
+    <string name="photo">Photo</string>
+    <string name="no_photos_yet">No Photos Yet</string>
+    <string name="add_photos_message">Add your favorite memories\nfrom this place!</string>
+    <string name="add_photos">Add Photos</string>
+    <string name="add_photo">Add Photo</string>
+    <string name="choose_how_to_add">Choose how to add photos to this memory:</string>
+    
+    <!-- Locket History -->
+    <string name="message_history">Message History</string>
+    
+    <!-- Time Editor Dialog -->
+    <string name="recommended_sleep">Recommended: 7-9 hours</string>
+    
+    <!-- Edit Profile -->
+    <string name="choose_avatar">Chọn ảnh đại diện</string>
+    <string name="take_photo_title">Chụp ảnh</string>
+    <string name="take_photo_desc">Sử dụng camera để chụp ảnh mới</string>
+    <string name="choose_from_gallery">Chọn từ thư viện</string>
+    <string name="choose_from_gallery_desc">Chọn ảnh từ bộ sưu tập của bạn</string>
+    <string name="profile_updated">Profile updated successfully!</string>
+    
+    <!-- Change Password Screen -->
+    <string name="create_strong_password">Create a strong password with at least 6 characters</string>
+    <string name="update_password">Update Password</string>
+    
+    <!-- QA Screen -->
+    <string name="qa_title">Hỏi &amp; Đáp</string>
+    <string name="qa_subtitle">Cùng nhau tìm hiểu về người ấy</string>
+    <string name="start_asking_questions">Start asking questions to get to know each other better!</string>
+    <string name="are_you_satisfied">Are you satisfied with this answer?</string>
+    <string name="answer_approved">Answer has been approved</string>
+    <string name="answer_not_satisfactory">Answer not satisfactory</string>
+    <string name="ask_question_to">Ask a Question to %s</string>
+    <string name="ask_interesting_questions">Ask interesting questions!</string>
+    <string name="question_example">Ví dụ: Điều gì khiến em thích anh?</string>
+    <string name="answer_question_title">Trả lời câu hỏi</string>
+    <string name="enter_your_answer">Nhập câu trả lời của bạn...</string>
+    <string name="ask_interesting_question_desc">Ask an interesting question to get to know each other better</string>
+    <string name="question_example_love">Ví dụ: Điều gì khiến em yêu anh?</string>
+    <string name="question_suggestions">Question Suggestions:</string>
+    
+    <!-- Chat Screen -->
+    <string name="enter_message">Nhập tin nhắn...</string>
+    <string name="authenticate_to_access">Xác thực để truy cập tin nhắn</string>
+    <string name="authenticate_message">Vui lòng xác thực bằng vân tay, Face ID hoặc mã PIN để tiếp tục.</string>
+    
+    <!-- Quest -->
+    <string name="congratulations">Congratulations! 🎉</string>
+    <string name="you_received">You received</string>
+    <string name="awesome">Awesome!</string>
+    <string name="watch_ad_for_coins">Watch Ad for Coins</string>
+    <string name="daily_bonus">Daily Bonus</string>
+    <string name="claim">Claim</string>
+    <string name="go_arrow">Go →</string>
+    <string name="todays_progress">Today\'s Progress</string>
+    <string name="claim_all">Claim All</string>
+    
+    <!-- Sleep -->
+    <string name="sleep_stages">Sleep Stages</string>
+    <string name="awake">Awake</string>
+    <string name="sleep">Sleep</string>
+    <string name="good_morning">Good Morning!</string>
+    <string name="youve_been_sleeping">You\'ve been sleeping</string>
+    <string name="since_time">Since %s</string>
+    <string name="im_awake">I\'m awake!</string>
+    <string name="still_sleeping">Still sleeping...</string>
+    <string name="sleep_settings">Sleep Settings</string>
+    <string name="add_sleep_widget">Add Sleep Widget</string>
+    <string name="add_widget_instructions">To add the Sleep Widget to your home screen:\n\n1. Long press on your home screen\n2. Select "Widgets"\n3. Find "CoupleApp"\n4. Choose "Sleep Widget"\n5. Drag to your home screen</string>
+    <string name="got_it">Got it!</string>
+    <string name="time_to_sleep">Time to sleep!</string>
+    <string name="sleep_goal_time">Sleep goal: %s</string>
+    <string name="sleep_now">Sleep now</string>
+    
+    <!-- Health Connect -->
+    <string name="health_connect_permissions">Health Connect Permissions</string>
+    <string name="health_connect_instructions">To sync sleep data, you need to:\n\n1. Open Health Connect app\n2. Go to \"App permissions\"\n3. Find \"CoupleApp\"\n4. Enable \"Sleep\" permission</string>
+    
+    <!-- Store -->
+    <string name="unit_price">Unit Price: </string>
+    <string name="total">Total: </string>
+    <string name="your_balance">Your Balance: %d</string>
+    <string name="available_in_days">Available in %d days</string>
+    <string name="quantity">Quantity</string>
+    <string name="quick_select">Quick Select</string>
+    
+    <!-- Profile Screen -->
+    <string name="app_version">Couple App v1.0.0</string>
+    
+    <!-- Missing Screen -->
+    <string name="history_last_7_days">History (Last 7 days)</string>
+    <string name="no_missing_records">No missing records yet</string>
+    <string name="tap_to_miss">Tap the button to let your partner know you miss them!</string>
+    <string name="todays_love">Today\'s Love 💕</string>
+    <string name="miss_you">Miss You</string>
+    
+    <!-- QA Section -->
+    <string name="get_to_know">Get to know each other better</string>
+    <string name="questions">Questions</string>
+    <string name="no_questions_yet">No questions yet</string>
+    <string name="create_questions_desc">Create questions to get to know each other better!</string>
+    <string name="answer">Answer</string>
+    <string name="reject">Reject</string>
+    <string name="enter_correct_answer">Enter the correct answer:</string>
+    <string name="correct_answer_hint">The correct answer is...</string>
+    
+    <!-- Locket -->
+    <string name="choose_emoji_title">Choose an emoji</string>
+    <string name="type_message_love">Type a message\nfor your love... 💕</string>
+    <string name="send_to">Send to...</string>
+    <string name="failed_to_load">Failed to load</string>
+    <string name="from_sender">From %s</string>
+    <string name="your_drawing">Your drawing</string>
+    <string name="draw_for_love">Draw something\nfor your love! 🎨</string>
+    <string name="camera_access_required">Camera access required</string>
+    <string name="grant_permission">Grant Permission</string>
+    
+    <!-- Moments -->
+    <string name="moment_locket">Locket</string>
+    <string name="moment_missing">Missing</string>
+    <string name="moment_event">Event</string>
+    <string name="moment_anniversary">Anniversary</string>
+    <string name="together">together</string>
+    
+    <!-- Sleep Settings -->
+    <string name="when_to_sleep">When to Sleep</string>
+    <string name="set_ideal_bedtime">Set your ideal bedtime</string>
+    <string name="set_sleep_goal">Set your sleep goal</string>
+    <string name="hours">hours</string>
+    <string name="minutes">minutes</string>
+    <string name="bedtime">Bedtime</string>
+    <string name="wake_up">Wake up</string>
+    <string name="duration">Duration</string>
+    <string name="total_sleep">Total sleep</string>
+    <string name="sleep_target">Target</string>
+    <string name="of_target">of target</string>
+    <string name="add_widget">Add Widget</string>
+    <string name="my_history">My History</string>
+    <string name="sync_health_connect">Sync Health Connect</string>
+    <string name="google_sleep_api">Google Sleep API</string>
+    <string name="auto_track_sleep">Auto-track sleep in background</string>
+    <string name="insert_mock_data">Insert Mock Data (Test)</string>
+    
+    <!-- Error -->
+    <string name="error_occurred">An error occurred</string>
+    
+    <!-- Phone Login -->
+    <string name="enter_info_continue">Enter your information to continue</string>
+    <string name="or_login_with">Or login with</string>
+    
+    <!-- About Screen -->
+    <string name="couple_app">Couple App</string>
+    <string name="version_number">Version 1.0.0</string>
+    <string name="about_description">Stay connected with your loved one through shared moments, activities, and memories.</string>
+    <string name="made_with_love">Made with ❤️ for couples</string>
+    
+    <!-- Language Settings -->
+    <string name="app_will_restart">App will restart to apply language changes</string>
+    
+    <!-- Manage Link -->
+    <string name="your_link_code">Your Link Code</string>
+    <string name="share_code_message">Share this code with your partner to link</string>
+    <string name="linked_partner">Linked Partner</string>
+    <string name="linked_since">Linked since %s</string>
+    <string name="not_linked_yet">Chưa liên kết với ai</string>
+    <string name="share_link_message">Chia sẻ mã liên kết của bạn với người yêu để kết nối</string>
+    
+    <!-- Shared Places -->
+    <string name="places_together">Places Together</string>
+    <string name="see_all">See all →</string>
+    <string name="view_all_count">View All (%d)</string>
+    <string name="photo_index">Photo %d</string>
+    <string name="add">Add</string>
+    <string name="online">Online</string>
+    <string name="current_location">Current Location</string>
+    
+    <!-- Notifications Settings -->
+    <string name="general">General</string>
+    <string name="features_section">Features</string>
+    
+    <!-- Location History -->
+    <string name="location_history">Location History</string>
+    <string name="no_location_history">No location history yet</string>
+    <string name="location_appear_message">Locations will appear after staying\n5+ minutes at a place</string>
+    <string name="currently_here">Currently here</string>
+    
+    <!-- Distance Settings -->
+    <string name="location_settings">Location Settings</string>
+    <string name="together_celebration">Together! 🎉</string>
+    
+    <!-- Help Screen -->
+    <string name="contact_us">Contact Us</string>
+    <string name="faq">Frequently Asked Questions</string>
+    <string name="feedback">Feedback</string>
+    
+    <!-- Link Partner -->
+    <string name="or_text">hoặc</string>
+    <string name="link_partner">Liên kết Partner</string>
+    <string name="share_code_to_link">Chia sẻ mã này với người ấy để liên kết</string>
+    <string name="enter_partner_link_code">Nhập mã liên kết của người ấy</string>
+    
+    <!-- Locket Drawing -->
+    <string name="draw_here">Draw here</string>
+    <string name="color">Color</string>
+    <string name="stroke_width">Stroke Width</string>
+    <string name="draw">Draw</string>
+    
+    <!-- Shared Places Screen -->
+    <string name="our_journey">Our Journey</string>
+    <string name="tap_to_view_memories">Tap to view memories</string>
+    <string name="no_places_yet">No Places Together Yet</string>
+    <string name="places_appear_message">When you both visit a place together\nfor 15+ minutes, it will appear here!</string>
+    <string name="go_explore">Go explore together!</string>
+    
+    <!-- Calendar -->
+    <string name="event_type">Loại sự kiện</string>
+    <string name="date_label">Ngày</string>
+    <string name="time_label">Giờ</string>
+    <string name="remind_yearly">Nhắc nhở vào ngày này mỗi năm</string>
+    <string name="notify_before_event">Nhận thông báo trước sự kiện</string>
+    <string name="select_event_type">Chọn loại sự kiện</string>
+    <string name="day_label">NGÀY</string>
+    <string name="we_have_loved">Chúng ta đã yêu nhau</string>
+    <string name="manage_anniversaries">Quản lý kỷ niệm</string>
+    <string name="month_year">Tháng %d/%d</string>
+    <string name="reminder_chip">Nhắc nhở</string>
+    
+    <!-- Auth -->
+    <string name="creating_account">Creating your account...</string>
+    <string name="logging_in">Logging in...</string>
+    
+    <!-- Additional -->
+    <string name="active_now">Active now</string>
+    <string name="link_code_copied">Link code copied</string>
+    <string name="request_sent">Request sent!</string>
+    <string name="waiting_for_user">Waiting for %s to accept</string>
+    <string name="event_on_date">Event on %s</string>
+    <string name="user">user</string>
 </resources>

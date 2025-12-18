@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -78,7 +79,7 @@ fun SleepCalendarHistoryScreen(
         modifier = modifier
     ) { loading ->
         if (loading) {
-            LoadingScreen(message = "Loading history...")
+            LoadingScreen(message = stringResource(R.string.loading_history))
         } else {
             Box(
                 modifier = Modifier
@@ -159,7 +160,7 @@ fun SleepCalendarHistoryScreen(
                                         )
 
                                         Text(
-                                            text = "Sleep History",
+                                            text = stringResource(R.string.sleep_history),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = Color(0xFF757575),
                                             fontSize = 12.sp

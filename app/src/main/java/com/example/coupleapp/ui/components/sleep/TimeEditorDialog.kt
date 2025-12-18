@@ -15,7 +15,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import com.example.coupleapp.R
 import java.time.LocalTime
 
 /**
@@ -101,7 +103,7 @@ fun TimeEditorDialog(
                             contentColor = Color(0xFF757575)
                         )
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     
                     Button(
@@ -117,7 +119,7 @@ fun TimeEditorDialog(
                             containerColor = Color(0xFFFF9ECE)
                         )
                     ) {
-                        Text("Save")
+                        Text(stringResource(R.string.save))
                     }
                 }
             }
@@ -162,7 +164,7 @@ fun DurationEditorDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "Recommended: 7-9 hours",
+                    text = stringResource(R.string.recommended_sleep),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF757575),
                     fontSize = 14.sp
@@ -218,7 +220,7 @@ fun DurationEditorDialog(
                             contentColor = Color(0xFF757575)
                         )
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.cancel))
                     }
                     
                     Button(
@@ -235,7 +237,7 @@ fun DurationEditorDialog(
                             containerColor = Color(0xFFFF9ECE)
                         )
                     ) {
-                        Text("Save")
+                        Text(stringResource(R.string.save))
                     }
                 }
             }

@@ -18,8 +18,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.PurchaseType
 import com.example.coupleapp.data.model.StoreItem
 
@@ -161,7 +163,7 @@ fun CoinPriceInfo(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Unit Price: ",
+                text = stringResource(R.string.unit_price),
                 fontSize = 13.sp,
                 color = Color(0xFF8D6E63)
             )
@@ -187,7 +189,7 @@ fun CoinPriceInfo(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Total: ",
+                text = stringResource(R.string.total),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF5D4037)
@@ -214,7 +216,7 @@ fun CoinPriceInfo(
         
         // Balance
         Text(
-            text = "Your Balance: $userCoins",
+            text = stringResource(R.string.your_balance, userCoins),
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = if (userCoins >= totalCost) Color(0xFF4CAF50) else Color(0xFFF44336)
@@ -256,7 +258,7 @@ fun CooldownInfo(cooldownDays: Int) {
             color = Color(0xFF9E9E9E)
         )
         Text(
-            text = "Available in $cooldownDays days",
+            text = stringResource(R.string.available_in_days, cooldownDays),
             fontSize = 13.sp,
             color = Color(0xFFBDBDBD)
         )

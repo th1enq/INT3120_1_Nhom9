@@ -15,10 +15,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupleapp.R
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.coupleapp.data.model.LocketMoment
@@ -130,7 +132,7 @@ fun LocketMomentCard(
             ) {
                 // Type
                 Text(
-                    text = "Locket",
+                    text = stringResource(R.string.moment_locket),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF718096)

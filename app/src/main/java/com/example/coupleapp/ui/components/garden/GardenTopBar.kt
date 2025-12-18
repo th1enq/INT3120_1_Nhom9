@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 
 /**
  * Garden Top Bar with back button, plant name, menu
@@ -172,7 +174,7 @@ fun RenamePlantDialog(
             OutlinedTextField(
                 value = newName,
                 onValueChange = { newName = it },
-                label = { Text("Plant Name") },
+                label = { Text(stringResource(R.string.plant_name)) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFF4CAF50),

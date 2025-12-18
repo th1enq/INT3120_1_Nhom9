@@ -322,8 +322,8 @@ fun createDefaultItem(type: CareItemType): CareItem {
         CareItemType.WATER -> CareItem(
             id = "water",
             type = type,
-            name = "Water",
-            vietnameseName = "Water",
+            name = "Watering Can",
+            vietnameseName = "Bình tưới",
             description = "Water the plant",
             iconRes = R.drawable.xoa,
             effectValue = 30f
@@ -332,7 +332,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "sunlight",
             type = type,
             name = "Sunlight",
-            vietnameseName = "Sunlight",
+            vietnameseName = "Ánh sáng",
             description = "Provide sunlight for the plant",
             iconRes = R.drawable.sun,
             effectValue = 30f
@@ -341,7 +341,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "pesticide",
             type = type,
             name = "Pesticide",
-            vietnameseName = "Pesticide",
+            vietnameseName = "Thuốc trừ sâu",
             description = "Protect plant from pests",
             iconRes = R.drawable.xit,
             effectValue = 35f
@@ -350,7 +350,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "scissors",
             type = type,
             name = "Scissors",
-            vietnameseName = "Scissors",
+            vietnameseName = "Kéo cắt tỉa",
             description = "Trim branches and leaves",
             iconRes = R.drawable.keo,
             effectValue = 20f
@@ -359,7 +359,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "fertilizer_4h",
             type = type,
             name = "4h Fertilizer",
-            vietnameseName = "4h Boost",
+            vietnameseName = "Phân bón 4h",
             description = "Speed up 4 hours",
             iconRes = R.drawable.phan4h,
             boostHours = 4
@@ -368,7 +368,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "fertilizer_8h",
             type = type,
             name = "8h Fertilizer",
-            vietnameseName = "8h Boost",
+            vietnameseName = "Phân bón 8h",
             description = "Speed up 8 hours",
             iconRes = R.drawable.phan8h,
             boostHours = 8
@@ -377,7 +377,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "fertilizer_24h",
             type = type,
             name = "24h Fertilizer",
-            vietnameseName = "24h Boost",
+            vietnameseName = "Phân bón 24h",
             description = "Speed up 24 hours",
             iconRes = R.drawable.phan24h,
             boostHours = 24
@@ -386,7 +386,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "seed_normal",
             type = type,
             name = "Normal Seed",
-            vietnameseName = "Normal Seed",
+            vietnameseName = "Hạt giống thường",
             description = "Basic seed",
             iconRes = R.drawable.normal_seed
         )
@@ -394,7 +394,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "seed_rare",
             type = type,
             name = "Rare Seed",
-            vietnameseName = "Rare Seed",
+            vietnameseName = "Hạt giống hiếm",
             description = "Rare seed",
             iconRes = R.drawable.rare_seed
         )
@@ -402,7 +402,7 @@ fun createDefaultItem(type: CareItemType): CareItem {
             id = "seed_super_rare",
             type = type,
             name = "Super Rare Seed",
-            vietnameseName = "Super Rare",
+            vietnameseName = "Hạt giống siêu hiếm",
             description = "Super rare seed",
             iconRes = R.drawable.super_rare_seed
         )

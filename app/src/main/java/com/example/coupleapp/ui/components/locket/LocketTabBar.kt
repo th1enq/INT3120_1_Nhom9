@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.LocketTab
+import java.util.Locale
 
 /**
  * Tab item composable for Locket feature
@@ -45,6 +46,9 @@ fun LocketTabItem(
         animationSpec = tween(300),
         label = "iconColor"
     )
+    
+    val isVietnamese = Locale.getDefault().language == "vi"
+    val localizedTitle = tab.getLocalizedTitle(isVietnamese)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -61,7 +65,7 @@ fun LocketTabItem(
         ) {
             Icon(
                 imageVector = getTabIcon(tab),
-                contentDescription = tab.title,
+                contentDescription = localizedTitle,
                 tint = iconColor,
                 modifier = Modifier.size(20.dp)
             )
@@ -74,7 +78,7 @@ fun LocketTabItem(
                        shrinkHorizontally(animationSpec = tween(200))
             ) {
                 Text(
-                    text = tab.title,
+                    text = localizedTitle,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp

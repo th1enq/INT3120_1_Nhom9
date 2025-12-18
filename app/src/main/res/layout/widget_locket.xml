@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/locket_widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <!-- Content container (shown when there's data) -->
+    <LinearLayout
+        android:id="@+id/locket_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Left side: Locket icon and sender info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="8dp">
+
+            <!-- Locket icon -->
+            <ImageView
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/locket"
+                android:contentDescription="Locket" />
+
+            <!-- Sender name -->
+            <TextView
+                android:id="@+id/locket_sender_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Partner"
+                android:textColor="#9C27B0"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <!-- Timestamp -->
+            <TextView
+                android:id="@+id/locket_timestamp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hôm nay 14:30"
+                android:textColor="#888888"
+                android:textSize="9sp" />
+
+        </LinearLayout>
+
+        <!-- Right side: Content display -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:padding="4dp">
+
+            <!-- Emoji content -->
+            <TextView
+                android:id="@+id/locket_emoji_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="❤️"
+                android:textSize="48sp"
+                android:visibility="gone" />
+
+            <!-- Text content -->
+            <TextView
+                android:id="@+id/locket_text_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="I love you!"
+                android:textColor="#333333"
+                android:textSize="14sp"
+                android:textStyle="italic"
+                android:maxLines="4"
+                android:ellipsize="end"
+                android:visibility="visible" />
+
+            <!-- Image content (placeholder) -->
+            <ImageView
+                android:id="@+id/locket_image_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:src="@drawable/locket"
+                android:visibility="gone"
+                android:contentDescription="Locket image" />
+
+            <!-- Caption overlay at bottom -->
+            <TextView
+                android:id="@+id/locket_caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:background="#80000000"
+                android:padding="4dp"
+                android:text=""
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:visibility="gone" />
+
+        </FrameLayout>
+
+        <!-- Send button -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:id="@+id/locket_send_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/circle_pink_background"
+                android:gravity="center"
+                android:text="📷"
+                android:textSize="20sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Gửi"
+                android:textColor="#9C27B0"
+                android:textSize="9sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Empty state container -->
+    <LinearLayout
+        android:id="@+id/locket_empty_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/locket"
+            android:alpha="0.5"
+            android:contentDescription="No Locket" />
+
+        <TextView
+            android:id="@+id/locket_empty_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Chưa có Locket mới"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Nhấn để gửi Locket đầu tiên"
+            android:textColor="#9C27B0"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
+</RelativeLayout>

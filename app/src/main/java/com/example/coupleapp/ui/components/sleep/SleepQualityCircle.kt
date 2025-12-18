@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -98,12 +99,19 @@ fun SleepQualityStatus(
         SleepQuality.POOR -> Color(0xFFF44336)
     }
     
+    // Use localized quality text
+    val localizedQualityText = when (quality) {
+        SleepQuality.EXCELLENT -> stringResource(R.string.excellent)
+        SleepQuality.GOOD -> stringResource(R.string.good)
+        SleepQuality.POOR -> stringResource(R.string.poor)
+    }
+    
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = qualityText,
+            text = localizedQualityText,
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 28.sp
@@ -114,7 +122,7 @@ fun SleepQualityStatus(
         Spacer(modifier = Modifier.height(4.dp))
         
         Text(
-            text = "${achievementPercentage.toInt()}% of target",
+            text = "${achievementPercentage.toInt()}% ${stringResource(R.string.of_target)}",
             style = MaterialTheme.typography.bodyLarge.copy(
                 fontSize = 16.sp
             ),

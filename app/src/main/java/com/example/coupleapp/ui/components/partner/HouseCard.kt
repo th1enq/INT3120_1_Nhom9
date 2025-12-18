@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import java.util.Locale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -273,13 +274,15 @@ private fun RoundedShortcutItem(
     ) {
         // Icon circular
         val iconRes = getDrawableForShortcut(shortcut.id)
-        android.util.Log.d("RoundedShortcutItem", "[PARTNER] Rendering shortcut ${shortcut.name}, iconRes: $iconRes")
+        val isVietnamese = Locale.getDefault().language == "vi"
+        val localizedName = shortcut.getLocalizedName(isVietnamese)
+        android.util.Log.d("RoundedShortcutItem", "[PARTNER] Rendering shortcut $localizedName, iconRes: $iconRes")
         
         if (iconRes != 0) {
             android.util.Log.d("RoundedShortcutItem", "[PARTNER] Loading image from resource")
             Image(
                 painter = painterResource(id = iconRes),
-                contentDescription = shortcut.name,
+                contentDescription = localizedName,
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape),
@@ -297,7 +300,7 @@ private fun RoundedShortcutItem(
             ) {
                 Icon(
                     imageVector = getIconForShortcut(shortcut.iconName),
-                    contentDescription = shortcut.name,
+                    contentDescription = localizedName,
                     tint = Color(shortcut.iconColor),
                     modifier = Modifier.size(28.dp)
                 )
@@ -307,7 +310,7 @@ private fun RoundedShortcutItem(
         Spacer(modifier = Modifier.height(6.dp))
         
         Text(
-            text = shortcut.name,
+            text = localizedName,
             style = MaterialTheme.typography.labelSmall,
             color = TextSecondary,
             maxLines = 1,
@@ -350,11 +353,13 @@ private fun SquareShortcutItem(
     ) {
         // Icon square
         val iconRes = getDrawableForShortcut(shortcut.id)
+        val isVietnamese = Locale.getDefault().language == "vi"
+        val localizedName = shortcut.getLocalizedName(isVietnamese)
         
         if (iconRes != 0) {
             Image(
                 painter = painterResource(id = iconRes),
-                contentDescription = shortcut.name,
+                contentDescription = localizedName,
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape),
@@ -371,7 +376,7 @@ private fun SquareShortcutItem(
             ) {
                 Icon(
                     imageVector = getIconForShortcut(shortcut.iconName),
-                    contentDescription = shortcut.name,
+                    contentDescription = localizedName,
                     tint = Color(shortcut.iconColor),
                     modifier = Modifier.size(28.dp)
                 )
@@ -381,7 +386,7 @@ private fun SquareShortcutItem(
         Spacer(modifier = Modifier.height(6.dp))
         
         Text(
-            text = shortcut.name,
+            text = localizedName,
             style = MaterialTheme.typography.labelSmall,
             color = TextSecondary,
             maxLines = 1,

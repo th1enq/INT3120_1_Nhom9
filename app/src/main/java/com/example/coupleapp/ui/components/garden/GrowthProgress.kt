@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.Plant
 import com.example.coupleapp.data.model.PlantStage
 
@@ -109,7 +111,7 @@ fun GrowthProgressTimer(
             if (plant.stage != PlantStage.BLOOMING) {
                 CompactTimeDisplay(days = days, hours = hours, minutes = minutes)
             } else {
-                Text("Bloomed! 🌸", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFFE91E63))
+                Text(stringResource(R.string.bloomed), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color(0xFFE91E63))
             }
         }
     }

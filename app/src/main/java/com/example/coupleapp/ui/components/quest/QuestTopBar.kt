@@ -13,8 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.sp
 
 /**
@@ -55,7 +57,7 @@ fun QuestTopBar(
 
         // Title
         Text(
-            text = "Quests",
+            text = stringResource(R.string.quests),
             style = MaterialTheme.typography.titleLarge.copy(
                 fontWeight = FontWeight.Bold,
                 fontSize = 24.sp

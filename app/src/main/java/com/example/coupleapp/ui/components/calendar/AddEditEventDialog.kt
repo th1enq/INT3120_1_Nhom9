@@ -19,7 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import com.example.coupleapp.R
 import com.example.coupleapp.data.model.Anniversary
 import com.example.coupleapp.data.model.AnniversaryType
 import com.example.coupleapp.ui.theme.*
@@ -98,7 +100,7 @@ fun AddEditEventDialog(
                         OutlinedTextField(
                             value = title,
                             onValueChange = { title = it },
-                            label = { Text("Tiêu đề *") },
+                            label = { Text(stringResource(R.string.title_required)) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = AccentPink,
@@ -113,7 +115,7 @@ fun AddEditEventDialog(
                         OutlinedTextField(
                             value = description,
                             onValueChange = { description = it },
-                            label = { Text("Mô tả") },
+                            label = { Text(stringResource(R.string.description_label)) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(100.dp),
@@ -129,7 +131,7 @@ fun AddEditEventDialog(
                     item {
                         Column {
                             Text(
-                                text = "Loại sự kiện",
+                                text = stringResource(R.string.event_type),
                                 fontSize = 14.sp,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -170,7 +172,7 @@ fun AddEditEventDialog(
                     item {
                         Column {
                             Text(
-                                text = "Ngày",
+                                text = stringResource(R.string.date_label),
                                 fontSize = 14.sp,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -215,7 +217,7 @@ fun AddEditEventDialog(
                     item {
                         Column {
                             Text(
-                                text = "Giờ",
+                                text = stringResource(R.string.time_label),
                                 fontSize = 14.sp,
                                 color = TextSecondary,
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -273,7 +275,7 @@ fun AddEditEventDialog(
                                     color = TextPrimary
                                 )
                                 Text(
-                                    text = "Nhắc nhở vào ngày này mỗi năm",
+                                    text = stringResource(R.string.remind_yearly),
                                     fontSize = 12.sp,
                                     color = TextSecondary
                                 )
@@ -306,7 +308,7 @@ fun AddEditEventDialog(
                                     color = TextPrimary
                                 )
                                 Text(
-                                    text = "Nhận thông báo trước sự kiện",
+                                    text = stringResource(R.string.notify_before_event),
                                     fontSize = 12.sp,
                                     color = TextSecondary
                                 )
@@ -341,7 +343,7 @@ fun AddEditEventDialog(
                         ) {
                             Icon(imageVector = Icons.Default.Delete, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Xóa")
+                            Text(stringResource(R.string.delete))
                         }
                     }
                     
@@ -369,7 +371,7 @@ fun AddEditEventDialog(
                     ) {
                         Icon(imageVector = Icons.Default.Save, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Lưu")
+                        Text(stringResource(R.string.save))
                     }
                 }
             }
@@ -386,7 +388,7 @@ fun AddEditEventDialog(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Chọn loại sự kiện",
+                        text = stringResource(R.string.select_event_type),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 12.dp)
@@ -436,12 +438,12 @@ fun AddEditEventDialog(
                     }
                     showDatePicker = false
                 }) {
-                    Text("OK", color = AccentPink)
+                    Text(stringResource(R.string.ok), color = AccentPink)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Hủy", color = TextSecondary)
+                    Text(stringResource(R.string.cancel), color = TextSecondary)
                 }
             }
         ) {
@@ -462,12 +464,12 @@ fun AddEditEventDialog(
                     time = LocalTime.of(timePickerState.hour, timePickerState.minute)
                     showTimePicker = false
                 }) {
-                    Text("OK", color = AccentPink)
+                    Text(stringResource(R.string.ok), color = AccentPink)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showTimePicker = false }) {
-                    Text("Hủy", color = TextSecondary)
+                    Text(stringResource(R.string.cancel), color = TextSecondary)
                 }
             },
             text = {

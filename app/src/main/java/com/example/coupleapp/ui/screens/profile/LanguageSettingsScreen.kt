@@ -17,7 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.coupleapp.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -55,7 +57,7 @@ fun LanguageSettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Language",
+                        text = stringResource(R.string.language),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -125,7 +127,7 @@ fun LanguageSettingsScreen(
                         }
                         
                         Text(
-                            text = "Select Language",
+                            text = stringResource(R.string.select_language),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF718096),
@@ -155,7 +157,7 @@ fun LanguageSettingsScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                         
                         Text(
-                            text = "App will restart to apply language changes",
+                            text = stringResource(R.string.app_will_restart),
                             fontSize = 12.sp,
                             color = Color(0xFF718096),
                             modifier = Modifier.fillMaxWidth()

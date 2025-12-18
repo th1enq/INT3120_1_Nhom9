@@ -231,7 +231,7 @@ fun NavGraph(
         ) {
             HomeScreen(
                 onNavigateToFeature = { featureName ->
-                    // Handle feature navigation
+                    // Handle feature navigation (including slider buttons)
                     when (featureName) {
                         "Store" -> navController.navigate(Screen.Store.route) {
                             launchSingleTop = true
@@ -243,6 +243,13 @@ fun NavGraph(
                             launchSingleTop = true
                         }
                         "Garden" -> navController.navigate(Screen.Garden.route) {
+                            launchSingleTop = true
+                        }
+                        // Added for slider navigation
+                        "Sleep" -> navController.navigate(Screen.SleepTracker.route) {
+                            launchSingleTop = true
+                        }
+                        "Locket" -> navController.navigate(Screen.Locket.route) {
                             launchSingleTop = true
                         }
                     }
