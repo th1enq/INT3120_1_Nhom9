@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import coil.Coil
 import com.example.coupleapp.util.createImageLoaderWithBase64Support
 import com.example.coupleapp.worker.BackgroundLocationWorker
+import com.example.coupleapp.worker.SleepSyncWorker
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -63,9 +64,26 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         if (currentUser != null) {
             Log.d("CoupleApplication", "User logged in, scheduling background location worker")
             BackgroundLocationWorker.schedule(this)
+            
+            // Also schedule sleep sync worker for accurate sleep tracking
+            scheduleSleepSyncWorker()
         } else {
-            Log.d("CoupleApplication", "No user logged in, skipping background location")
+            Log.d("CoupleApplication", "No user logged in, skipping background workers")
         }
+    }
+    
+    /**
+     * Schedule sleep sync worker for accurate sleep tracking
+     * This runs periodically and in the morning to sync Health Connect data
+     */
+    private fun scheduleSleepSyncWorker() {
+        Log.d("CoupleApplication", "Scheduling sleep sync workers")
+        // Schedule periodic sync (every 4 hours)
+        SleepSyncWorker.schedulePeriodicSync(this)
+        // Schedule morning sync (between 6 AM - 12 PM)
+        SleepSyncWorker.scheduleMorningSync(this)
+        // Trigger immediate sync on app start
+        SleepSyncWorker.triggerImmediateSync(this)
     }
     
     override val workManagerConfiguration: Configuration

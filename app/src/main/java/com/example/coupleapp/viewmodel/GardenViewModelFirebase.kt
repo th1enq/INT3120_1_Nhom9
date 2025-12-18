@@ -158,6 +158,14 @@ class GardenViewModelFirebase : ViewModel() {
                                                 partnerId = partnerId ?: ""
                                             )
                                         }
+                                        
+                                        // Check for pending evolution and decay after loading
+                                        if (plant != null) {
+                                            // Apply any pending status decay based on time elapsed
+                                            applyPendingStatusDecay(plant)
+                                            // Check if plant should evolve
+                                            checkPlantEvolution()
+                                        }
                                     },
                                     onFailure = { error ->
                                         _uiState.update {
@@ -391,7 +399,48 @@ class GardenViewModelFirebase : ViewModel() {
             while (true) {
                 delay(60_000) // Check every minute
                 decayPlantStatus()
+                // Also check if plant can evolve to next stage naturally
+                checkPlantEvolution()
             }
+        }
+    }
+
+    /**
+     * Apply pending status decay when app starts (based on time since last update)
+     * This handles the case when user has been away from the app for a while
+     */
+    private fun applyPendingStatusDecay(plant: Plant) {
+        if (plant.status.isDead) return
+        
+        val decayRate = if (plant.isInGreenhouse) 0.5f else 1f
+        val timeSinceUpdate = System.currentTimeMillis() - plant.status.lastUpdateTime
+        val hoursElapsed = timeSinceUpdate / 3600000f
+        
+        // Only apply decay if more than 1 minute has passed
+        if (hoursElapsed < 0.016f) return
+        
+        val decayAmount = hoursElapsed * 3f * decayRate // 3% per hour decay rate
+        
+        Log.d("GardenViewModel", "[GARDEN] Applying pending decay: ${hoursElapsed}h elapsed, decay=$decayAmount")
+
+        val newStatus = plant.status.copy(
+            sunlight = (plant.status.sunlight - decayAmount).coerceIn(0f, 100f),
+            water = (plant.status.water - decayAmount * 1.2f).coerceIn(0f, 100f),
+            health = (plant.status.health - decayAmount * 0.8f).coerceIn(0f, 100f),
+            lastUpdateTime = System.currentTimeMillis()
+        )
+
+        val updatedPlant = plant.copy(status = newStatus)
+        
+        _uiState.update {
+            it.copy(plant = updatedPlant)
+        }
+
+        // Save to Firebase
+        savePlantStatus(updatedPlant)
+
+        if (newStatus.isDead) {
+            onPlantDied()
         }
     }
 
@@ -404,7 +453,9 @@ class GardenViewModelFirebase : ViewModel() {
 
         val decayRate = if (plant.isInGreenhouse) 0.5f else 1f
         val timeSinceUpdate = System.currentTimeMillis() - plant.status.lastUpdateTime
-        val decayAmount = (timeSinceUpdate / 3600000f) * 5f * decayRate
+        // Decay based on time since last update (about 2-3% per hour for normal plants)
+        val hoursElapsed = timeSinceUpdate / 3600000f
+        val decayAmount = hoursElapsed * 3f * decayRate // 3% per hour decay rate
 
         val newStatus = plant.status.copy(
             sunlight = (plant.status.sunlight - decayAmount).coerceIn(0f, 100f),

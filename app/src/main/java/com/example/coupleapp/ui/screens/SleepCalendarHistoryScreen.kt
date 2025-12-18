@@ -22,17 +22,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.coupleapp.R
-import com.example.coupleapp.data.model.SleepQuality
+import com.example.coupleapp.data.model.FirebaseSleepRecord
 import com.example.coupleapp.ui.components.LoadingScreen
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.viewmodel.SleepCalendarViewModel
@@ -45,8 +47,9 @@ fun SleepCalendarHistoryScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val viewModel: SleepCalendarViewModel = viewModel(
-        factory = SleepCalendarViewModelFactory(userId)
+        factory = SleepCalendarViewModelFactory(userId, context)
     )
     val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
@@ -219,7 +222,7 @@ fun SleepCalendarHistoryScreen(
 @Composable
 private fun CalendarGrid(
     currentMonth: YearMonth,
-    sleepRecords: List<com.example.coupleapp.data.model.SleepRecord>,
+    sleepRecords: List<FirebaseSleepRecord>,
     selectedDate: LocalDate?,
     onDateSelected: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
@@ -228,7 +231,14 @@ private fun CalendarGrid(
     val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7
     val daysInMonth = currentMonth.lengthOfMonth()
 
-    val sleepDataMap = sleepRecords.associateBy { it.date.toLocalDate() }
+    // Map FirebaseSleepRecord by date
+    val sleepDataMap = sleepRecords.associateBy { record ->
+        record.date?.let { timestamp ->
+            timestamp.toDate().toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate()
+        }
+    }.filterKeys { it != null }.mapKeys { it.key!! }
 
     Column(
         modifier = modifier
@@ -305,24 +315,27 @@ private fun CalendarGrid(
 @Composable
 private fun CalendarDayCell(
     day: Int,
-    sleepRecord: com.example.coupleapp.data.model.SleepRecord?,
+    sleepRecord: FirebaseSleepRecord?,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Convert Firebase quality string to color and image
     val qualityColor = sleepRecord?.quality?.let { quality ->
-        when (quality) {
-            SleepQuality.EXCELLENT -> Color(0xFF4CAF50)
-            SleepQuality.GOOD -> Color(0xFFFF9800)
-            SleepQuality.POOR -> Color(0xFFF44336)
+        when (quality.uppercase()) {
+            "EXCELLENT" -> Color(0xFF4CAF50)
+            "GOOD" -> Color(0xFFFF9800)
+            "POOR" -> Color(0xFFF44336)
+            else -> Color(0xFF9E9E9E)
         }
     }
 
     val imageRes = sleepRecord?.quality?.let { quality ->
-        when (quality) {
-            SleepQuality.EXCELLENT -> R.drawable.excellent
-            SleepQuality.GOOD -> R.drawable.good
-            SleepQuality.POOR -> R.drawable.bad
+        when (quality.uppercase()) {
+            "EXCELLENT" -> R.drawable.excellent
+            "GOOD" -> R.drawable.good
+            "POOR" -> R.drawable.bad
+            else -> null
         }
     }
 
@@ -373,8 +386,10 @@ private fun CalendarDayCell(
         }
 
         if (sleepRecord != null && qualityColor != null) {
-            val hours = sleepRecord.actualSleepDuration / 60
-            val minutes = sleepRecord.actualSleepDuration % 60
+            // Use sleepDurationMinutes from Firebase record
+            val totalMinutes = sleepRecord.sleepDurationMinutes
+            val hours = totalMinutes / 60
+            val minutes = totalMinutes % 60
             val hoursText = if (minutes >= 30) "${hours + 1}h" else "${hours}h"
 
             Text(

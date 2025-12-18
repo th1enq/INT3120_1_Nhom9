@@ -243,7 +243,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.rare_seed,
                         type = StoreItemType.SEED,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 100,
+                        coinPrice = 300,
                         rarity = SeedRarity.RARE
                     ),
                     StoreItem(
@@ -253,7 +253,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.super_rare_seed,
                         type = StoreItemType.SEED,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 100,
+                        coinPrice = 500,
                         rarity = SeedRarity.SUPER_RARE
                     )
                 )
@@ -281,7 +281,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.phan8h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 100,
+                        coinPrice = 150,
                         durationHours = 8
                     ),
                     StoreItem(
@@ -291,7 +291,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.phan24h,
                         type = StoreItemType.FERTILIZER,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 100,
+                        coinPrice = 300,
                         durationHours = 24
                     )
                 )
@@ -309,7 +309,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.sun,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 150
+                        coinPrice = 100
                     ),
                     StoreItem(
                         id = "tool_keo",
@@ -318,7 +318,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.keo,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 150
+                        coinPrice = 100
                     ),
                     StoreItem(
                         id = "tool_xit",
@@ -327,7 +327,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.xit,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 150
+                        coinPrice = 100
                     ),
                     StoreItem(
                         id = "tool_xoa",
@@ -336,7 +336,7 @@ class StoreViewModelFirebase(
                         iconRes = R.drawable.xoa,
                         type = StoreItemType.TOOL,
                         purchaseType = PurchaseType.COIN,
-                        coinPrice = 150
+                        coinPrice = 100
                     )
                 )
             )
@@ -403,8 +403,9 @@ class StoreViewModelFirebase(
                             mapOf("lastFreeGiftDate" to today)
                         )
                         
-                        // Add to inventory
-                        addToInventory(currentUserId, item)
+                        // Add FREE PACKAGE items to inventory:
+                        // 1 normal seed, 1 xoa (scissors), 1 sun, 1 bình xịt (pesticide)
+                        addFreePackageToInventory(currentUserId)
                         
                         // Record purchase
                         recordPurchase(currentUserId, item, "free")
@@ -541,6 +542,70 @@ class StoreViewModelFirebase(
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error adding to inventory", e)
+        }
+    }
+
+    /**
+     * Add free package items to inventory
+     * Free package contains: 1 normal seed, 1 xoa (scissors), 1 sun (sunlight), 1 bình xịt (pesticide)
+     */
+    private suspend fun addFreePackageToInventory(userId: String) {
+        Log.d(TAG, "[STORE→GARDEN] Adding FREE PACKAGE to inventory for userId=$userId")
+        try {
+            val result = firestoreRepository.getDocument(
+                "garden_inventories",
+                userId,
+                FirebaseGardenInventory::class.java
+            )
+            
+            result.fold(
+                onSuccess = { inventoryDoc ->
+                    val updates = mutableMapOf<String, Any>()
+                    
+                    // Add 1 normal seed
+                    val currentSeeds = inventoryDoc?.seeds ?: 0
+                    updates["seeds"] = currentSeeds + 1
+                    Log.d(TAG, "[STORE→GARDEN] Free Package - Seeds: $currentSeeds → ${currentSeeds + 1}")
+                    
+                    // Add 1 xoa (scissors)
+                    val currentScissors = inventoryDoc?.scissors ?: 0
+                    updates["scissors"] = currentScissors + 1
+                    Log.d(TAG, "[STORE→GARDEN] Free Package - Scissors: $currentScissors → ${currentScissors + 1}")
+                    
+                    // Add 1 sun (sunlight)
+                    val currentSunlight = inventoryDoc?.sunlightBottle ?: 0
+                    updates["sunlightBottle"] = currentSunlight + 1
+                    Log.d(TAG, "[STORE→GARDEN] Free Package - Sunlight: $currentSunlight → ${currentSunlight + 1}")
+                    
+                    // Add 1 bình xịt (pesticide)
+                    val currentPesticide = inventoryDoc?.pesticide ?: 0
+                    updates["pesticide"] = currentPesticide + 1
+                    Log.d(TAG, "[STORE→GARDEN] Free Package - Pesticide: $currentPesticide → ${currentPesticide + 1}")
+                    
+                    Log.d(TAG, "[STORE→GARDEN] Free Package - Applying updates to Firebase: $updates")
+                    if (inventoryDoc == null) {
+                        // Create new inventory
+                        Log.d(TAG, "[STORE→GARDEN] Creating new inventory document for user $userId")
+                        val newInventory = FirebaseGardenInventory(
+                            id = userId,
+                            userId = userId
+                        )
+                        firestoreRepository.setDocument("garden_inventories", userId, newInventory)
+                    }
+                    
+                    firestoreRepository.updateDocument(
+                        "garden_inventories",
+                        userId,
+                        updates
+                    )
+                    Log.d(TAG, "[STORE→GARDEN] ✓ Free Package added to inventory successfully")
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "Error loading inventory for free package", e)
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding free package to inventory", e)
         }
     }
 

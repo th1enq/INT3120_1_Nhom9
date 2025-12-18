@@ -29,6 +29,8 @@ data class Base64ImageUrl(val imageId: String)
 class Base64ImageMapper : Mapper<String, Base64ImageUrl> {
     companion object {
         private const val BASE64_DATA_MIN_LENGTH = 500 // Inline base64 data is very long
+        // Characters that are valid in base64 but indicate raw base64 content
+        private val BASE64_PATTERN = Regex("^[A-Za-z0-9+/=]+$")
     }
     
     override fun map(data: String, options: Options): Base64ImageUrl? {
@@ -68,11 +70,31 @@ class Base64ImageMapper : Mapper<String, Base64ImageUrl> {
                     Base64ImageUrl("LEGACY:$afterComma")
                 }
             }
+            // Format 4: RAW base64 string (from LocketFirebaseRepository)
+            // This is base64 data stored directly without any prefix
+            data.length > BASE64_DATA_MIN_LENGTH && isLikelyBase64(data) -> {
+                android.util.Log.d("Base64ImageMapper", "✓ Raw base64 data detected (${data.length} chars)")
+                Base64ImageUrl("RAW:$data")
+            }
             else -> {
                 android.util.Log.e("Base64ImageMapper", "✗ Unknown format")
                 null
             }
         }
+    }
+    
+    /**
+     * Check if string looks like raw base64 encoded data
+     */
+    private fun isLikelyBase64(data: String): Boolean {
+        // Check first and last part for base64 characters
+        // Full validation would be expensive for large strings
+        val sample = data.take(100) + data.takeLast(100)
+        val isValid = sample.all { c -> 
+            c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '+' || c == '/' || c == '='
+        }
+        android.util.Log.d("Base64ImageMapper", "isLikelyBase64 check: $isValid")
+        return isValid
     }
 }
 
@@ -91,6 +113,7 @@ class Base64ImageFetcher(
         android.util.Log.d("Base64ImageFetcher", "Received imageId: ${imageId.take(100)}...")
         android.util.Log.d("Base64ImageFetcher", "Starts with INLINE:? ${imageId.startsWith("INLINE:")}")
         android.util.Log.d("Base64ImageFetcher", "Starts with LEGACY:? ${imageId.startsWith("LEGACY:")}")
+        android.util.Log.d("Base64ImageFetcher", "Starts with RAW:? ${imageId.startsWith("RAW:")}")
         
         val base64Data: String = when {
             imageId.startsWith("INLINE:") -> {
@@ -107,6 +130,13 @@ class Base64ImageFetcher(
                 val extracted = dataUrl.substring(commaIndex + 1)
                 android.util.Log.d("Base64ImageFetcher", "✓ Extracted ${extracted.length} chars of base64")
                 extracted
+            }
+            imageId.startsWith("RAW:") -> {
+                // Raw base64 data stored directly (from LocketFirebaseRepository)
+                val rawData = imageId.removePrefix("RAW:")
+                android.util.Log.d("Base64ImageFetcher", "✓ Processing RAW base64 format")
+                android.util.Log.d("Base64ImageFetcher", "RAW data length: ${rawData.length} chars")
+                rawData
             }
             imageId.startsWith("LEGACY:") -> {
                 // Remove marker and fetch from Firestore

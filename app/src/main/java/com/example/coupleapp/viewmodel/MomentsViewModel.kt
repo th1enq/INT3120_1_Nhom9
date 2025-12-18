@@ -250,9 +250,10 @@ class MomentsViewModel : ViewModel() {
     private suspend fun loadLocketMoments(coupleId: String, currentUser: FirebaseUser, partner: FirebaseUser?): List<LocketMoment>? {
         return try {
             val db = Firebase.firestore
-            val locketSnapshot = db.collection("lockets")
+            // Use locket_posts collection (same as LocketFirebaseRepository)
+            val locketSnapshot = db.collection("locket_posts")
                 .whereEqualTo("coupleId", coupleId)
-                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(20)
                 .get()
                 .await()
@@ -260,24 +261,35 @@ class MomentsViewModel : ViewModel() {
             locketSnapshot.documents.mapNotNull { doc ->
                 try {
                     val senderId = doc.getString("senderId") ?: return@mapNotNull null
-                    val typeStr = doc.getString("type") ?: "TEXT"
-                    val content = doc.getString("content") ?: ""
-                    val caption = doc.getString("caption")
+                    val typeStr = doc.getString("type") ?: "text"
                     val photoUrl = doc.getString("photoUrl")
-                    val createdAtMs = doc.getLong("createdAt") ?: return@mapNotNull null
+                    val emoji = doc.getString("emoji")
+                    val drawingUrl = doc.getString("drawingUrl")
+                    val textContent = doc.getString("textContent")
+                    val caption = doc.getString("caption")
+                    val createdAt = doc.getTimestamp("timestamp") ?: return@mapNotNull null
                     
                     val senderName = if (senderId == currentUser.id) currentUser.displayName else partner?.displayName ?: "Partner"
                     
                     val timestamp = LocalDateTime.ofInstant(
-                        java.time.Instant.ofEpochMilli(createdAtMs),
+                        createdAt.toDate().toInstant(),
                         java.time.ZoneId.systemDefault()
                     )
                     
-                    val locketType = when (typeStr) {
-                        "PHOTO" -> LocketType.PHOTO
-                        "EMOJI" -> LocketType.EMOJI
-                        "DRAWING" -> LocketType.DRAWING
+                    val locketType = when (typeStr.lowercase()) {
+                        "photo" -> LocketType.PHOTO
+                        "emoji" -> LocketType.EMOJI
+                        "drawing" -> LocketType.DRAWING
+                        "text" -> LocketType.TEXT
                         else -> LocketType.TEXT
+                    }
+                    
+                    // Get content based on type
+                    val content = when (locketType) {
+                        LocketType.PHOTO -> photoUrl ?: ""
+                        LocketType.EMOJI -> emoji ?: ""
+                        LocketType.DRAWING -> drawingUrl ?: ""
+                        LocketType.TEXT -> textContent ?: ""
                     }
                     
                     LocketMoment(
@@ -286,7 +298,7 @@ class MomentsViewModel : ViewModel() {
                         senderName = senderName,
                         senderAvatar = "💕",
                         locketType = locketType,
-                        content = photoUrl ?: content,
+                        content = content,
                         caption = caption
                     )
                 } catch (e: Exception) {
