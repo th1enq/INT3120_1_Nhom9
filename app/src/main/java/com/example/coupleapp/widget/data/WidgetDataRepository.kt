@@ -185,6 +185,18 @@ object WidgetDataRepository {
         if (!forceRefresh && (now - cachedTimestamp) < LOCKET_CACHE_EXPIRY_MS) {
             val cachedData = parseLocketCachedData(prefs.getString(KEY_LOCKET_DATA, null))
             if (cachedData != null) {
+                // If cached content is a placeholder (for PHOTO/DRAWING), we need fresh data
+                if (cachedData.content == "__BASE64_IMAGE__") {
+                    Log.d(TAG, "Cached locket is image type, fetching fresh data for content")
+                    return withContext(Dispatchers.IO) {
+                        try {
+                            fetchLocketDataFromFirebase()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error fetching locket data for image", e)
+                            cachedData // Return cached metadata at least
+                        }
+                    }
+                }
                 Log.d(TAG, "Returning cached locket data")
                 return cachedData
             }
@@ -209,19 +221,11 @@ object WidgetDataRepository {
         val currentUser = auth.currentUser ?: return null
         val db = FirebaseFirestore.getInstance()
         
-        val userDoc = db.collection("users").document(currentUser.uid).get().await()
-        val partnerId = userDoc.getString("partnerId")
-        
-        if (partnerId.isNullOrEmpty()) return null
-        
-        val coupleId = listOf(currentUser.uid, partnerId).sorted().joinToString("_")
-        
-        // Get latest locket from partner
-        val locketQuery = db.collection("lockets")
-            .whereEqualTo("coupleId", coupleId)
-            .whereEqualTo("senderId", partnerId)
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(1)
+        // Query lockets where current user is the receiver
+        // Use only receiverId filter (no orderBy) to avoid needing composite index
+        // Sort client-side like app does in LocketFirebaseRepository
+        val locketQuery = db.collection("locket_posts")
+            .whereEqualTo("receiverId", currentUser.uid)
             .get()
             .await()
         
@@ -236,21 +240,36 @@ object WidgetDataRepository {
             )
         }
         
-        val doc = locketQuery.documents.first()
+        // Sort by timestamp descending and get the latest
+        val doc = locketQuery.documents
+            .sortedByDescending { it.getTimestamp("timestamp")?.toDate()?.time ?: 0L }
+            .first()
+        
         val senderName = doc.getString("senderName") ?: "Partner"
-        val content = doc.getString("content") ?: ""
-        val type = doc.getString("type") ?: "TEXT"
-        val caption = doc.getString("caption")
+        val typeStr = doc.getString("type") ?: "text"
+        val caption = doc.getString("caption") ?: ""
         val timestamp = doc.getTimestamp("timestamp")?.toDate()?.time ?: 0L
-        val isViewed = doc.getBoolean("viewed") ?: true
+        val isRead = doc.getBoolean("isRead") ?: false
+        
+        // Get content based on type - each type has its own field
+        val content = when (typeStr.lowercase()) {
+            "photo" -> doc.getString("photoUrl") ?: ""
+            "emoji" -> doc.getString("emoji") ?: ""
+            "drawing" -> doc.getString("drawingUrl") ?: ""
+            "text" -> doc.getString("textContent") ?: ""
+            else -> doc.getString("textContent") ?: ""
+        }
+        
+        // Convert type to uppercase for widget display consistency
+        val type = typeStr.uppercase()
         
         return LocketWidgetCachedData(
             senderName = senderName,
             content = content,
             type = type,
-            caption = caption,
+            caption = caption.ifEmpty { null },
             timestamp = timestamp,
-            hasNewLocket = !isViewed
+            hasNewLocket = !isRead
         )
     }
     
@@ -262,7 +281,13 @@ object WidgetDataRepository {
     }
     
     private fun serializeLocketData(data: LocketWidgetCachedData): String {
-        return "${data.senderName}|${data.content}|${data.type}|${data.caption ?: ""}|${data.timestamp}|${data.hasNewLocket}"
+        // For PHOTO and DRAWING types, don't cache the content (Base64 is too large for SharedPreferences)
+        // Instead, store a placeholder - widget will fetch fresh data when needed
+        val contentToCache = when (data.type) {
+            "PHOTO", "DRAWING" -> "__BASE64_IMAGE__" // Placeholder for large image content
+            else -> data.content
+        }
+        return "${data.senderName}|${contentToCache}|${data.type}|${data.caption ?: ""}|${data.timestamp}|${data.hasNewLocket}"
     }
     
     private fun parseLocketCachedData(cached: String?): LocketWidgetCachedData? {
@@ -438,6 +463,8 @@ object WidgetDataRepository {
                 
                 db.collection("missing_records").document(recordId).set(recordData).await()
                 
+                Log.d(TAG, "Missing count incremented to $newCount for user ${currentUser.uid}")
+                
                 // Update cache immediately for responsive UI
                 val prefs = getPrefs(context)
                 val cachedData = parseMissingCachedData(prefs.getString(KEY_MISSING_DATA, null))
@@ -447,6 +474,16 @@ object WidgetDataRepository {
                         hasSentToday = true
                     )
                     cacheMissingData(prefs, updatedData)
+                } else {
+                    // Create new cache if it doesn't exist
+                    val newCacheData = MissingWidgetCachedData(
+                        currentStreak = 0,
+                        longestStreak = 0,
+                        myTodayCount = newCount,
+                        partnerTodayCount = 0,
+                        hasSentToday = true
+                    )
+                    cacheMissingData(prefs, newCacheData)
                 }
                 
                 true

@@ -695,7 +695,8 @@ fun NavGraph(
                     navController.navigate(Screen.Profile.route) {
                         popUpTo(Screen.Locket.route) { inclusive = true }
                     }
-                }
+                },
+                questViewModel = questViewModel
             )
         }
         

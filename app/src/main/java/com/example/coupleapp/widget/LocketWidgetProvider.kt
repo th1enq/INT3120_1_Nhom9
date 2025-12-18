@@ -133,12 +133,12 @@ class LocketWidgetProvider : AppWidgetProvider() {
                     val cachedData = WidgetDataRepository.getLocketWidgetData(context)
                     
                     if (cachedData != null && cachedData.type != "EMPTY") {
-                        showLocketContentCached(context, views, cachedData)
+                        showLocketContentCached(context, views, cachedData, appWidgetManager, appWidgetId)
                     } else {
                         // Fallback to direct Firebase query
                         val latestLocket = loadLatestLocket(currentUser.uid)
                         if (latestLocket != null) {
-                            showLocketContent(context, views, latestLocket)
+                            showLocketContent(context, views, latestLocket, appWidgetManager, appWidgetId)
                         } else {
                             showEmptyState(views, "Chưa có Locket mới")
                         }
@@ -178,7 +178,13 @@ class LocketWidgetProvider : AppWidgetProvider() {
         }
     }
     
-    private fun showLocketContentCached(context: Context, views: RemoteViews, data: LocketWidgetCachedData) {
+    private suspend fun showLocketContentCached(
+        context: Context, 
+        views: RemoteViews, 
+        data: LocketWidgetCachedData,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int
+    ) {
         views.setViewVisibility(R.id.locket_content_container, View.VISIBLE)
         views.setViewVisibility(R.id.locket_empty_container, View.GONE)
         
@@ -208,7 +214,24 @@ class LocketWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.locket_emoji_content, View.GONE)
                 views.setViewVisibility(R.id.locket_text_content, View.GONE)
                 views.setViewVisibility(R.id.locket_image_content, View.VISIBLE)
-                views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+                
+                // Load image from content (can be Base64 or URL)
+                val imageContent = data.content
+                if (imageContent.isNotEmpty()) {
+                    val bitmap = loadBitmapFromContent(imageContent)
+                    if (bitmap != null) {
+                        views.setImageViewBitmap(R.id.locket_image_content, bitmap)
+                        Log.d(TAG, "Loaded image successfully, type: ${data.type}")
+                    } else {
+                        views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+                        Log.w(TAG, "Failed to load image, using placeholder")
+                    }
+                } else {
+                    views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+                }
+                
+                // Update widget immediately after loading image
+                appWidgetManager.updateAppWidget(appWidgetId, views)
             }
             else -> {
                 views.setViewVisibility(R.id.locket_emoji_content, View.GONE)
@@ -224,6 +247,147 @@ class LocketWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.locket_caption, data.caption)
         } else {
             views.setViewVisibility(R.id.locket_caption, View.GONE)
+        }
+    }
+    
+    /**
+     * Load bitmap from content string (can be Base64 or URL)
+     * The app stores images as Base64 in Firestore, so we need to handle that
+     * Based on Base64ImageLoader.kt from the app
+     */
+    private suspend fun loadBitmapFromContent(content: String): Bitmap? {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "loadBitmapFromContent: content length=${content.length}, starts with=${content.take(20)}")
+                
+                val originalBitmap = when {
+                    // Format: data:image/...;base64,<data>
+                    content.startsWith("data:image/") && content.contains("base64,") -> {
+                        val commaIndex = content.indexOf(",")
+                        if (commaIndex != -1 && commaIndex < content.length - 1) {
+                            val base64Data = content.substring(commaIndex + 1)
+                            Log.d(TAG, "Detected data:image format, extracting base64 data (${base64Data.length} chars)")
+                            decodeBase64ToBitmap(base64Data)
+                        } else {
+                            Log.w(TAG, "Invalid data:image format")
+                            null
+                        }
+                    }
+                    // Raw Base64 data (stored directly by LocketFirebaseRepository)
+                    isRawBase64Data(content) -> {
+                        Log.d(TAG, "Detected raw base64 data (${content.length} chars)")
+                        decodeBase64ToBitmap(content)
+                    }
+                    // HTTP URL
+                    content.startsWith("http") -> {
+                        Log.d(TAG, "Loading from URL: ${content.take(50)}...")
+                        loadBitmapFromUrl(content)
+                    }
+                    else -> {
+                        Log.w(TAG, "Unknown image format, content length: ${content.length}, preview: ${content.take(50)}")
+                        null
+                    }
+                }
+                
+                if (originalBitmap != null) {
+                    Log.d(TAG, "Bitmap loaded: ${originalBitmap.width}x${originalBitmap.height}")
+                    // Scale down for widget to save memory (max 512px)
+                    scaleBitmapForWidget(originalBitmap, 512)
+                } else {
+                    Log.w(TAG, "Failed to load bitmap")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading bitmap from content", e)
+                null
+            }
+        }
+    }
+    
+    /**
+     * Check if the string is raw Base64 encoded data
+     * Based on Base64ImageMapper.isLikelyBase64() from Base64ImageLoader.kt
+     */
+    private fun isRawBase64Data(content: String): Boolean {
+        // Raw base64 is long (min 500 chars for images) and contains only base64 characters
+        if (content.length < 500) return false
+        if (content.startsWith("http")) return false
+        
+        // Check first and last 100 characters for base64 validity
+        val sample = content.take(100) + content.takeLast(100)
+        val isValid = sample.all { c ->
+            c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '+' || c == '/' || c == '='
+        }
+        
+        Log.d(TAG, "isRawBase64Data check: length=${content.length}, isValid=$isValid")
+        return isValid
+    }
+    
+    /**
+     * Decode Base64 string to Bitmap
+     * Uses Base64.NO_WRAP flag as per app's Base64ImageDecoder
+     */
+    private fun decodeBase64ToBitmap(base64String: String): Bitmap? {
+        return try {
+            // Use NO_WRAP flag - same as Base64ImageLoader.kt uses
+            val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.NO_WRAP)
+            Log.d(TAG, "Decoded ${decodedBytes.size} bytes from base64")
+            val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+            if (bitmap == null) {
+                Log.e(TAG, "BitmapFactory.decodeByteArray returned null")
+            }
+            bitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error decoding Base64 to bitmap: ${e.message}", e)
+            null
+        }
+    }
+    
+    /**
+     * Load bitmap from URL
+     */
+    private fun loadBitmapFromUrl(urlString: String): Bitmap? {
+        return try {
+            val url = URL(urlString)
+            val connection = url.openConnection()
+            connection.connectTimeout = 10000
+            connection.readTimeout = 15000
+            connection.doInput = true
+            connection.connect()
+            
+            val inputStream = connection.getInputStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            bitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading bitmap from URL: $urlString", e)
+            null
+        }
+    }
+    
+    /**
+     * Scale bitmap for widget to save memory
+     */
+    private fun scaleBitmapForWidget(originalBitmap: Bitmap, maxSize: Int): Bitmap {
+        val scale = minOf(
+            maxSize.toFloat() / originalBitmap.width,
+            maxSize.toFloat() / originalBitmap.height,
+            1f
+        )
+        
+        return if (scale < 1f) {
+            val scaledBitmap = Bitmap.createScaledBitmap(
+                originalBitmap,
+                (originalBitmap.width * scale).toInt(),
+                (originalBitmap.height * scale).toInt(),
+                true
+            )
+            if (scaledBitmap != originalBitmap) {
+                originalBitmap.recycle()
+            }
+            scaledBitmap
+        } else {
+            originalBitmap
         }
     }
     
@@ -251,38 +415,39 @@ class LocketWidgetProvider : AppWidgetProvider() {
             try {
                 val db = FirebaseFirestore.getInstance()
                 
-                // First get user's partnerId
-                val userDoc = db.collection("users").document(userId).get().await()
-                val partnerId = userDoc.getString("partnerId")
-                
-                if (partnerId.isNullOrEmpty()) {
-                    Log.d(TAG, "No partner linked")
-                    return@withContext null
-                }
-                
-                // Get couple ID for querying lockets
-                val coupleId = listOf(userId, partnerId).sorted().joinToString("_")
-                
-                // Query latest locket sent to current user (from partner)
-                val locketQuery = db.collection("lockets")
-                    .whereEqualTo("coupleId", coupleId)
-                    .whereEqualTo("senderId", partnerId)
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(1)
+                // Query lockets where current user is the receiver
+                // Use only receiverId filter (no orderBy) to avoid needing composite index
+                // Sort client-side like app does in LocketFirebaseRepository
+                val locketQuery = db.collection("locket_posts")
+                    .whereEqualTo("receiverId", userId)
                     .get()
                     .await()
                 
                 if (locketQuery.documents.isEmpty()) {
-                    Log.d(TAG, "No lockets found from partner")
+                    Log.d(TAG, "No lockets found for user")
                     return@withContext null
                 }
                 
-                val doc = locketQuery.documents.first()
+                // Sort by timestamp descending and get the latest
+                val doc = locketQuery.documents
+                    .sortedByDescending { it.getTimestamp("timestamp")?.toDate()?.time ?: 0L }
+                    .first()
                 val senderName = doc.getString("senderName") ?: "Partner"
-                val content = doc.getString("content") ?: ""
-                val type = doc.getString("type") ?: "TEXT"
+                val typeStr = doc.getString("type") ?: "text"
                 val caption = doc.getString("caption")
                 val timestamp = doc.getTimestamp("timestamp")?.toDate()
+                
+                // Get content based on type - each type has its own field
+                val content = when (typeStr.lowercase()) {
+                    "photo" -> doc.getString("photoUrl") ?: ""
+                    "emoji" -> doc.getString("emoji") ?: ""
+                    "drawing" -> doc.getString("drawingUrl") ?: ""
+                    "text" -> doc.getString("textContent") ?: ""
+                    else -> doc.getString("textContent") ?: ""
+                }
+                
+                // Convert type to uppercase for widget display
+                val type = typeStr.uppercase()
                 
                 LocketData(
                     senderName = senderName,
@@ -298,7 +463,13 @@ class LocketWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private fun showLocketContent(context: Context, views: RemoteViews, locket: LocketData) {
+    private suspend fun showLocketContent(
+        context: Context, 
+        views: RemoteViews, 
+        locket: LocketData,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int
+    ) {
         views.setViewVisibility(R.id.locket_content_container, View.VISIBLE)
         views.setViewVisibility(R.id.locket_empty_container, View.GONE)
         
@@ -342,9 +513,23 @@ class LocketWidgetProvider : AppWidgetProvider() {
                 views.setViewVisibility(R.id.locket_text_content, View.GONE)
                 views.setViewVisibility(R.id.locket_image_content, View.VISIBLE)
                 
-                // Load image in background - for widget we'll show placeholder
-                // Real image loading requires Glide AppWidgetTarget which is complex
-                views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+                // Load image from content (can be Base64 or URL)
+                val imageContent = locket.content
+                if (imageContent.isNotEmpty()) {
+                    val bitmap = loadBitmapFromContent(imageContent)
+                    if (bitmap != null) {
+                        views.setImageViewBitmap(R.id.locket_image_content, bitmap)
+                        Log.d(TAG, "Loaded image successfully, type: ${locket.type}")
+                    } else {
+                        views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+                        Log.w(TAG, "Failed to load image, using placeholder")
+                    }
+                } else {
+                    views.setImageViewResource(R.id.locket_image_content, R.drawable.locket)
+                }
+                
+                // Update widget immediately after loading image
+                appWidgetManager.updateAppWidget(appWidgetId, views)
             }
             else -> {
                 views.setViewVisibility(R.id.locket_emoji_content, View.GONE)

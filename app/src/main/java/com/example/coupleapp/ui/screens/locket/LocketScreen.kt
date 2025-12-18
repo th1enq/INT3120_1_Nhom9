@@ -55,12 +55,20 @@ fun LocketScreen(
     onNavigateToMoments: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: LocketViewModelFirebase = viewModel()
+    viewModel: LocketViewModelFirebase = viewModel(),
+    questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
+    
+    // Update quest progress when locket is sent successfully
+    LaunchedEffect(uiState.sendSuccess) {
+        if (uiState.sendSuccess) {
+            questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SEND_LOCKET, 1)
+        }
+    }
     
     // Handle navigation
     LaunchedEffect(selectedBottomNavItem) {

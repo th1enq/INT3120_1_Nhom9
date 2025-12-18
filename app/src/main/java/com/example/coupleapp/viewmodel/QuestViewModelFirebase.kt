@@ -162,9 +162,13 @@ class QuestViewModelFirebase : ViewModel() {
                 
                 Log.d(TAG, "[QUEST] Final special quest: ${if (specialQuest == null) "null (hidden)" else "visible with status ${specialQuest.status}"}")
 
-                // Calculate summary
-                val summary = calculateDailySummary(dailyQuests)
-                Log.d(TAG, "Daily summary: ${summary.completedQuests}/${summary.totalQuests} completed")
+                // Check if bonus can be claimed today (prevent re-claiming)
+                val canClaimBonus = canClaimBonusToday(userId)
+                Log.d(TAG, "[BONUS CHECK] Can claim bonus today: $canClaimBonus")
+
+                // Calculate summary with bonus claim status
+                val summary = calculateDailySummary(dailyQuests, canClaimBonus)
+                Log.d(TAG, "Daily summary: ${summary.completedQuests}/${summary.totalQuests} completed, bonusUnlocked=${summary.bonusRewardUnlocked}")
 
                 // Load streak info (includes current streak, longest streak, missed days)
                 val streakInfo = loadStreakInfoFromFirebase(userId)
@@ -540,13 +544,20 @@ class QuestViewModelFirebase : ViewModel() {
                         "updatedAt" to com.google.firebase.Timestamp.now()
                     )
                     
-                    firestoreRepository.updateDocument(
+                    val updateResult = firestoreRepository.updateDocument(
                         collection = "user_wallets",
                         documentId = userId,
                         updates = updates
                     )
                     
-                    Log.d(TAG, "[STREAK] Updated streak to $newStreak (longest: $newLongestStreak)")
+                    updateResult.fold(
+                        onSuccess = {
+                            Log.d(TAG, "[STREAK] ✓ Updated streak to $newStreak (longest: $newLongestStreak)")
+                        },
+                        onFailure = { e ->
+                            Log.e(TAG, "[STREAK] ✗ Failed to update wallet: ${e.message}")
+                        }
+                    )
                     
                     StreakUpdateResult(newStreak, newLongestStreak, true)
                 },
@@ -604,6 +615,39 @@ class QuestViewModelFirebase : ViewModel() {
             )
         } catch (e: Exception) {
             Log.e(TAG, "[DAILY] Exception", e)
+            true
+        }
+    }
+    
+    /**
+     * Check if user can claim daily bonus (haven't claimed bonus today)
+     */
+    private suspend fun canClaimBonusToday(userId: String): Boolean {
+        return try {
+            val result = firestoreRepository.getDocument(
+                collection = "user_wallets",
+                documentId = userId,
+                clazz = FirebaseUserWallet::class.java
+            )
+
+            result.fold(
+                onSuccess = { wallet ->
+                    if (wallet == null) return@fold true
+                    
+                    val todayString = dateFormat.format(Date())
+                    // Null-safe check: if lastBonusClaimDate is null (old wallet), allow claim
+                    val canClaim = wallet.lastBonusClaimDate != todayString
+                    
+                    Log.d(TAG, "[BONUS CHECK] Today: $todayString, LastBonus: ${wallet.lastBonusClaimDate ?: "null (first time)"}, CanClaim: $canClaim")
+                    canClaim
+                },
+                onFailure = { e ->
+                    Log.e(TAG, "[BONUS CHECK] Error: ${e.message}")
+                    true
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "[BONUS CHECK] Exception", e)
             true
         }
     }
@@ -668,14 +712,17 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Calculate daily summary from quests
+     * @param quests The list of daily quests
+     * @param canClaimBonus Whether the user can claim the bonus (hasn't claimed today)
      */
-    private fun calculateDailySummary(quests: List<Quest>): DailyQuestSummary {
+    private fun calculateDailySummary(quests: List<Quest>, canClaimBonus: Boolean = true): DailyQuestSummary {
         val total = quests.size
         val completed = quests.count { it.status == QuestStatus.COMPLETED || it.status == QuestStatus.CLAIMED }
         val claimed = quests.count { it.status == QuestStatus.CLAIMED }
         val coinsEarned = quests.filter { it.status == QuestStatus.CLAIMED }.sumOf { it.reward.coins }
         val totalAvailable = quests.sumOf { it.reward.coins }
-        val bonusUnlocked = completed == total && total > 0
+        // Bonus is only unlocked if all quests are completed AND user hasn't claimed bonus today
+        val bonusUnlocked = completed == total && total > 0 && canClaimBonus
 
         return DailyQuestSummary(
             totalQuests = total,
@@ -713,7 +760,9 @@ class QuestViewModelFirebase : ViewModel() {
                 }
             }
 
-            val newSummary = calculateDailySummary(updatedQuests)
+            // Preserve the current bonus state - if it was already claimed, keep it false
+            val currentBonusState = _uiState.value.dailySummary.bonusRewardUnlocked
+            val newSummary = calculateDailySummary(updatedQuests, currentBonusState)
 
             _uiState.update {
                 it.copy(
@@ -785,7 +834,9 @@ class QuestViewModelFirebase : ViewModel() {
             
             // IMPORTANT: Save quest progress to Firebase FIRST before updating UI
             // This prevents the exploit where user can claim again if they navigate away
+            // AWAIT the save to ensure it completes before proceeding
             saveQuestProgressToFirebase(claimedQuest)
+            Log.d(TAG, "[REWARD] Quest progress saved for ${quest.id}")
             
             val updatedQuests = _uiState.value.quests.map {
                 if (it.id == quest.id) {
@@ -798,7 +849,9 @@ class QuestViewModelFirebase : ViewModel() {
             val success = addCoinsToWallet(userId, finalReward)
             if (success) {
                 val newCoins = _uiState.value.userCoins + finalReward
-                val newSummary = calculateDailySummary(updatedQuests)
+                // Preserve the current bonus state - if bonus was already claimed, keep it false
+                val currentBonusState = _uiState.value.dailySummary.bonusRewardUnlocked
+                val newSummary = calculateDailySummary(updatedQuests, currentBonusState)
                 val todayString = dateFormat.format(Date())
 
                 _uiState.update {
@@ -930,15 +983,19 @@ class QuestViewModelFirebase : ViewModel() {
                     }
                 }
                 
-                // Save all claimed quests to Firebase first
-                updatedQuests.filter { it.status == QuestStatus.CLAIMED && 
+                // Save all claimed quests to Firebase first - AWAIT each save
+                val questsToSave = updatedQuests.filter { it.status == QuestStatus.CLAIMED && 
                     _uiState.value.quests.find { q -> q.id == it.id }?.status == QuestStatus.COMPLETED 
-                }.forEach { claimed ->
+                }
+                questsToSave.forEach { claimed ->
                     saveQuestProgressToFirebase(claimed)
+                    Log.d(TAG, "[CLAIM ALL] Quest progress saved for ${claimed.id}")
                 }
 
                 val newCoins = _uiState.value.userCoins + totalCoins
-                val newSummary = calculateDailySummary(updatedQuests)
+                // Preserve the current bonus state - if bonus was already claimed, keep it false
+                val currentBonusState = _uiState.value.dailySummary.bonusRewardUnlocked
+                val newSummary = calculateDailySummary(updatedQuests, currentBonusState)
                 val todayString = dateFormat.format(Date())
 
                 _uiState.update {
@@ -993,6 +1050,7 @@ class QuestViewModelFirebase : ViewModel() {
     /**
      * Show bonus reward for completing all quests
      * Applies streak multiplier to bonus reward
+     * Only claimable once per day
      */
     fun showBonusReward() {
         if (!_uiState.value.dailySummary.bonusRewardUnlocked) return
@@ -1016,6 +1074,26 @@ class QuestViewModelFirebase : ViewModel() {
             val success = addCoinsToWallet(userId, totalBonus)
             if (success) {
                 val newCoins = _uiState.value.userCoins + totalBonus
+                val todayString = dateFormat.format(Date())
+                
+                // Save bonus claim date to Firebase to prevent re-claiming
+                val bonusUpdateResult = firestoreRepository.updateDocument(
+                    collection = "user_wallets",
+                    documentId = userId,
+                    updates = mapOf(
+                        "lastBonusClaimDate" to todayString,
+                        "updatedAt" to com.google.firebase.Timestamp.now()
+                    )
+                )
+                
+                bonusUpdateResult.fold(
+                    onSuccess = {
+                        Log.d(TAG, "[BONUS] ✓ Bonus claim date saved: $todayString")
+                    },
+                    onFailure = { e ->
+                        Log.e(TAG, "[BONUS] ✗ Failed to save bonus claim date: ${e.message}")
+                    }
+                )
 
                 _uiState.update {
                     it.copy(

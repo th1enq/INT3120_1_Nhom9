@@ -275,6 +275,7 @@ data class FirebaseUserWallet(
     val freeCoins: Int = 0,
     val lastFreeGiftDate: String? = null, // YYYY-MM-DD format
     val lastQuestClaimDate: String? = null, // YYYY-MM-DD format for daily quest tracking (null = never claimed)
+    val lastBonusClaimDate: String? = null, // YYYY-MM-DD format for daily bonus tracking (null = never claimed)
     val currentStreak: Int? = null, // Current login/quest streak (null = 0 for old wallets)
     val longestStreak: Int? = null, // Longest streak ever (null = 0 for old wallets)
     @ServerTimestamp

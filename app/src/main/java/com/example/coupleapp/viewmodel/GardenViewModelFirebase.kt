@@ -272,64 +272,26 @@ class GardenViewModelFirebase : ViewModel() {
 
     /**
      * Convert Firebase inventory to domain model
+     * Always includes ALL item types, even with 0 quantity, to prevent fallback to default inventory
      */
     private fun FirebaseGardenInventory.toGardenInventory(): GardenInventory {
-        val items = mutableMapOf<CareItemType, CareItem>()
         Log.d("GardenViewModel", "[GARDEN] Converting Firebase inventory to domain: seeds=${this.seeds}, rareSeeds=${this.rareSeeds}, superRareSeeds=${this.superRareSeeds}, fert4h=${this.fertilizer4h}, fert8h=${this.fertilizer8h}, fert12h=${this.fertilizer12h}, water=${this.wateringCan}, sun=${this.sunlightBottle}, pesticide=${this.pesticide}, scissors=${this.scissors}")
 
-        if (this.seeds > 0) {
-            items[CareItemType.SEED_NORMAL] = createDefaultItem(CareItemType.SEED_NORMAL)
-                .copy(quantity = this.seeds)
-            Log.d("GardenViewModel", "[GARDEN] Added SEED_NORMAL: quantity=${this.seeds}")
-        }
-        if (this.rareSeeds > 0) {
-            items[CareItemType.SEED_RARE] = createDefaultItem(CareItemType.SEED_RARE)
-                .copy(quantity = this.rareSeeds)
-            Log.d("GardenViewModel", "[GARDEN] Added SEED_RARE: quantity=${this.rareSeeds}")
-        }
-        if (this.superRareSeeds > 0) {
-            items[CareItemType.SEED_SUPER_RARE] = createDefaultItem(CareItemType.SEED_SUPER_RARE)
-                .copy(quantity = this.superRareSeeds)
-            Log.d("GardenViewModel", "[GARDEN] Added SEED_SUPER_RARE: quantity=${this.superRareSeeds}")
-        }
-        if (this.fertilizer4h > 0) {
-            items[CareItemType.FERTILIZER_4H] = createDefaultItem(CareItemType.FERTILIZER_4H)
-                .copy(quantity = this.fertilizer4h)
-            Log.d("GardenViewModel", "[GARDEN] Added FERTILIZER_4H: quantity=${this.fertilizer4h}")
-        }
-        if (this.fertilizer8h > 0) {
-            items[CareItemType.FERTILIZER_8H] = createDefaultItem(CareItemType.FERTILIZER_8H)
-                .copy(quantity = this.fertilizer8h)
-            Log.d("GardenViewModel", "[GARDEN] Added FERTILIZER_8H: quantity=${this.fertilizer8h}")
-        }
-        if (this.fertilizer12h > 0) {
-            items[CareItemType.FERTILIZER_24H] = createDefaultItem(CareItemType.FERTILIZER_24H)
-                .copy(quantity = this.fertilizer12h)
-            Log.d("GardenViewModel", "[GARDEN] Added FERTILIZER_24H (from fertilizer12h field): quantity=${this.fertilizer12h}")
-        }
-        if (this.wateringCan > 0) {
-            items[CareItemType.WATER] = createDefaultItem(CareItemType.WATER)
-                .copy(quantity = this.wateringCan)
-            Log.d("GardenViewModel", "[GARDEN] Added WATER: quantity=${this.wateringCan}")
-        }
-        if (this.sunlightBottle > 0) {
-            items[CareItemType.SUNLIGHT] = createDefaultItem(CareItemType.SUNLIGHT)
-                .copy(quantity = this.sunlightBottle)
-            Log.d("GardenViewModel", "[GARDEN] Added SUNLIGHT: quantity=${this.sunlightBottle}")
-        }
+        // Always include ALL item types to prevent items from "disappearing" when quantity is 0
+        val items = mapOf(
+            CareItemType.SEED_NORMAL to createDefaultItem(CareItemType.SEED_NORMAL).copy(quantity = this.seeds),
+            CareItemType.SEED_RARE to createDefaultItem(CareItemType.SEED_RARE).copy(quantity = this.rareSeeds),
+            CareItemType.SEED_SUPER_RARE to createDefaultItem(CareItemType.SEED_SUPER_RARE).copy(quantity = this.superRareSeeds),
+            CareItemType.FERTILIZER_4H to createDefaultItem(CareItemType.FERTILIZER_4H).copy(quantity = this.fertilizer4h),
+            CareItemType.FERTILIZER_8H to createDefaultItem(CareItemType.FERTILIZER_8H).copy(quantity = this.fertilizer8h),
+            CareItemType.FERTILIZER_24H to createDefaultItem(CareItemType.FERTILIZER_24H).copy(quantity = this.fertilizer12h),
+            CareItemType.WATER to createDefaultItem(CareItemType.WATER).copy(quantity = this.wateringCan),
+            CareItemType.SUNLIGHT to createDefaultItem(CareItemType.SUNLIGHT).copy(quantity = this.sunlightBottle),
+            CareItemType.PESTICIDE to createDefaultItem(CareItemType.PESTICIDE).copy(quantity = this.pesticide),
+            CareItemType.SCISSORS to createDefaultItem(CareItemType.SCISSORS).copy(quantity = this.scissors)
+        )
         
-        if (this.pesticide > 0) {
-            items[CareItemType.PESTICIDE] = createDefaultItem(CareItemType.PESTICIDE)
-                .copy(quantity = this.pesticide)
-            Log.d("GardenViewModel", "[GARDEN] Added PESTICIDE: quantity=${this.pesticide}")
-        }
-        if (this.scissors > 0) {
-            items[CareItemType.SCISSORS] = createDefaultItem(CareItemType.SCISSORS)
-                .copy(quantity = this.scissors)
-            Log.d("GardenViewModel", "[GARDEN] Added SCISSORS: quantity=${this.scissors}")
-        }
-        
-        Log.d("GardenViewModel", "[GARDEN] Final inventory has ${items.size} item types")
+        Log.d("GardenViewModel", "[GARDEN] Final inventory has ${items.size} item types (all types included)")
 
         return GardenInventory(
             items = items,
@@ -1220,29 +1182,44 @@ class GardenViewModelFirebase : ViewModel() {
 
     /**
      * Save inventory to Firebase
+     * Uses setDocument with merge to ensure document is created if it doesn't exist
      */
     private fun saveInventory(inventory: GardenInventory) {
         val userId = authRepository.currentUser?.uid ?: return
 
         viewModelScope.launch {
-            val updates = mapOf(
-                "seeds" to (inventory.getItem(CareItemType.SEED_NORMAL)?.quantity ?: 0),
-                "rareSeeds" to (inventory.getItem(CareItemType.SEED_RARE)?.quantity ?: 0),
-                "superRareSeeds" to (inventory.getItem(CareItemType.SEED_SUPER_RARE)?.quantity ?: 0),
-                "fertilizer4h" to (inventory.getItem(CareItemType.FERTILIZER_4H)?.quantity ?: 0),
-                "fertilizer8h" to (inventory.getItem(CareItemType.FERTILIZER_8H)?.quantity ?: 0),
-                "fertilizer12h" to (inventory.getItem(CareItemType.FERTILIZER_24H)?.quantity ?: 0),
-                "wateringCan" to (inventory.getItem(CareItemType.WATER)?.quantity ?: 0),
-                "sunlightBottle" to (inventory.getItem(CareItemType.SUNLIGHT)?.quantity ?: 0),
-                "pesticide" to (inventory.getItem(CareItemType.PESTICIDE)?.quantity ?: 0),
-                "scissors" to (inventory.getItem(CareItemType.SCISSORS)?.quantity ?: 0),
-                "updatedAt" to Timestamp(Date())
+            val inventoryData = FirebaseGardenInventory(
+                id = userId,
+                userId = userId,
+                seeds = inventory.getItem(CareItemType.SEED_NORMAL)?.quantity ?: 0,
+                rareSeeds = inventory.getItem(CareItemType.SEED_RARE)?.quantity ?: 0,
+                superRareSeeds = inventory.getItem(CareItemType.SEED_SUPER_RARE)?.quantity ?: 0,
+                fertilizer4h = inventory.getItem(CareItemType.FERTILIZER_4H)?.quantity ?: 0,
+                fertilizer8h = inventory.getItem(CareItemType.FERTILIZER_8H)?.quantity ?: 0,
+                fertilizer12h = inventory.getItem(CareItemType.FERTILIZER_24H)?.quantity ?: 0,
+                wateringCan = inventory.getItem(CareItemType.WATER)?.quantity ?: 0,
+                sunlightBottle = inventory.getItem(CareItemType.SUNLIGHT)?.quantity ?: 0,
+                pesticide = inventory.getItem(CareItemType.PESTICIDE)?.quantity ?: 0,
+                scissors = inventory.getItem(CareItemType.SCISSORS)?.quantity ?: 0,
+                updatedAt = Date()
             )
 
-            firestoreRepository.updateDocument(
+            Log.d("GardenViewModel", "[GARDEN] Saving inventory to Firebase: seeds=${inventoryData.seeds}, water=${inventoryData.wateringCan}, sun=${inventoryData.sunlightBottle}")
+            
+            val result = firestoreRepository.setDocument(
                 collection = "garden_inventories",
                 documentId = userId,
-                updates = updates
+                data = inventoryData,
+                merge = true
+            )
+            
+            result.fold(
+                onSuccess = {
+                    Log.d("GardenViewModel", "[GARDEN] ✓ Inventory saved successfully")
+                },
+                onFailure = { error ->
+                    Log.e("GardenViewModel", "[GARDEN] ✗ Failed to save inventory: ${error.message}")
+                }
             )
         }
     }

@@ -101,14 +101,19 @@ class MissingWidgetProvider : AppWidgetProvider() {
             }
             ACTION_SEND_MISSING -> {
                 // Quick send missing from widget with haptic feedback
+                Log.d(TAG, "ACTION_SEND_MISSING received, processing...")
                 CoroutineScope(Dispatchers.IO).launch {
                     val success = sendMissingFromWidgetOptimized(context)
+                    Log.d(TAG, "sendMissingFromWidgetOptimized result: $success")
                     withContext(Dispatchers.Main) {
                         if (success) {
                             // Haptic feedback
                             provideHapticFeedback(context)
                             // Show toast
                             Toast.makeText(context, "💕 Đã gửi nhớ!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            // Show error toast
+                            Toast.makeText(context, "❌ Không thể gửi, hãy đăng nhập lại", Toast.LENGTH_SHORT).show()
                         }
                         // Update widget immediately
                         updateWidgets(context)
