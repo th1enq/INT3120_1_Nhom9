@@ -21,7 +21,6 @@ import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.components.missing.*
-import com.example.coupleapp.viewmodel.MissingViewModel
 import com.example.coupleapp.viewmodel.MissingViewModelFirebase
 import kotlinx.coroutines.delay
 

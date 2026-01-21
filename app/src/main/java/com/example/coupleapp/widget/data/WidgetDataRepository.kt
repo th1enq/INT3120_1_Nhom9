@@ -3,6 +3,10 @@ package com.example.coupleapp.widget.data
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.example.coupleapp.data.local.CoupleAppDatabase
+import com.example.coupleapp.data.local.entity.PartnerLocationEntity
+import com.example.coupleapp.data.local.entity.PartnerPhotoEntity
+import com.example.coupleapp.data.local.entity.PartnerSleepEntity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -15,23 +19,35 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Repository for widget data with caching support
- * Follows modern app patterns for battery optimization:
- * - Aggressive caching to reduce network calls
- * - Smart refresh based on data staleness
- * - Offline-first approach
+ * Repository for widget data with Room DB as single source of truth.
+ * 
+ * Architecture (Silent Push Strategy):
+ * 1. FCM Data Message arrives → triggers PartnerDataSyncWorker
+ * 2. Worker fetches from Firebase → saves to Room DB
+ * 3. Widget reads from Room DB (THIS CLASS)
+ * 4. Only fallback to Firebase if Room is empty
+ * 
+ * Benefits:
+ * - Battery efficient: Widget never calls Firebase directly
+ * - Offline-first: Widget always has data from Room cache
+ * - Reactive: Room Flow enables automatic widget updates
+ * - Consistent: Single source of truth prevents data conflicts
  */
 object WidgetDataRepository {
     private const val TAG = "WidgetDataRepository"
     private const val PREFS_NAME = "widget_data_cache"
     
-    // Cache expiry times (in milliseconds)
+    // Cache expiry times (in milliseconds) - now used as FALLBACK only
+    // Primary data comes from Room DB
     private const val SLEEP_CACHE_EXPIRY_MS = 30 * 60 * 1000L     // 30 minutes
     private const val LOCKET_CACHE_EXPIRY_MS = 5 * 60 * 1000L     // 5 minutes (more frequent for real-time feel)
     private const val MISSING_CACHE_EXPIRY_MS = 15 * 60 * 1000L   // 15 minutes
     private const val LOCATION_CACHE_EXPIRY_MS = 10 * 60 * 1000L  // 10 minutes
     
-    // Cache keys
+    // Room data staleness threshold - if older than this, also try Firebase refresh
+    private const val ROOM_DATA_STALE_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
+    
+    // Cache keys (for SharedPreferences fallback)
     private const val KEY_SLEEP_DATA = "sleep_data"
     private const val KEY_SLEEP_TIMESTAMP = "sleep_timestamp"
     private const val KEY_LOCKET_DATA = "locket_data"
@@ -40,44 +56,170 @@ object WidgetDataRepository {
     private const val KEY_MISSING_TIMESTAMP = "missing_timestamp"
     private const val KEY_LOCATION_DATA = "location_data"
     private const val KEY_LOCATION_TIMESTAMP = "location_timestamp"
+    private const val KEY_PARTNER_ID = "cached_partner_id"
     
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
     
+    /**
+     * Get partner ID from cache or fetch from Firebase.
+     */
+    private suspend fun getPartnerId(context: Context): String? {
+        val prefs = getPrefs(context)
+        val cachedPartnerId = prefs.getString(KEY_PARTNER_ID, null)
+        if (!cachedPartnerId.isNullOrEmpty()) {
+            return cachedPartnerId
+        }
+        
+        // Fetch and cache partner ID
+        return withContext(Dispatchers.IO) {
+            try {
+                val auth = FirebaseAuth.getInstance()
+                val currentUser = auth.currentUser ?: return@withContext null
+                val db = FirebaseFirestore.getInstance()
+                val userDoc = db.collection("users").document(currentUser.uid).get().await()
+                val partnerId = userDoc.getString("partnerId")
+                if (!partnerId.isNullOrEmpty()) {
+                    prefs.edit().putString(KEY_PARTNER_ID, partnerId).apply()
+                }
+                partnerId
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching partner ID", e)
+                null
+            }
+        }
+    }
+    
     // ==================== SLEEP DATA ====================
     
     /**
-     * Get sleep widget data with smart caching
-     * Returns cached data if fresh, otherwise fetches from Firebase
+     * Get sleep widget data with Room DB as single source of truth.
+     * 
+     * Priority order:
+     * 1. Room DB (primary - synced by PartnerDataSyncWorker)
+     * 2. SharedPreferences cache (fallback)
+     * 3. Firebase direct fetch (last resort, also saves to Room)
      */
     suspend fun getSleepWidgetData(context: Context, forceRefresh: Boolean = false): SleepWidgetCachedData? {
-        val prefs = getPrefs(context)
-        val cachedTimestamp = prefs.getLong(KEY_SLEEP_TIMESTAMP, 0)
-        val now = System.currentTimeMillis()
-        
-        // Check if cache is valid
-        if (!forceRefresh && (now - cachedTimestamp) < SLEEP_CACHE_EXPIRY_MS) {
-            val cachedData = parseSleepCachedData(prefs.getString(KEY_SLEEP_DATA, null))
-            if (cachedData != null) {
-                Log.d(TAG, "Returning cached sleep data")
-                return cachedData
-            }
-        }
-        
-        // Fetch fresh data
         return withContext(Dispatchers.IO) {
             try {
+                val partnerId = getPartnerId(context) ?: return@withContext null
+                
+                // 1. Try Room DB first (single source of truth)
+                if (!forceRefresh) {
+                    val roomData = getSleepFromRoom(context, partnerId)
+                    if (roomData != null) {
+                        Log.d(TAG, "✅ Returning sleep data from Room DB")
+                        return@withContext roomData
+                    }
+                }
+                
+                // 2. Try SharedPreferences cache as fallback
+                val prefs = getPrefs(context)
+                val cachedTimestamp = prefs.getLong(KEY_SLEEP_TIMESTAMP, 0)
+                val now = System.currentTimeMillis()
+                
+                if (!forceRefresh && (now - cachedTimestamp) < SLEEP_CACHE_EXPIRY_MS) {
+                    val cachedData = parseSleepCachedData(prefs.getString(KEY_SLEEP_DATA, null))
+                    if (cachedData != null) {
+                        Log.d(TAG, "📦 Returning sleep data from SharedPreferences cache")
+                        return@withContext cachedData
+                    }
+                }
+                
+                // 3. Last resort: Fetch from Firebase directly
+                Log.d(TAG, "🌐 Fetching sleep data from Firebase (fallback)")
                 val freshData = fetchSleepDataFromFirebase()
                 if (freshData != null) {
                     cacheSleepData(prefs, freshData)
                 }
                 freshData
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching sleep data", e)
-                // Return stale cache if fetch fails
-                parseSleepCachedData(prefs.getString(KEY_SLEEP_DATA, null))
+                Log.e(TAG, "Error getting sleep data", e)
+                // Return stale cache if all else fails
+                parseSleepCachedData(getPrefs(context).getString(KEY_SLEEP_DATA, null))
             }
+        }
+    }
+    
+    /**
+     * Read sleep data from Room Database.
+     */
+    private suspend fun getSleepFromRoom(context: Context, partnerId: String): SleepWidgetCachedData? {
+        return try {
+            val db = CoupleAppDatabase.getInstance(context)
+            val sleepDao = db.partnerSleepDao()
+            val sleepEntity = sleepDao.getLatestSleep(partnerId)
+            
+            if (sleepEntity != null) {
+                // Check if data is too stale
+                val now = System.currentTimeMillis()
+                if (now - sleepEntity.lastSyncedAt > ROOM_DATA_STALE_THRESHOLD_MS) {
+                    Log.d(TAG, "Room sleep data is stale (${(now - sleepEntity.lastSyncedAt) / 1000}s old)")
+                    // Return data but also trigger background refresh
+                }
+                
+                // Get my sleep data too (need Firebase for this)
+                val auth = FirebaseAuth.getInstance()
+                val currentUser = auth.currentUser
+                val firestore = FirebaseFirestore.getInstance()
+                
+                val myName = currentUser?.let {
+                    firestore.collection("users").document(it.uid).get().await()
+                        .getString("displayName")
+                } ?: "Bạn"
+                
+                val coupleId = currentUser?.let {
+                    listOf(it.uid, partnerId).sorted().joinToString("_")
+                } ?: ""
+                
+                val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                
+                // Get my sleep record
+                val mySleepDoc = currentUser?.let {
+                    firestore.collection("sleep_records")
+                        .document("${coupleId}_${it.uid}_$today")
+                        .get().await()
+                }
+                
+                val mySleepDuration = mySleepDoc?.getLong("actualDuration")?.toInt() ?: 0
+                val mySleepQuality = mySleepDoc?.getString("quality") ?: "GOOD"
+                val myAchievement = mySleepDoc?.getDouble("achievementPercentage")?.toFloat() ?: 0f
+                
+                // Get bedtime setting
+                val settingsDoc = currentUser?.let {
+                    firestore.collection("sleep_settings").document(it.uid).get().await()
+                }
+                val bedtimeHour = settingsDoc?.getLong("bedtimeHour")?.toInt() ?: 22
+                val bedtimeMinute = settingsDoc?.getLong("bedtimeMinute")?.toInt() ?: 0
+                
+                // Check if partner is currently asleep
+                val partnerSleepDoc = firestore.collection("sleep_records")
+                    .document("${coupleId}_${partnerId}_$today")
+                    .get().await()
+                val partnerIsAsleep = partnerSleepDoc.getBoolean("isCurrentlyAsleep") ?: false
+                
+                SleepWidgetCachedData(
+                    myName = myName,
+                    partnerName = sleepEntity.partnerName,
+                    mySleepDuration = mySleepDuration,
+                    mySleepQuality = mySleepQuality,
+                    myAchievement = myAchievement,
+                    partnerSleepDuration = sleepEntity.sleepDurationMinutes,
+                    partnerSleepQuality = sleepEntity.sleepQuality,
+                    partnerAchievement = (sleepEntity.sleepDurationMinutes.toFloat() / sleepEntity.targetDurationMinutes * 100).coerceIn(0f, 100f),
+                    partnerIsAsleep = partnerIsAsleep,
+                    bedtimeHour = bedtimeHour,
+                    bedtimeMinute = bedtimeMinute,
+                    date = sleepEntity.date
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading sleep from Room", e)
+            null
         }
     }
     
@@ -177,42 +319,101 @@ object WidgetDataRepository {
     
     // ==================== LOCKET DATA ====================
     
+    /**
+     * Get locket widget data with Room DB as single source of truth.
+     * 
+     * Priority order:
+     * 1. Room DB (primary - synced by PartnerDataSyncWorker)
+     * 2. SharedPreferences cache (fallback)
+     * 3. Firebase direct fetch (last resort)
+     */
     suspend fun getLocketWidgetData(context: Context, forceRefresh: Boolean = false): LocketWidgetCachedData? {
-        val prefs = getPrefs(context)
-        val cachedTimestamp = prefs.getLong(KEY_LOCKET_TIMESTAMP, 0)
-        val now = System.currentTimeMillis()
-        
-        if (!forceRefresh && (now - cachedTimestamp) < LOCKET_CACHE_EXPIRY_MS) {
-            val cachedData = parseLocketCachedData(prefs.getString(KEY_LOCKET_DATA, null))
-            if (cachedData != null) {
-                // If cached content is a placeholder (for PHOTO/DRAWING), we need fresh data
-                if (cachedData.content == "__BASE64_IMAGE__") {
-                    Log.d(TAG, "Cached locket is image type, fetching fresh data for content")
-                    return withContext(Dispatchers.IO) {
-                        try {
-                            fetchLocketDataFromFirebase()
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error fetching locket data for image", e)
-                            cachedData // Return cached metadata at least
-                        }
-                    }
-                }
-                Log.d(TAG, "Returning cached locket data")
-                return cachedData
-            }
-        }
-        
         return withContext(Dispatchers.IO) {
             try {
+                val partnerId = getPartnerId(context) ?: return@withContext null
+                
+                // 1. Try Room DB first (single source of truth)
+                if (!forceRefresh) {
+                    val roomData = getLocketFromRoom(context, partnerId)
+                    if (roomData != null) {
+                        Log.d(TAG, "✅ Returning locket data from Room DB")
+                        return@withContext roomData
+                    }
+                }
+                
+                // 2. Try SharedPreferences cache as fallback
+                val prefs = getPrefs(context)
+                val cachedTimestamp = prefs.getLong(KEY_LOCKET_TIMESTAMP, 0)
+                val now = System.currentTimeMillis()
+                
+                if (!forceRefresh && (now - cachedTimestamp) < LOCKET_CACHE_EXPIRY_MS) {
+                    val cachedData = parseLocketCachedData(prefs.getString(KEY_LOCKET_DATA, null))
+                    if (cachedData != null) {
+                        // If cached content is a placeholder (for PHOTO/DRAWING), we need fresh data
+                        if (cachedData.content == "__BASE64_IMAGE__") {
+                            Log.d(TAG, "Cached locket is image type, fetching fresh data for content")
+                            val freshData = fetchLocketDataFromFirebase()
+                            if (freshData != null) {
+                                return@withContext freshData
+                            }
+                        }
+                        Log.d(TAG, "📦 Returning locket data from SharedPreferences cache")
+                        return@withContext cachedData
+                    }
+                }
+                
+                // 3. Last resort: Fetch from Firebase directly
+                Log.d(TAG, "🌐 Fetching locket data from Firebase (fallback)")
                 val freshData = fetchLocketDataFromFirebase()
                 if (freshData != null) {
                     cacheLocketData(prefs, freshData)
                 }
                 freshData
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching locket data", e)
-                parseLocketCachedData(prefs.getString(KEY_LOCKET_DATA, null))
+                Log.e(TAG, "Error getting locket data", e)
+                parseLocketCachedData(getPrefs(context).getString(KEY_LOCKET_DATA, null))
             }
+        }
+    }
+    
+    /**
+     * Read locket/photo data from Room Database.
+     */
+    private suspend fun getLocketFromRoom(context: Context, partnerId: String): LocketWidgetCachedData? {
+        return try {
+            val db = CoupleAppDatabase.getInstance(context)
+            val photoDao = db.partnerPhotoDao()
+            val photoEntity = photoDao.getLatestPhoto(partnerId)
+            
+            if (photoEntity != null) {
+                // Check if data is too stale
+                val now = System.currentTimeMillis()
+                if (now - photoEntity.lastSyncedAt > ROOM_DATA_STALE_THRESHOLD_MS) {
+                    Log.d(TAG, "Room locket data is stale (${(now - photoEntity.lastSyncedAt) / 1000}s old)")
+                }
+                
+                // Determine type based on URL
+                val type = when {
+                    photoEntity.imageUrl.contains("drawing") -> "DRAWING"
+                    photoEntity.imageUrl.startsWith("http") -> "PHOTO"
+                    photoEntity.imageUrl.length < 50 -> "EMOJI" // Emoji is short text
+                    else -> "TEXT"
+                }
+                
+                LocketWidgetCachedData(
+                    senderName = photoEntity.partnerName,
+                    content = photoEntity.imageUrl,
+                    type = type,
+                    caption = photoEntity.caption,
+                    timestamp = photoEntity.timestamp,
+                    hasNewLocket = !photoEntity.isRead
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading locket from Room", e)
+            null
         }
     }
     
@@ -496,30 +697,121 @@ object WidgetDataRepository {
     
     // ==================== LOCATION DATA ====================
     
+    /**
+     * Get location widget data with Room DB as single source of truth.
+     * 
+     * Priority order:
+     * 1. Room DB (primary - synced by PartnerDataSyncWorker)
+     * 2. SharedPreferences cache (fallback)
+     * 3. Firebase direct fetch (last resort)
+     */
     suspend fun getLocationWidgetData(context: Context, forceRefresh: Boolean = false): LocationWidgetCachedData? {
-        val prefs = getPrefs(context)
-        val cachedTimestamp = prefs.getLong(KEY_LOCATION_TIMESTAMP, 0)
-        val now = System.currentTimeMillis()
-        
-        if (!forceRefresh && (now - cachedTimestamp) < LOCATION_CACHE_EXPIRY_MS) {
-            val cachedData = parseLocationCachedData(prefs.getString(KEY_LOCATION_DATA, null))
-            if (cachedData != null) {
-                Log.d(TAG, "Returning cached location data")
-                return cachedData
-            }
-        }
-        
         return withContext(Dispatchers.IO) {
             try {
+                val partnerId = getPartnerId(context) ?: return@withContext null
+                
+                // 1. Try Room DB first (single source of truth)
+                if (!forceRefresh) {
+                    val roomData = getLocationFromRoom(context, partnerId)
+                    if (roomData != null) {
+                        Log.d(TAG, "✅ Returning location data from Room DB")
+                        return@withContext roomData
+                    }
+                }
+                
+                // 2. Try SharedPreferences cache as fallback
+                val prefs = getPrefs(context)
+                val cachedTimestamp = prefs.getLong(KEY_LOCATION_TIMESTAMP, 0)
+                val now = System.currentTimeMillis()
+                
+                if (!forceRefresh && (now - cachedTimestamp) < LOCATION_CACHE_EXPIRY_MS) {
+                    val cachedData = parseLocationCachedData(prefs.getString(KEY_LOCATION_DATA, null))
+                    if (cachedData != null) {
+                        Log.d(TAG, "📦 Returning location data from SharedPreferences cache")
+                        return@withContext cachedData
+                    }
+                }
+                
+                // 3. Last resort: Fetch from Firebase directly
+                Log.d(TAG, "🌐 Fetching location data from Firebase (fallback)")
                 val freshData = fetchLocationDataFromFirebase()
                 if (freshData != null) {
                     cacheLocationData(prefs, freshData)
                 }
                 freshData
             } catch (e: Exception) {
-                Log.e(TAG, "Error fetching location data", e)
-                parseLocationCachedData(prefs.getString(KEY_LOCATION_DATA, null))
+                Log.e(TAG, "Error getting location data", e)
+                parseLocationCachedData(getPrefs(context).getString(KEY_LOCATION_DATA, null))
             }
+        }
+    }
+    
+    /**
+     * Read location data from Room Database.
+     */
+    private suspend fun getLocationFromRoom(context: Context, partnerId: String): LocationWidgetCachedData? {
+        return try {
+            val db = CoupleAppDatabase.getInstance(context)
+            val locationDao = db.partnerLocationDao()
+            val locationEntity = locationDao.getLatestLocation(partnerId)
+            
+            if (locationEntity != null) {
+                // Check if data is too stale
+                val now = System.currentTimeMillis()
+                if (now - locationEntity.lastSyncedAt > ROOM_DATA_STALE_THRESHOLD_MS) {
+                    Log.d(TAG, "Room location data is stale (${(now - locationEntity.lastSyncedAt) / 1000}s old)")
+                }
+                
+                // Get my location from Firebase (Room only stores partner data)
+                val auth = FirebaseAuth.getInstance()
+                val currentUser = auth.currentUser
+                val firestore = FirebaseFirestore.getInstance()
+                
+                val userDoc = currentUser?.let {
+                    firestore.collection("users").document(it.uid).get().await()
+                }
+                val myName = userDoc?.getString("displayName") ?: "Bạn"
+                val coupleId = userDoc?.getString("coupleId") 
+                    ?: currentUser?.let { listOf(it.uid, partnerId).sorted().joinToString("_") }
+                    ?: ""
+                
+                val myLocationDoc = currentUser?.let {
+                    firestore.collection("couple_locations")
+                        .document(coupleId)
+                        .collection("user_locations")
+                        .document(it.uid)
+                        .get()
+                        .await()
+                }
+                
+                val myLat = myLocationDoc?.getDouble("latitude")
+                val myLng = myLocationDoc?.getDouble("longitude")
+                val myLocationName = myLocationDoc?.getString("locationName") ?: "Không rõ"
+                
+                // Calculate distance if both have locations
+                val distance = if (myLat != null && myLng != null) {
+                    calculateDistance(myLat, myLng, locationEntity.latitude, locationEntity.longitude)
+                } else {
+                    null
+                }
+                
+                val isSharing = myLat != null && myLng != null
+                
+                LocationWidgetCachedData(
+                    myName = myName,
+                    partnerName = locationEntity.partnerName,
+                    myLocation = myLocationName,
+                    partnerLocation = locationEntity.placeName ?: locationEntity.address ?: "Không rõ",
+                    distance = distance,
+                    isSharing = isSharing,
+                    partnerLastUpdate = locationEntity.timestamp
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading location from Room", e)
+            null
         }
     }
     

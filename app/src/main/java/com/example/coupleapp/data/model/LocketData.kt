@@ -1,5 +1,6 @@
 package com.example.coupleapp.data.model
 
+import android.graphics.Bitmap
 import java.time.LocalDateTime
 
 /**
@@ -92,4 +93,34 @@ data class LocketSettings(
     val userId: String,
     val notificationsEnabled: Boolean = true,
     val autoSaveToGallery: Boolean = false
+)
+
+/**
+ * UI State for Locket feature
+ */
+data class LocketUiState(
+    val currentUser: UserProfile = UserProfile("", "", null),
+    val partnerUser: UserProfile = UserProfile("", "", null),
+    val selectedTab: LocketTab = LocketTab.PHOTO,
+    val cameraState: CameraState = CameraState(),
+    val capturedPhoto: Bitmap? = null,
+    val selectedGalleryImage: String? = null,
+    val showPreview: Boolean = false,
+    val selectedEmoji: String? = null,
+    val showEmojiPicker: Boolean = false,
+    val textContent: String = "",
+    val drawingPaths: List<DrawingPath> = emptyList(),
+    val drawingBitmap: Bitmap? = null,
+    val showDrawingScreen: Boolean = false,
+    val locketHistory: List<LocketPost> = emptyList(),
+    val emojis: List<EmojiItem> = emptyList(),
+    val settings: LocketSettings = LocketSettings(""),
+    val isPinMode: Boolean = true,
+    val showHistory: Boolean = false,
+    val showSettings: Boolean = false,
+    val showGalleryPicker: Boolean = false,
+    val isLoading: Boolean = true,
+    val isSending: Boolean = false,
+    val sendSuccess: Boolean = false,
+    val error: String? = null
 )

@@ -34,13 +34,16 @@ fun CalendarSettingsDialog(
     onUpdateBackground: (String) -> Unit,
     onToggleHeartbeat: (Boolean) -> Unit,
     onUpdateAnniversaryDate: (java.time.LocalDate) -> Unit = {},
-    onInsertMockData: () -> Unit = {}
+    onSelectBackgroundFromGallery: () -> Unit = {},
+    onUpdateReminderHours: (Int) -> Unit = {}
 ) {
     var user1Nickname by remember { mutableStateOf(coupleProfile?.user1?.nickname ?: "") }
     var user2Nickname by remember { mutableStateOf(coupleProfile?.user2?.nickname ?: "") }
     var showHeartbeat by remember { mutableStateOf(settings.showHeartbeatAnimation) }
     var useDefaultBackground by remember { mutableStateOf(settings.useDefaultBackground) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showReminderPicker by remember { mutableStateOf(false) }
+    var reminderHours by remember { mutableStateOf(settings.reminderHoursBefore) }
     
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -171,8 +174,7 @@ fun CalendarSettingsDialog(
                                 if (!useDefaultBackground) {
                                     Button(
                                         onClick = { 
-                                            // TODO: Open image picker
-                                            // For now, just show a placeholder action
+                                            onSelectBackgroundFromGallery()
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(
@@ -219,26 +221,17 @@ fun CalendarSettingsDialog(
                                 SettingItem(
                                     icon = Icons.Default.Notifications,
                                     title = "Nhắc nhở sự kiện",
-                                    subtitle = "Nhận thông báo trước ${settings.reminderHoursBefore}h",
+                                    subtitle = "Nhận thông báo trước ${reminderHours}h",
                                     onClick = { 
-                                        // TODO: Open time picker for reminder
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    
-                    // Test Section
-                    item {
-                        SettingsSection(title = "Test & Debug") {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                SettingItem(
-                                    icon = Icons.Default.Add,
-                                    title = "Insert Mock Data",
-                                    subtitle = "Thêm dữ liệu mẫu để test",
-                                    onClick = {
-                                        onInsertMockData()
-                                        onDismiss()
+                                        showReminderPicker = true
+                                    },
+                                    trailing = {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Chỉnh sửa",
+                                            tint = AccentPink,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
                                 )
                             }
@@ -257,11 +250,11 @@ fun CalendarSettingsDialog(
                                 )
                                 
                                 coupleProfile?.let { profile ->
-                                    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+                                    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")
                                     SettingItem(
                                         icon = Icons.Default.DateRange,
                                         title = "Ngày bắt đầu yêu nhau",
-                                        subtitle = profile.relationshipStartDate.format(formatter),
+                                        subtitle = profile.relationshipStartDate.toLocalDate().format(formatter),
                                         onClick = { showDatePicker = true },
                                         trailing = {
                                             Icon(
@@ -318,6 +311,81 @@ fun CalendarSettingsDialog(
                     )
                 )
             }
+        }
+        
+        // Reminder Hours Picker Dialog
+        if (showReminderPicker) {
+            val reminderOptions = listOf(1, 2, 6, 12, 24, 48, 72)
+            
+            AlertDialog(
+                onDismissRequest = { showReminderPicker = false },
+                title = {
+                    Text(
+                        text = "Chọn thời gian nhắc nhở",
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Nhận thông báo trước sự kiện:",
+                            fontSize = 14.sp,
+                            color = TextSecondary
+                        )
+                        reminderOptions.forEach { hours ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        reminderHours = hours
+                                        onUpdateReminderHours(hours)
+                                        showReminderPicker = false
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = reminderHours == hours,
+                                    onClick = {
+                                        reminderHours = hours
+                                        onUpdateReminderHours(hours)
+                                        showReminderPicker = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = AccentPink
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = when (hours) {
+                                        1 -> "1 giờ trước"
+                                        2 -> "2 giờ trước"
+                                        6 -> "6 giờ trước"
+                                        12 -> "12 giờ trước"
+                                        24 -> "1 ngày trước"
+                                        48 -> "2 ngày trước"
+                                        72 -> "3 ngày trước"
+                                        else -> "$hours giờ trước"
+                                    },
+                                    fontSize = 15.sp,
+                                    color = TextPrimary
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showReminderPicker = false }) {
+                        Text(stringResource(R.string.cancel), color = TextSecondary)
+                    }
+                },
+                containerColor = BackgroundWhite,
+                shape = RoundedCornerShape(20.dp)
+            )
         }
     }
 }

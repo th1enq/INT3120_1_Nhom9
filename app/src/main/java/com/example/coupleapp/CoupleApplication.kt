@@ -8,18 +8,30 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import coil.Coil
+import com.example.coupleapp.data.sync.PartnerSyncRepository
 import com.example.coupleapp.util.createImageLoaderWithBase64Support
+import com.example.coupleapp.util.SyncTriggerListener
+import com.example.coupleapp.service.SignificantLocationManager
+import com.example.coupleapp.util.PartnerNotificationManager
 import com.example.coupleapp.widget.WidgetManager
+import com.example.coupleapp.widget.observer.RoomWidgetObserver
 import com.example.coupleapp.worker.BackgroundLocationWorker
+import com.example.coupleapp.worker.PartnerDataSyncWorker
 import com.example.coupleapp.worker.SleepSyncWorker
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
+import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Application class for initializing Firebase, background workers, widgets and tracking app lifecycle
  */
+@HiltAndroidApp
 class CoupleApplication : Application(), Configuration.Provider, LifecycleEventObserver {
     
     companion object {
@@ -33,6 +45,8 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         lateinit var instance: CoupleApplication
             private set
     }
+    
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     override fun onCreate() {
         super.onCreate()
@@ -55,14 +69,17 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         // Track app lifecycle for notifications
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         
-        // Initialize widget system
+        // Create notification channels for partner notifications
+        PartnerNotificationManager.createNotificationChannels(this)
+        
+        // Initialize widget system (legacy + new)
         initializeWidgets()
         
         Log.d("CoupleApplication", "Firebase initialized successfully")
         Log.d("CoupleApplication", "Coil ImageLoader with base64 support initialized")
         
-        // Schedule background location worker if user is logged in
-        scheduleBackgroundLocationIfNeeded()
+        // Schedule background workers if user is logged in
+        scheduleBackgroundWorkersIfNeeded()
     }
     
     /**
@@ -70,20 +87,41 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
      */
     private fun initializeWidgets() {
         Log.d("CoupleApplication", "Initializing widget system")
+        
+        // Initialize legacy widget system (WidgetDataRepository + Firestore Observer)
         WidgetManager.initialize(this)
+        
+        // Initialize new Room-based widget observer
+        // This provides reactive widget updates when Room DB changes
+        RoomWidgetObserver.startObserving(this)
+        
+        // Start Firestore sync trigger listener (alternative to Cloud Functions)
+        // This listens for sync requests from partner without needing FCM
+        SyncTriggerListener.startListening(this)
+        
+        Log.d("CoupleApplication", "Widget systems and sync trigger listener initialized")
     }
     
     /**
-     * Schedule background location updates if user is logged in and paired
+     * Schedule background workers if user is logged in and paired
      */
-    private fun scheduleBackgroundLocationIfNeeded() {
+    private fun scheduleBackgroundWorkersIfNeeded() {
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
-            Log.d("CoupleApplication", "User logged in, scheduling background location worker")
+            Log.d("CoupleApplication", "User logged in, scheduling background workers")
+            
+            // Battery-efficient location tracking (like Widgetable)
+            // Uses Significant Location Changes instead of continuous GPS
+            SignificantLocationManager.getInstance(this).startTracking()
+            
+            // Fallback: periodic location worker (runs every 15 min if significant changes missed)
             BackgroundLocationWorker.schedule(this)
             
-            // Also schedule sleep sync worker for accurate sleep tracking
+            // Sleep sync worker
             scheduleSleepSyncWorker()
+            
+            // Partner data sync worker (Silent Push fallback - no Cloud Functions needed)
+            schedulePartnerDataSync()
         } else {
             Log.d("CoupleApplication", "No user logged in, skipping background workers")
         }
@@ -91,16 +129,38 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
     
     /**
      * Schedule sleep sync worker for accurate sleep tracking
-     * This runs periodically and in the morning to sync Health Connect data
      */
     private fun scheduleSleepSyncWorker() {
         Log.d("CoupleApplication", "Scheduling sleep sync workers")
-        // Schedule periodic sync (every 4 hours)
         SleepSyncWorker.schedulePeriodicSync(this)
-        // Schedule morning sync (between 6 AM - 12 PM)
         SleepSyncWorker.scheduleMorningSync(this)
-        // Trigger immediate sync on app start
         SleepSyncWorker.triggerImmediateSync(this)
+    }
+    
+    /**
+     * Schedule periodic partner data sync as fallback for Silent Push.
+     * This ensures data stays fresh even if FCM is delayed/blocked.
+     */
+    private fun schedulePartnerDataSync() {
+        applicationScope.launch {
+            try {
+                val partnerId = PartnerSyncRepository.getInstance(this@CoupleApplication).getPartnerId()
+                if (partnerId != null) {
+                    Log.d("CoupleApplication", "Scheduling periodic partner data sync for: $partnerId")
+                    PartnerDataSyncWorker.schedulePeriodicSync(this@CoupleApplication, partnerId)
+                    
+                    // Also trigger immediate sync on app start
+                    PartnerDataSyncWorker.enqueueRegular(
+                        context = this@CoupleApplication,
+                        partnerId = partnerId,
+                        syncTypes = null,
+                        triggerSource = PartnerDataSyncWorker.TRIGGER_APP_OPEN
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("CoupleApplication", "Error scheduling partner data sync", e)
+            }
+        }
     }
     
     override val workManagerConfiguration: Configuration
@@ -114,14 +174,25 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
                 // App moved to foreground
                 isAppInForeground = true
                 Log.d("CoupleApplication", "App in FOREGROUND")
+                
+                // Restart Room observer (in case it was stopped)
+                RoomWidgetObserver.startObserving(this)
             }
             Lifecycle.Event.ON_STOP -> {
                 // App moved to background
                 isAppInForeground = false
                 Log.d("CoupleApplication", "App in BACKGROUND")
+                // Note: Don't stop RoomWidgetObserver here - it should keep running
+                // to update widgets even when app is in background
             }
             else -> {}
         }
+    }
+    
+    override fun onTerminate() {
+        super.onTerminate()
+        // Clean up observers
+        RoomWidgetObserver.stopObserving()
     }
 }
 

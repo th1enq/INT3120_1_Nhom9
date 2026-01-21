@@ -156,6 +156,8 @@
     <string name="help_support">Trợ giúp &amp; Hỗ trợ</string>
     <string name="about_app">Về ứng dụng</string>
     <string name="select_language">Chọn ngôn ngữ</string>
+    <string name="select_gender">Chọn giới tính</string>
+    <string name="gender">Giới tính</string>
     <string name="days_together">%d ngày bên nhau</string>
     <string name="link_code">Mã liên kết</string>
     <string name="no_partner">Chưa có người yêu</string>

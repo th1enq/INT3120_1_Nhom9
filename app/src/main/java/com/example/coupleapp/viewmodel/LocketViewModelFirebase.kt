@@ -4,9 +4,9 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.CoupleApplication
+import com.example.coupleapp.data.EmojiHelper
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.LocketFirebaseRepository
-import com.example.coupleapp.data.repository.LocketRepository
 import com.example.coupleapp.widget.LocketWidgetManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -84,8 +84,8 @@ class LocketViewModelFirebase : ViewModel() {
                     partnerAvatarUrl = partnerDoc.getString("profileImageUrl")
                 }
                 
-                // Load emojis (use mock data for now)
-                val emojis = LocketRepository.getEmojis()
+                // Load emojis
+                val emojis = EmojiHelper.getEmojis()
                 
                 _uiState.update { currentState ->
                     currentState.copy(
@@ -393,6 +393,23 @@ class LocketViewModelFirebase : ViewModel() {
                     
                     // Update widget immediately after sending locket
                     LocketWidgetManager.onLocketSent(CoupleApplication.instance)
+                    
+                    // Notify partner via sync trigger (will show notification on their device!)
+                    val locketType = when (state.selectedTab) {
+                        LocketTab.EMOJI -> "emoji"
+                        LocketTab.DRAWING -> "drawing"
+                        LocketTab.TEXT -> "text"
+                        else -> "photo"
+                    }
+                    com.example.coupleapp.util.SyncTriggerHelper.sendTriggerToPartnerWithExtra(
+                        context = CoupleApplication.instance,
+                        dataType = com.example.coupleapp.util.SyncTriggerHelper.DataType.PHOTOS,
+                        priority = "high",
+                        extraData = locketType
+                    )
+                    
+                    // Notify partner via sync trigger (no Cloud Functions needed!)
+                    com.example.coupleapp.util.SyncTriggerHelper.notifyLocketUploaded(CoupleApplication.instance)
                     
                     // Reset success flag after showing
                     delay(2000)

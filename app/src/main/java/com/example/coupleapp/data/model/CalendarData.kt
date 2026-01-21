@@ -2,6 +2,7 @@ package com.example.coupleapp.data.model
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.YearMonth
 
 /**
  * Represents the couple's relationship data
@@ -145,4 +146,26 @@ data class CalendarSettings(
     val useDefaultBackground: Boolean = true,
     val showHeartbeatAnimation: Boolean = true,
     val reminderHoursBefore: Int = 24
+)
+
+/**
+ * UI State for Calendar Screen
+ */
+data class CalendarUiState(
+    val coupleProfile: CoupleProfile? = null,
+    val loveDaysCounter: LoveDaysCounter? = null,
+    val upcomingEvents: List<CalendarEvent> = emptyList(),
+    val allAnniversaries: List<Anniversary> = emptyList(),
+    val calendarEvents: Map<LocalDate, List<Anniversary>> = emptyMap(),
+    val settings: CalendarSettings = CalendarSettings(),
+    val viewMode: CalendarViewMode = CalendarViewMode.CIRCLE_COUNTER,
+    val selectedYearMonth: YearMonth = YearMonth.now(),
+    val selectedDate: LocalDate? = null,
+    val showEventDialog: Boolean = false,
+    val showAddEventDialog: Boolean = false,
+    val showSettingsDialog: Boolean = false,
+    val showAnniversaryManagement: Boolean = false,
+    val editingAnniversary: Anniversary? = null,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
 )

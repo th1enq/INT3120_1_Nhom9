@@ -193,6 +193,12 @@ class QAViewModelFirebase : ViewModel() {
                 if (result.isSuccess) {
                     Log.d(TAG, "[QA] ✅ Question created successfully")
                     _newQuestion.value = ""
+                    
+                    // Notify partner about the new question (will show push notification!)
+                    com.example.coupleapp.util.SyncTriggerHelper.notifyQuestionAsked(
+                        context = com.example.coupleapp.CoupleApplication.instance,
+                        questionText = question
+                    )
                 } else {
                     Log.e(TAG, "[QA] ❌ Failed to create question", result.exceptionOrNull())
                 }

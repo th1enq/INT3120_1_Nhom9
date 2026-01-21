@@ -12,6 +12,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,12 +22,17 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.data.model.CalendarUserProfile
 import com.example.coupleapp.ui.theme.*
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 @Composable
 fun CoupleProfileSection(
@@ -70,6 +76,9 @@ fun CoupleProfileSection(
 private fun UserAvatarCard(
     user: CalendarUserProfile
 ) {
+    val context = LocalContext.current
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(110.dp)
@@ -94,13 +103,26 @@ private fun UserAvatarCard(
                 .background(Color(0xFFFFE8F5).copy(alpha = 0.3f)),
             contentAlignment = Alignment.Center
         ) {
-            // TODO: Load actual avatar image
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                modifier = Modifier.size(50.dp),
-                tint = Color(0xFFFF6B9D)
-            )
+            // Load actual avatar image or show default icon
+            if (user.avatarUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(user.avatarUrl)
+                        .crossfade(true)
+                        .build(),
+                    imageLoader = imageLoader,
+                    contentDescription = "${user.name}'s avatar",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(50.dp),
+                    tint = Color(0xFFFF6B9D)
+                )
+            }
         }
         
         Spacer(modifier = Modifier.height(8.dp))

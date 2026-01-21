@@ -115,7 +115,11 @@ class CalendarViewModelFirebase : ViewModel() {
                                         _uiState.update {
                                             it.copy(
                                                 coupleProfile = coupleProfile,
-                                                isLoading = false
+                                                isLoading = false,
+                                                settings = it.settings.copy(
+                                                    backgroundImageUrl = coupleProfile.backgroundImageUrl,
+                                                    useDefaultBackground = coupleProfile.backgroundImageUrl.isEmpty()
+                                                )
                                             )
                                         }
                                         updateLoveDaysCounter(coupleProfile.relationshipStartDate)
@@ -196,11 +200,14 @@ class CalendarViewModelFirebase : ViewModel() {
             LocalDateTime.now().minusDays(365)
         }
 
+        // Get background image URL from couple data
+        val backgroundUrl = coupleData?.backgroundImageUrl ?: ""
+
         return CoupleProfile(
             user1 = user1Profile,
             user2 = user2Profile,
             relationshipStartDate = startDate,
-            backgroundImageUrl = ""
+            backgroundImageUrl = backgroundUrl
         )
     }
 
@@ -288,7 +295,7 @@ class CalendarViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Start live counter that updates every second
+     * Start live counter - updates once per minute (since we only count full days)
      */
     private fun startLiveCounter() {
         counterUpdateJob?.cancel()
@@ -297,34 +304,32 @@ class CalendarViewModelFirebase : ViewModel() {
                 _uiState.value.coupleProfile?.let { profile ->
                     updateLoveDaysCounter(profile.relationshipStartDate)
                 }
-                delay(1000)
+                delay(60_000) // Update every minute (sufficient since we count full days only)
             }
         }
     }
 
     /**
-     * Update love days counter
+     * Update love days counter - only count full days from 00:00
      */
     private fun updateLoveDaysCounter(startDate: LocalDateTime) {
-        val now = LocalDateTime.now()
-        val duration = Duration.between(startDate, now)
-
-        val totalDays = duration.toDays()
+        val today = LocalDate.now()
+        val startDateOnly = startDate.toLocalDate()
+        
+        // Calculate days between start date and today (not including time)
+        val totalDays = java.time.temporal.ChronoUnit.DAYS.between(startDateOnly, today)
         val years = (totalDays / 365).toInt()
         val months = ((totalDays % 365) / 30).toInt()
         val days = ((totalDays % 365) % 30).toInt()
-        val hours = duration.toHours() % 24
-        val minutes = duration.toMinutes() % 60
-        val seconds = duration.seconds % 60
 
         val counter = LoveDaysCounter(
             totalDays = totalDays,
             years = years,
             months = months,
             days = days,
-            hours = hours.toInt(),
-            minutes = minutes.toInt(),
-            seconds = seconds.toInt(),
+            hours = 0,
+            minutes = 0,
+            seconds = 0,
             progressPercentage = (totalDays % 365).toFloat() / 365f
         )
 
@@ -774,125 +779,86 @@ class CalendarViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Insert mock calendar data for testing
+     * Update background image URL - saves to couples collection
      */
-    fun insertMockCalendarData() {
+    fun updateBackgroundImage(imageUrl: String) {
+        Log.d(TAG, "[CALENDAR] ▶️ updateBackgroundImage called: imageUrl=$imageUrl")
         viewModelScope.launch {
             try {
                 val userId = authRepository.currentUser?.uid
                 if (userId == null) {
-                    Log.e(TAG, "User not logged in")
-                    _uiState.update { it.copy(errorMessage = "Bạn chưa đăng nhập") }
+                    Log.e(TAG, "[CALENDAR] ❌ User not logged in")
                     return@launch
                 }
                 
-                Log.d(TAG, "Starting mock data insert for userId: $userId")
-
-                // Get real coupleId from current user
+                // Load current user to get coupleId
                 val userResult = firestoreRepository.getDocument(
                     "users",
                     userId,
                     FirebaseUser::class.java
                 )
 
-                userResult.fold(
-                    onSuccess = { user ->
-                        if (user == null) {
-                            Log.e(TAG, "User data not found")
-                            _uiState.update { it.copy(errorMessage = "Không tìm thấy thông tin user") }
-                            return@fold
-                        }
+                val user = userResult.getOrNull()
+                val coupleId = user?.coupleId
+                if (coupleId.isNullOrEmpty()) {
+                    Log.e(TAG, "[CALENDAR] ❌ No coupleId found, cannot update background")
+                    return@launch
+                }
 
-                        var coupleId = user.coupleId
-                        
-                        // If no coupleId, use userId as fallback (for testing without partner)
-                        if (coupleId.isNullOrEmpty()) {
-                            Log.w(TAG, "No coupleId found, using userId as coupleId for testing")
-                            coupleId = userId
-                        }
-
-                        Log.d(TAG, "Using coupleId: $coupleId")
-
-                        val today = LocalDate.now()
-                        val mockEvents = listOf(
-                            // Relationship anniversary (1 year ago)
-                            Triple("Ngày yêu nhau", "Ngày chúng ta chính thức bên nhau ❤️", today.minusYears(1)),
-                            // First date (1.5 years ago)
-                            Triple("Hẹn hò đầu tiên", "Buổi hẹn đầu tiên tại quán cafe", today.minusMonths(18)),
-                            // Upcoming birthday
-                            Triple("Sinh nhật bạn", "Sinh nhật của người yêu 🎂", today.plusDays(15)),
-                            // Recent trip
-                            Triple("Chuyến đi Đà Lạt", "Kỷ niệm chuyến đi thành phố ngàn hoa", today.minusMonths(2)),
-                            // Valentine's Day (next year)
-                            Triple("Valentine 2026", "Ngày lễ tình nhân", LocalDate.of(2026, 2, 14)),
-                            // Monthly anniversary (this month)
-                            Triple("Kỷ niệm 1 tháng", "Tròn 1 tháng yêu nhau", today.plusDays(5)),
-                            // Special moment (last week)
-                            Triple("Khoảnh khắc đặc biệt", "Ngày ta nói lời yêu thương", today.minusDays(7))
-                        )
-
-                        val eventTypes = listOf("anniversary", "date", "birthday", "trip", "anniversary", "anniversary", "date")
-
-                        var successCount = 0
-                        var failCount = 0
-
-                        mockEvents.forEachIndexed { index, (title, description, date) ->
-                            val eventId = UUID.randomUUID().toString()
-                            val event = FirebaseCalendarEvent(
-                                id = eventId,
-                                coupleId = coupleId,
-                                title = title,
-                                description = description,
-                                date = date.format(DateTimeFormatter.ISO_LOCAL_DATE),
-                                time = "20:00",
-                                eventType = eventTypes[index],
-                                isRecurring = index == 0,
-                                reminderMinutes = 1440,
-                                createdAt = Date()
+                // Update backgroundImageUrl in couples document
+                firestoreRepository.updateDocument(
+                    "couples",
+                    coupleId,
+                    mapOf("backgroundImageUrl" to imageUrl)
+                ).fold(
+                    onSuccess = {
+                        Log.d(TAG, "[CALENDAR] ✅ Background image updated successfully")
+                        // Update local UI state
+                        _uiState.update { state ->
+                            state.copy(
+                                coupleProfile = state.coupleProfile?.copy(backgroundImageUrl = imageUrl),
+                                settings = state.settings.copy(
+                                    backgroundImageUrl = imageUrl,
+                                    useDefaultBackground = imageUrl.isEmpty()
+                                )
                             )
-
-                            firestoreRepository.setDocument(
-                                collection = "calendar_events",
-                                documentId = eventId,
-                                data = event
-                            ).fold(
-                                onSuccess = {
-                                    successCount++
-                                    Log.d(TAG, "✓ Mock event inserted: $title (id: $eventId)")
-                                },
-                                onFailure = { error ->
-                                    failCount++
-                                    Log.e(TAG, "✗ Error inserting: $title - ${error.message}")
-                                }
-                            )
-                        }
-
-                        // Wait for all inserts to complete
-                        delay(1500)
-                        
-                        Log.d(TAG, "Insert completed: $successCount success, $failCount failed")
-                        
-                        // Reload data
-                        loadAnniversaries(coupleId)
-                        
-                        _uiState.update { 
-                            it.copy(errorMessage = "Đã thêm $successCount sự kiện mẫu") 
                         }
                     },
                     onFailure = { error ->
-                        Log.e(TAG, "Error loading user data: ${error.message}")
-                        _uiState.update { 
-                            it.copy(errorMessage = "Lỗi: ${error.message}") 
-                        }
+                        Log.e(TAG, "[CALENDAR] ❌ Error updating background: ${error.message}", error)
+                        _uiState.update { it.copy(errorMessage = "Lỗi cập nhật hình nền: ${error.message}") }
                     }
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Exception in insertMockCalendarData", e)
-                _uiState.update { 
-                    it.copy(errorMessage = "Lỗi: ${e.message}") 
-                }
+                Log.e(TAG, "[CALENDAR] ❌ Exception updating background: ${e.message}", e)
+                _uiState.update { it.copy(errorMessage = "Lỗi: ${e.message}") }
             }
         }
+    }
+
+    /**
+     * Toggle heartbeat animation setting
+     */
+    fun toggleHeartbeatAnimation(enabled: Boolean) {
+        Log.d(TAG, "[CALENDAR] ▶️ toggleHeartbeatAnimation called: enabled=$enabled")
+        _uiState.update { state ->
+            state.copy(
+                settings = state.settings.copy(showHeartbeatAnimation = enabled)
+            )
+        }
+    }
+
+    /**
+     * Update reminder hours setting
+     */
+    fun updateReminderHours(hours: Int) {
+        Log.d(TAG, "[CALENDAR] ▶️ updateReminderHours called: hours=$hours")
+        _uiState.update { state ->
+            state.copy(
+                settings = state.settings.copy(reminderHoursBefore = hours)
+            )
+        }
+        // TODO: Update notification scheduling based on new reminder hours
     }
 
     override fun onCleared() {

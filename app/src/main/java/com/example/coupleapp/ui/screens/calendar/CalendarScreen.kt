@@ -1,5 +1,8 @@
 package com.example.coupleapp.ui.screens.calendar
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -10,14 +13,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.CalendarViewMode
+import com.example.coupleapp.data.repository.FirebaseStorageRepository
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.calendar.*
 import com.example.coupleapp.viewmodel.CalendarViewModelFirebase
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,13 +79,46 @@ fun CalendarScreen(
 
 @Composable
 private fun CalendarMainContent(
-    uiState: com.example.coupleapp.viewmodel.CalendarUiState,
+    uiState: com.example.coupleapp.data.model.CalendarUiState,
     visible: Boolean,
     onBackClick: () -> Unit,
     viewModel: CalendarViewModelFirebase,
     questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val storageRepository = remember { FirebaseStorageRepository() }
+    var isUploadingBackground by remember { mutableStateOf(false) }
+    
+    // Image picker launcher for background
+    val backgroundImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            scope.launch {
+                isUploadingBackground = true
+                try {
+                    val result = storageRepository.uploadImageWithContext(
+                        context = context,
+                        uri = selectedUri,
+                        path = "calendar_backgrounds",
+                        filename = "calendar_bg_${System.currentTimeMillis()}.jpg"
+                    )
+                    result.onSuccess { imageUrl ->
+                        viewModel.updateBackgroundImage(imageUrl)
+                        snackbarHostState.showSnackbar("Đã cập nhật hình nền")
+                    }
+                    result.onFailure { error ->
+                        snackbarHostState.showSnackbar("Lỗi: ${error.message}")
+                    }
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Lỗi: ${e.message}")
+                }
+                isUploadingBackground = false
+            }
+        }
+    }
     
     // Show error/success message
     LaunchedEffect(uiState.errorMessage) {
@@ -180,16 +219,19 @@ private fun CalendarMainContent(
                         viewModel.updateNickname(userId, nickname)
                     },
                     onUpdateBackground = { imageUrl ->
-                        // Not implemented in Firebase version yet
+                        viewModel.updateBackgroundImage(imageUrl)
                     },
                     onToggleHeartbeat = { enabled ->
-                        // Not implemented in Firebase version yet
+                        viewModel.toggleHeartbeatAnimation(enabled)
                     },
                     onUpdateAnniversaryDate = { date ->
                         viewModel.updateRelationshipStartDate(date)
                     },
-                    onInsertMockData = {
-                        viewModel.insertMockCalendarData()
+                    onSelectBackgroundFromGallery = {
+                        backgroundImagePickerLauncher.launch("image/*")
+                    },
+                    onUpdateReminderHours = { hours ->
+                        viewModel.updateReminderHours(hours)
                     }
                 )
             }
@@ -214,7 +256,7 @@ private fun CalendarMainContent(
 
 @Composable
 private fun CalendarContent(
-    uiState: com.example.coupleapp.viewmodel.CalendarUiState,
+    uiState: com.example.coupleapp.data.model.CalendarUiState,
     onDateClick: (java.time.LocalDate) -> Unit,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit

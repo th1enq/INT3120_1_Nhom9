@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import com.example.coupleapp.ui.components.sleep.*
 import com.example.coupleapp.ui.components.LoadingScreen
-import com.example.coupleapp.viewmodel.SleepTrackerViewModel
 import com.example.coupleapp.viewmodel.SleepTrackerViewModelFirebase
 import com.example.coupleapp.viewmodel.TimeEditorType
 import kotlinx.coroutines.delay

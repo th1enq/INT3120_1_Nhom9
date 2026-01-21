@@ -95,18 +95,34 @@ class MainActivity : FragmentActivity() {
         // Setup photo sync if permissions already granted, or request them
         checkAndRequestPhotoSyncPermissions()
         
-        // Get navigation target from intent (for widget clicks)
+        // Get navigation target from intent (for widget clicks and notifications)
         val navigateTo = intent.getStringExtra("navigate_to")
+        
+        // Map navigate_to value to actual route
+        val targetRoute = when (navigateTo) {
+            "sleep_tracker" -> "sleep_tracker"
+            "missing" -> "missing"
+            "locket" -> "locket"
+            "qa" -> "qa"
+            else -> null
+        }
         
         setContent {
             CoupleAppTheme {
                 val navController = rememberNavController()
                 NavGraph(
                     navController = navController,
-                    startDestination = if (navigateTo == "sleep_tracker") "sleep_tracker" else null
+                    startDestination = targetRoute
                 )
             }
         }
+    }
+    
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        // Handle notification clicks when app is already running
+        val navigateTo = intent.getStringExtra("navigate_to")
+        Log.d(TAG, "onNewIntent received with navigate_to: $navigateTo")
     }
     
     /**

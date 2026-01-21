@@ -407,6 +407,9 @@ class MissingViewModelFirebase : ViewModel() {
                 
                 // Update widget immediately after sending missing
                 WidgetManager.onMissingUpdated(CoupleApplication.instance)
+                
+                // Notify partner via sync trigger (no Cloud Functions needed!)
+                com.example.coupleapp.util.SyncTriggerHelper.notifyMissingSent(CoupleApplication.instance)
 
                 // Reload data to update history and streak
                 loadMissingData()

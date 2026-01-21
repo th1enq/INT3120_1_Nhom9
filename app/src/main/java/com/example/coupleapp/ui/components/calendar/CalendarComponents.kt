@@ -14,13 +14,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.R
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 
 /**
  * Background image for Calendar screen
@@ -30,6 +34,9 @@ fun BackgroundImage(
     imageUrl: String?,
     useDefault: Boolean
 ) {
+    val context = LocalContext.current
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
     if (useDefault || imageUrl.isNullOrEmpty()) {
         androidx.compose.foundation.Image(
             painter = painterResource(id = R.drawable.background_counter),
@@ -38,12 +45,18 @@ fun BackgroundImage(
             contentScale = ContentScale.Crop
         )
     } else {
-        // TODO: Load image from URL using Coil or similar
-        androidx.compose.foundation.Image(
-            painter = painterResource(id = R.drawable.background_counter),
-            contentDescription = null,
+        // Load custom background image from URL or base64
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(imageUrl)
+                .crossfade(true)
+                .build(),
+            imageLoader = imageLoader,
+            contentDescription = "Calendar Background",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
+            error = painterResource(id = R.drawable.background_counter),
+            placeholder = painterResource(id = R.drawable.background_counter)
         )
     }
 }

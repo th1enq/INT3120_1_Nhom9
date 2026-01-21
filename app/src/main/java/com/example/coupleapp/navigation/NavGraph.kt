@@ -81,9 +81,12 @@ fun NavGraph(
         when (authState) {
             AuthState.Authenticated -> {
                 // Only navigate if we haven't already done so and not coming from a specific destination
-                if (!hasNavigatedFromAuth && startDestination == null) {
+                if (!hasNavigatedFromAuth) {
                     hasNavigatedFromAuth = true
-                    navController.navigate(Screen.Home.route) {
+                    // If there's a specific destination from notification/widget, navigate there
+                    // Otherwise go to Home
+                    val targetRoute = startDestination ?: Screen.Home.route
+                    navController.navigate(targetRoute) {
                         popUpTo(0) { inclusive = true }
                     }
                 }

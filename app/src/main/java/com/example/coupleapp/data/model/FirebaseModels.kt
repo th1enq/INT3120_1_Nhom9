@@ -53,6 +53,7 @@ data class FirebaseCouple(
     val relationshipStatus: String = "dating",
     val sharedGardenLevel: Int = 1,
     val sharedPoints: Int = 0,
+    val backgroundImageUrl: String = "", // Calendar background image
     @ServerTimestamp
     val createdAt: Date? = null,
     @ServerTimestamp

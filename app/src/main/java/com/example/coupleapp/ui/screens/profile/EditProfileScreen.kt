@@ -77,6 +77,8 @@ fun EditProfileScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showAvatarPicker by remember { mutableStateOf(false) }
     var showImageSourcePicker by remember { mutableStateOf(false) }
+    var showDateOfBirthPicker by remember { mutableStateOf(false) }
+    var showGenderPicker by remember { mutableStateOf(false) }
     
     // Camera photo file URI
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
@@ -540,6 +542,98 @@ fun EditProfileScreen(
                             )
                         )
                         
+                        // Date of Birth (clickable field)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showDateOfBirthPicker = true }
+                        ) {
+                            OutlinedTextField(
+                                value = if (dateOfBirth.isNotEmpty()) {
+                                    try {
+                                        val date = java.time.LocalDate.parse(dateOfBirth, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                                        date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                                    } catch (e: Exception) {
+                                        dateOfBirth
+                                    }
+                                } else "",
+                                onValueChange = { },
+                                label = { Text(stringResource(R.string.date_of_birth)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Cake,
+                                        contentDescription = null,
+                                        tint = Color(0xFF718096)
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.CalendarMonth,
+                                        contentDescription = "Chọn ngày",
+                                        tint = Color(0xFFFF6B9D)
+                                    )
+                                },
+                                readOnly = true,
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledBorderColor = Color(0xFFE0E0E0),
+                                    disabledContainerColor = Color.White,
+                                    disabledTextColor = Color(0xFF2D3748),
+                                    disabledLabelColor = Color(0xFF718096),
+                                    disabledLeadingIconColor = Color(0xFF718096),
+                                    disabledTrailingIconColor = Color(0xFFFF6B9D)
+                                )
+                            )
+                        }
+                        
+                        // Gender (clickable field)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showGenderPicker = true }
+                        ) {
+                            OutlinedTextField(
+                                value = when (gender.lowercase()) {
+                                    "male" -> "Nam"
+                                    "female" -> "Nữ"
+                                    "other" -> "Khác"
+                                    else -> gender
+                                },
+                                onValueChange = { },
+                                label = { Text(stringResource(R.string.gender)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (gender.lowercase() == "male") Icons.Filled.Male 
+                                                      else if (gender.lowercase() == "female") Icons.Filled.Female
+                                                      else Icons.Filled.Person,
+                                        contentDescription = null,
+                                        tint = Color(0xFF718096)
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = "Chọn",
+                                        tint = Color(0xFFFF6B9D)
+                                    )
+                                },
+                                readOnly = true,
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledBorderColor = Color(0xFFE0E0E0),
+                                    disabledContainerColor = Color.White,
+                                    disabledTextColor = Color(0xFF2D3748),
+                                    disabledLabelColor = Color(0xFF718096),
+                                    disabledLeadingIconColor = Color(0xFF718096),
+                                    disabledTrailingIconColor = Color(0xFFFF6B9D)
+                                )
+                            )
+                        }
+                        
                         // Bio
                         OutlinedTextField(
                             value = bio,
@@ -632,5 +726,127 @@ fun EditProfileScreen(
                 }
             }
         }
+    }
+    
+    // Date of Birth Picker Dialog
+    if (showDateOfBirthPicker) {
+        val initialDateMillis = try {
+            if (dateOfBirth.isNotEmpty()) {
+                val date = java.time.LocalDate.parse(dateOfBirth, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                date.toEpochDay() * 24 * 60 * 60 * 1000
+            } else {
+                // Default to 25 years ago
+                java.time.LocalDate.now().minusYears(25).toEpochDay() * 24 * 60 * 60 * 1000
+            }
+        } catch (e: Exception) {
+            java.time.LocalDate.now().minusYears(25).toEpochDay() * 24 * 60 * 60 * 1000
+        }
+        
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialDateMillis
+        )
+        
+        DatePickerDialog(
+            onDismissRequest = { showDateOfBirthPicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedDate = java.time.LocalDate.ofEpochDay(millis / (24 * 60 * 60 * 1000))
+                            dateOfBirth = selectedDate.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                        }
+                        showDateOfBirthPicker = false
+                    }
+                ) {
+                    Text(stringResource(R.string.confirm), color = Color(0xFFFF6B9D))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDateOfBirthPicker = false }) {
+                    Text(stringResource(R.string.cancel), color = Color(0xFF718096))
+                }
+            }
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    selectedDayContainerColor = Color(0xFFFF6B9D),
+                    todayContentColor = Color(0xFFFF6B9D),
+                    todayDateBorderColor = Color(0xFFFF6B9D)
+                )
+            )
+        }
+    }
+    
+    // Gender Picker Dialog
+    if (showGenderPicker) {
+        AlertDialog(
+            onDismissRequest = { showGenderPicker = false },
+            title = {
+                Text(
+                    text = stringResource(R.string.select_gender),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2D3748)
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "male" to "Nam",
+                        "female" to "Nữ",
+                        "other" to "Khác"
+                    ).forEach { (value, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    gender = value
+                                    showGenderPicker = false
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = gender.lowercase() == value,
+                                onClick = {
+                                    gender = value
+                                    showGenderPicker = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFFFF6B9D)
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Icon(
+                                imageVector = when (value) {
+                                    "male" -> Icons.Filled.Male
+                                    "female" -> Icons.Filled.Female
+                                    else -> Icons.Filled.Person
+                                },
+                                contentDescription = null,
+                                tint = Color(0xFF718096),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = label,
+                                fontSize = 16.sp,
+                                color = Color(0xFF2D3748)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showGenderPicker = false }) {
+                    Text(stringResource(R.string.cancel), color = Color(0xFF718096))
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }

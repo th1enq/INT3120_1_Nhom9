@@ -13,7 +13,6 @@ import android.widget.RemoteViews
 import com.example.coupleapp.MainActivity
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.SleepQuality
-import com.example.coupleapp.data.repository.SleepRepository
 import com.example.coupleapp.widget.data.SleepWidgetCachedData
 import com.example.coupleapp.widget.data.WidgetDataRepository
 import com.example.coupleapp.widget.worker.WidgetUpdateWorker
@@ -118,37 +117,8 @@ class SleepWidgetProvider : AppWidgetProvider() {
                         showSleepComparisonCached(context, views, sleepData)
                     }
                 } else {
-                    // Fallback to original repository
-                    try {
-                        val currentUser = SleepRepository.getCurrentUser()
-                        val partnerUser = SleepRepository.getPartnerUser()
-                        
-                        val currentUserRecord = SleepRepository.getTodaySleepRecord(currentUser.id)
-                        val partnerUserRecord = SleepRepository.getTodaySleepRecord(partnerUser.id)
-                        
-                        val currentSettings = SleepRepository.getSleepSettings(currentUser.id)
-                        
-                        val shouldShowReminderFallback = checkBedtimeReminder(
-                            currentSettings.idealBedTime.hour,
-                            currentSettings.idealBedTime.minute
-                        )
-                        
-                        if (shouldShowReminderFallback) {
-                            showBedtimeReminder(views, currentSettings.idealBedTime.hour, currentSettings.idealBedTime.minute)
-                        } else {
-                            showSleepComparison(
-                                context,
-                                views,
-                                currentUserRecord,
-                                partnerUserRecord,
-                                currentUser.name,
-                                partnerUser.name
-                            )
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Fallback also failed", e)
-                        showEmptyState(views, "Đăng nhập để xem giấc ngủ")
-                    }
+                    // No cached data available - show empty state
+                    showEmptyState(views, "Đăng nhập để xem giấc ngủ")
                 }
                 
             } catch (e: Exception) {
@@ -320,109 +290,6 @@ class SleepWidgetProvider : AppWidgetProvider() {
         views.setTextViewText(
             R.id.bedtime_text,
             "🌙 Mục tiêu ngủ: $bedTimeFormatted"
-        )
-    }
-
-    private fun showSleepComparison(
-        context: Context,
-        views: RemoteViews,
-        leftRecord: com.example.coupleapp.data.model.SleepRecord?,
-        rightRecord: com.example.coupleapp.data.model.SleepRecord?,
-        leftName: String,
-        rightName: String
-    ) {
-        views.setViewVisibility(R.id.widget_container, View.VISIBLE)
-        views.setViewVisibility(R.id.bedtime_reminder_container, View.GONE)
-        
-        // Update left user
-        leftRecord?.let { record ->
-            updateUserSleepInfo(
-                context,
-                views,
-                record,
-                leftName,
-                isLeft = true
-            )
-        }
-        
-        // Update right user
-        rightRecord?.let { record ->
-            updateUserSleepInfo(
-                context,
-                views,
-                record,
-                rightName,
-                isLeft = false
-            )
-        }
-    }
-
-    private fun updateUserSleepInfo(
-        context: Context,
-        views: RemoteViews,
-        record: com.example.coupleapp.data.model.SleepRecord,
-        userName: String,
-        isLeft: Boolean
-    ) {
-        // Set emoji icon
-        val emojiText = if (userName.lowercase().contains("emma") || userName.lowercase().contains("e")) "😊" else "🥦"
-        views.setTextViewText(
-            if (isLeft) R.id.left_emoji_icon else R.id.right_emoji_icon,
-            emojiText
-        )
-        
-        // Set status circle image based on quality
-        val statusImageRes = when (record.quality) {
-            SleepQuality.EXCELLENT -> R.drawable.excellent
-            SleepQuality.GOOD -> R.drawable.good
-            SleepQuality.POOR -> R.drawable.bad
-        }
-        views.setImageViewResource(
-            if (isLeft) R.id.left_status_circle else R.id.right_status_circle,
-            statusImageRes
-        )
-        
-        // Create progress circle bitmap
-        val progressBitmap = createProgressCircleBitmap(record.achievementPercentage, record.quality)
-        views.setImageViewBitmap(
-            if (isLeft) R.id.left_progress_bg else R.id.right_progress_bg,
-            progressBitmap
-        )
-        
-        // Set status text with Vietnamese translation
-        val statusText = when (record.quality) {
-            SleepQuality.EXCELLENT -> "Xuất sắc"
-            SleepQuality.GOOD -> "Tốt"
-            SleepQuality.POOR -> "Kém"
-        }
-        val statusColor = when (record.quality) {
-            SleepQuality.EXCELLENT -> Color.parseColor("#4CAF50")
-            SleepQuality.GOOD -> Color.parseColor("#FF9800")
-            SleepQuality.POOR -> Color.parseColor("#F44336")
-        }
-        views.setTextViewText(
-            if (isLeft) R.id.left_status_text else R.id.right_status_text,
-            statusText
-        )
-        views.setTextColor(
-            if (isLeft) R.id.left_status_text else R.id.right_status_text,
-            statusColor
-        )
-        
-        // Set date in Vietnamese format
-        val dateFormatter = DateTimeFormatter.ofPattern("'Tháng' M d")
-        views.setTextViewText(
-            if (isLeft) R.id.left_date_text else R.id.right_date_text,
-            record.date.format(dateFormatter)
-        )
-        
-        // Set duration
-        val hours = record.actualSleepDuration / 60
-        val minutes = record.actualSleepDuration % 60
-        val durationText = "${hours}h ${minutes}min"
-        views.setTextViewText(
-            if (isLeft) R.id.left_duration_text else R.id.right_duration_text,
-            durationText
         )
     }
 

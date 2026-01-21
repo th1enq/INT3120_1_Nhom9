@@ -17,7 +17,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.store.*
-import com.example.coupleapp.viewmodel.StoreViewModel
 import com.example.coupleapp.viewmodel.StoreViewModelFirebase
 import kotlinx.coroutines.delay
 

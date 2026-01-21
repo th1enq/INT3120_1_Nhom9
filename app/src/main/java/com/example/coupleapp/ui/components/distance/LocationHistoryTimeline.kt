@@ -33,11 +33,13 @@ import com.example.coupleapp.data.model.LocationHistory
 import com.example.coupleapp.data.model.LocationType
 import com.example.coupleapp.ui.theme.*
 import com.example.coupleapp.util.LocationUtils
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 /**
  * Vertical Timeline UI for location history
- * Displays locations visited in the last 1-2 days
+ * Displays locations visited in the last 1-2 days with detailed date/time info
  */
 @Composable
 fun LocationHistoryTimeline(
@@ -45,6 +47,12 @@ fun LocationHistoryTimeline(
     userName: String,
     modifier: Modifier = Modifier
 ) {
+    // Group locations by date for better organization
+    val groupedHistory = remember(locationHistory) {
+        locationHistory.groupBy { it.arrivalTime.toLocalDate() }
+            .toSortedMap(compareByDescending { it })
+    }
+    
     Column(modifier = modifier) {
         // Header
         Row(
@@ -100,38 +108,135 @@ fun LocationHistoryTimeline(
                 }
             }
         } else {
-            // Timeline items
+            // Timeline with date sections
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp),
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
+                    .heightIn(max = 500.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                itemsIndexed(
-                    items = locationHistory,
-                    key = { index, item -> 
-                        // Use ID if not empty, otherwise use index to avoid duplicate key error
-                        if (item.id.isNotEmpty()) item.id else "history_$index"
+                groupedHistory.forEach { (date, locations) ->
+                    // Date header
+                    item(key = "date_${date}") {
+                        DateHeader(date = date)
                     }
-                ) { index, location ->
-                    TimelineItem(
-                        location = location,
-                        isFirst = index == 0,
-                        isLast = index == locationHistory.lastIndex,
-                        animationDelay = index * 100
-                    )
+                    
+                    // Location items for this date
+                    itemsIndexed(
+                        items = locations,
+                        key = { index, item -> 
+                            if (item.id.isNotEmpty()) item.id else "history_${date}_$index"
+                        }
+                    ) { index, location ->
+                        TimelineItemWithDate(
+                            location = location,
+                            isFirst = index == 0,
+                            isLast = index == locations.lastIndex,
+                            animationDelay = index * 100,
+                            showDateOnLeft = true
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Date section header
+ */
 @Composable
-private fun TimelineItem(
+private fun DateHeader(date: LocalDate) {
+    val today = LocalDate.now()
+    val yesterday = today.minusDays(1)
+    
+    val dateText = when (date) {
+        today -> "Hôm nay"
+        yesterday -> "Hôm qua"
+        else -> {
+            val daysBetween = ChronoUnit.DAYS.between(date, today)
+            if (daysBetween <= 7) {
+                "${daysBetween.toInt()} ngày trước"
+            } else {
+                date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            }
+        }
+    }
+    
+    val fullDate = date.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy", java.util.Locale("vi")))
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Decorative line
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            SoftPink.copy(alpha = 0.3f)
+                        )
+                    )
+                )
+        )
+        
+        // Date badge
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = PastelPink.copy(alpha = 0.5f)
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = dateText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftPink
+                )
+                Text(
+                    text = fullDate,
+                    fontSize = 10.sp,
+                    color = TextSecondary
+                )
+            }
+        }
+        
+        // Decorative line
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            SoftPink.copy(alpha = 0.3f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+    }
+}
+
+/**
+ * Timeline item with date/time on the left side
+ */
+@Composable
+private fun TimelineItemWithDate(
     location: LocationHistory,
     isFirst: Boolean,
     isLast: Boolean,
-    animationDelay: Int
+    animationDelay: Int,
+    showDateOnLeft: Boolean
 ) {
     var visible by remember { mutableStateOf(false) }
     
@@ -148,9 +253,40 @@ private fun TimelineItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Timeline line and dot
+            // LEFT SIDE: Date and Time info
+            Column(
+                modifier = Modifier.width(60.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Time
+                Text(
+                    text = location.arrivalTime.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = SoftPink
+                )
+                
+                // Duration or "Đang ở đây"
+                if (location.departureTime == null) {
+                    Text(
+                        text = "Đang ở",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF4CAF50)
+                    )
+                } else {
+                    Text(
+                        text = "→ ${location.departureTime.format(DateTimeFormatter.ofPattern("HH:mm"))}",
+                        fontSize = 10.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+            
+            // MIDDLE: Timeline line and dot
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.width(32.dp)
@@ -160,7 +296,7 @@ private fun TimelineItem(
                     Box(
                         modifier = Modifier
                             .width(2.dp)
-                            .height(16.dp)
+                            .height(12.dp)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
@@ -171,7 +307,7 @@ private fun TimelineItem(
                             )
                     )
                 } else {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
                 
                 // Location type icon
@@ -197,7 +333,7 @@ private fun TimelineItem(
                     Box(
                         modifier = Modifier
                             .width(2.dp)
-                            .height(40.dp)
+                            .height(36.dp)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
@@ -210,7 +346,7 @@ private fun TimelineItem(
                 }
             }
             
-            // Location info card
+            // RIGHT SIDE: Location info card
             Surface(
                 modifier = Modifier
                     .weight(1f)
@@ -232,102 +368,87 @@ private fun TimelineItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     
                     // Address
                     Text(
                         text = location.address,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         color = TextSecondary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     
-                    // Time info
+                    // Duration badge and current indicator
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Time range
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Schedule,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = formatTimeRange(location),
-                                fontSize = 11.sp,
-                                color = TextSecondary
-                            )
-                        }
-                        
                         // Duration badge
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = PastelPink.copy(alpha = 0.5f)
                         ) {
-                            Text(
-                                text = formatDuration(location.durationMinutes),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = SoftPink,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Timer,
+                                    contentDescription = null,
+                                    tint = SoftPink,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = formatDuration(location.durationMinutes),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = SoftPink
+                                )
+                            }
                         }
-                    }
-                    
-                    // Current location indicator
-                    if (location.departureTime == null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            // Pulsing dot
-                            val infiniteTransition = rememberInfiniteTransition(label = "currentPulse")
-                            val alpha by infiniteTransition.animateFloat(
-                                initialValue = 1f,
-                                targetValue = 0.4f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(1000),
-                                    repeatMode = RepeatMode.Reverse
-                                ),
-                                label = "pulseAlpha"
-                            )
-                            
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF4CAF50).copy(alpha = alpha))
-                            )
-                            Text(
-                                text = stringResource(R.string.currently_here),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF4CAF50)
-                            )
+                        
+                        // Current location indicator
+                        if (location.departureTime == null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                // Pulsing dot
+                                val infiniteTransition = rememberInfiniteTransition(label = "currentPulse")
+                                val alpha by infiniteTransition.animateFloat(
+                                    initialValue = 1f,
+                                    targetValue = 0.4f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1000),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "pulseAlpha"
+                                )
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF4CAF50).copy(alpha = alpha))
+                                )
+                                Text(
+                                    text = stringResource(R.string.currently_here),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
-
-private fun formatTimeRange(location: LocationHistory): String {
-    val formatter = DateTimeFormatter.ofPattern("HH:mm")
-    val arrival = location.arrivalTime.format(formatter)
-    val departure = location.departureTime?.format(formatter) ?: "now"
-    return "$arrival - $departure"
 }
 
 private fun formatDuration(minutes: Int): String {

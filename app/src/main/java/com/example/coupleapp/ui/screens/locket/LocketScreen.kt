@@ -36,7 +36,6 @@ import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.home.BottomNavItem
 import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.components.locket.*
-import com.example.coupleapp.viewmodel.LocketViewModel
 import com.example.coupleapp.viewmodel.LocketViewModelFirebase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

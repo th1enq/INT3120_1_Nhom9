@@ -155,6 +155,8 @@
     <string name="help_support">Help &amp; Support</string>
     <string name="about_app">About App</string>
     <string name="select_language">Select Language</string>
+    <string name="select_gender">Select Gender</string>
+    <string name="gender">Gender</string>
     <string name="days_together">%d days together</string>
     <string name="link_code">Link code</string>
     <string name="no_partner">No Partner</string>

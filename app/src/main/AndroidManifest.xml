@@ -34,7 +34,14 @@
     <!-- Foreground service permission for location tracking -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    
+    <!-- Required for high-priority FCM messages to wake device from Doze -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- For receiving FCM even when app is killed -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".CoupleApplication"
@@ -167,6 +174,12 @@
             </intent-filter>
         </receiver>
         
+        <!-- Significant Location Change Receiver (Battery-efficient like Widgetable) -->
+        <receiver
+            android:name=".service.SignificantLocationReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        
         <!-- Location Tracking Foreground Service -->
         <service
             android:name=".service.LocationTrackingService"
@@ -174,14 +187,26 @@
             android:exported="false"
             android:foregroundServiceType="location" />
             
-        <!-- Firebase Cloud Messaging Service -->
+        <!-- 
+            Unified Firebase Cloud Messaging Service
+            IMPORTANT: Only ONE FCM service can receive messages!
+            This service handles BOTH:
+            - Silent Push (Data Messages) for background sync
+            - Notification Messages for user alerts
+        -->
         <service
-            android:name=".service.CoupleFirebaseMessagingService"
+            android:name=".service.UnifiedFCMService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+        
+        <!-- Data Sync Foreground Service (for expedited work on Android 12+) -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
             
         <!-- FileProvider for camera photos -->
         <provider
