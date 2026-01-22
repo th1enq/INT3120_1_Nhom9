@@ -46,7 +46,6 @@ import com.example.coupleapp.ui.screens.profile.ManageLinkScreen
 import com.example.coupleapp.ui.screens.profile.NotificationSettingsScreen
 import com.example.coupleapp.ui.screens.profile.LanguageSettingsScreen
 import com.example.coupleapp.ui.screens.profile.PermissionsSettingsScreen
-import com.example.coupleapp.ui.screens.profile.ImportantPlacesScreen
 import com.example.coupleapp.ui.screens.profile.HelpScreen
 import com.example.coupleapp.ui.screens.profile.AboutScreen
 
@@ -383,6 +382,29 @@ fun NavGraph(
                 },
                 onLinkSuccess = {
                     navController.popBackStack()
+                },
+                onNavigateToHome = {
+                    navController.navigate(Screen.Home.route) {
+                        popUpTo(Screen.Home.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPartnerHub = {
+                    navController.navigate(Screen.PartnerHub.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMoments = {
+                    navController.navigate(Screen.Moments.route) {
+                        popUpTo(Screen.Home.route)
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route) {
+                        popUpTo(Screen.Home.route)
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -1319,11 +1341,6 @@ fun NavGraph(
                         launchSingleTop = true
                     }
                 },
-                onNavigateToImportantPlaces = {
-                    navController.navigate(Screen.ImportantPlaces.route) {
-                        launchSingleTop = true
-                    }
-                },
                 onNavigateToHelp = {
                     navController.navigate(Screen.Help.route) {
                         launchSingleTop = true
@@ -1605,39 +1622,6 @@ fun NavGraph(
             }
         ) {
             PermissionsSettingsScreen(
-                onBackClick = { navController.popBackStack() }
-            )
-        }
-        
-        // Important Places Screen
-        composable(
-            route = Screen.ImportantPlaces.route,
-            enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(250)
-                ) + fadeIn(animationSpec = tween(250))
-            },
-            exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(250)
-                ) + fadeOut(animationSpec = tween(250))
-            },
-            popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -it },
-                    animationSpec = tween(250)
-                ) + fadeIn(animationSpec = tween(250))
-            },
-            popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(250)
-                ) + fadeOut(animationSpec = tween(250))
-            }
-        ) {
-            ImportantPlacesScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }

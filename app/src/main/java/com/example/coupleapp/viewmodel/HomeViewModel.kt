@@ -30,9 +30,7 @@ class HomeViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                // Simulate loading delay
-                delay(1500)
-                
+                // No fake delay - load data immediately for better UX
                 // Mock data loading (Backend will provide actual data)
                 _uiState.update { 
                     it.copy(
@@ -60,7 +58,8 @@ class HomeViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                delay(1000)
+                // Minimal delay for visual feedback on pull-to-refresh
+                delay(300)
                 
                 _uiState.update { 
                     it.copy(

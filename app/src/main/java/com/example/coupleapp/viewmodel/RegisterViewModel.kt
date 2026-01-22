@@ -166,8 +166,8 @@ class RegisterViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                // Simulate network delay (Backend will handle actual registration)
-                delay(1500)
+                // Minimal delay for visual feedback (Backend will handle actual registration)
+                delay(300)
                 
                 // Mock success for now
                 _uiState.update { 

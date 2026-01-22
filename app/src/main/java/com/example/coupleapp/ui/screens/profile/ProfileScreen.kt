@@ -64,7 +64,6 @@ fun ProfileScreen(
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToLanguage: () -> Unit = {},
     onNavigateToPermissions: () -> Unit = {},
-    onNavigateToImportantPlaces: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
     onLogout: () -> Unit = {},
@@ -273,7 +272,6 @@ fun ProfileScreen(
                             onNotificationsClick = onNavigateToNotifications,
                             onLanguageClick = onNavigateToLanguage,
                             onPermissionsClick = onNavigateToPermissions,
-                            onImportantPlacesClick = onNavigateToImportantPlaces,
                             onHelpClick = onNavigateToHelp,
                             onAboutClick = onNavigateToAbout
                         )
@@ -548,7 +546,6 @@ private fun AppSettingsSection(
     onNotificationsClick: () -> Unit,
     onLanguageClick: () -> Unit,
     onPermissionsClick: () -> Unit,
-    onImportantPlacesClick: () -> Unit,
     onHelpClick: () -> Unit,
     onAboutClick: () -> Unit
 ) {
@@ -664,12 +661,6 @@ private fun AppSettingsSection(
                     icon = Icons.Filled.Security,
                     title = "Quyền ứng dụng",
                     onClick = onPermissionsClick
-                )
-                HorizontalDivider(color = Color(0xFFF0F0F0))
-                SettingsItem(
-                    icon = Icons.Filled.MyLocation,
-                    title = "Địa điểm quan trọng",
-                    onClick = onImportantPlacesClick
                 )
                 HorizontalDivider(color = Color(0xFFF0F0F0))
                 SettingsItem(

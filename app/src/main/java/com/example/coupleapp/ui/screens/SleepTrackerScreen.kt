@@ -138,7 +138,7 @@ fun SleepTrackerScreen(
             visible = false
         } else {
             if (!visible) {
-                delay(400)
+                delay(100)  // Minimal delay for smooth animation
                 visible = true
             }
         }
@@ -488,15 +488,6 @@ fun SleepTrackerScreen(
                                 // Update quest progress when syncing sleep data
                                 questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SLEEP_TRACKING, 1)
                             }
-                        }
-                    },
-                    onInsertMockDataClick = {
-                        scope.launch {
-                            sheetState.hide()
-                            viewModel.showBottomSheet(false)
-                            viewModel.insertMockSleepData()
-                            // Update quest progress when inserting mock sleep data
-                            questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.SLEEP_TRACKING, 1)
                         }
                     },
                     onToggleGoogleSleepApi = { enabled ->

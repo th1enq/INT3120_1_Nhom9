@@ -3,9 +3,9 @@ package com.example.coupleapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.model.*
-import com.example.coupleapp.data.repository.FirebaseAuthRepository
-import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,12 +18,18 @@ import java.util.*
  * Firebase-integrated ViewModel for Quest Screen
  * Syncs with user_wallets collection for coin balance
  * Saves quest progress to Firebase
+ * 
+ * Uses Cache-First Strategy:
+ * 1. On init: Load cached data immediately (instant UI)
+ * 2. Background refresh: Load fresh data from Firebase
+ * 3. Cache duration: 5 minutes (quest data changes frequently)
  */
 class QuestViewModelFirebase : ViewModel() {
 
     // Initialize repositories inside class to avoid factory issues
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val questCache = QuestCacheRepository.getInstance()
 
     private val _uiState = MutableStateFlow(QuestUiState())
     val uiState: StateFlow<QuestUiState> = _uiState.asStateFlow()
@@ -35,6 +41,89 @@ class QuestViewModelFirebase : ViewModel() {
 
     init {
         Log.d(TAG, "Initializing QuestViewModelFirebase")
+        loadQuestDataWithCache()
+    }
+    
+    /**
+     * Load quest data with cache-first strategy
+     */
+    private fun loadQuestDataWithCache() {
+        viewModelScope.launch {
+            try {
+                val userId = authRepository.currentUser?.uid
+                if (userId == null) {
+                    Log.e(TAG, "No authenticated user found")
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Vui lòng đăng nhập") }
+                    return@launch
+                }
+                
+                // Try to load from cache first
+                val hasCached = questCache.hasCachedData(userId)
+                val isCacheFresh = questCache.isQuestCacheFresh(userId)
+                
+                if (hasCached) {
+                    Log.d(TAG, "📦 Cache found! Loading from cache first...")
+                    val cachedData = questCache.getCachedQuestData(userId)
+                    val cachedCoins = questCache.getCachedCoins(userId)
+                    val cachedStreak = questCache.getCachedStreakInfo(userId)
+                    
+                    if (cachedData != null) {
+                        // Show cached data immediately
+                        val today = Date()
+                        val todayDisplay = dateFormatDisplay.format(today)
+                        
+                        // Convert cached quests back to domain models
+                        val quests = cachedData.quests.map { it.toQuest() }
+                        val specialQuest = cachedData.specialQuest?.toQuest()
+                        val summary = cachedData.dailySummary.toDailySummary()
+                        
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                quests = quests,
+                                specialQuest = specialQuest,
+                                dailySummary = summary,
+                                userCoins = cachedCoins ?: 0,
+                                currentStreak = cachedStreak?.currentStreak ?: 0,
+                                longestStreak = cachedStreak?.longestStreak ?: 0,
+                                missedDays = cachedStreak?.missedDays ?: 0,
+                                lastClaimDate = cachedStreak?.lastClaimDate,
+                                todayDate = todayDisplay,
+                                isLinkedWithPartner = cachedData.isLinkedWithPartner
+                            )
+                        }
+                        Log.d(TAG, "✅ UI updated from cache")
+                        
+                        // Refresh in background if cache is stale
+                        if (!isCacheFresh) {
+                            Log.d(TAG, "🔄 Cache is stale, refreshing in background...")
+                            loadQuestDataFromFirebase(showLoading = false)
+                        }
+                    } else {
+                        // Cache parsing failed, load from Firebase
+                        _uiState.update { it.copy(isLoading = true) }
+                        loadQuestData()
+                    }
+                } else {
+                    Log.d(TAG, "🌐 No cache, loading from Firebase...")
+                    _uiState.update { it.copy(isLoading = true) }
+                    loadQuestData()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in loadQuestDataWithCache", e)
+                _uiState.update { it.copy(isLoading = true) }
+                loadQuestData()
+            }
+        }
+    }
+    
+    /**
+     * Load quest data from Firebase (background refresh)
+     */
+    private fun loadQuestDataFromFirebase(showLoading: Boolean) {
+        if (showLoading) {
+            _uiState.update { it.copy(isLoading = true) }
+        }
         loadQuestData()
     }
 
@@ -188,6 +277,28 @@ class QuestViewModelFirebase : ViewModel() {
                         todayDate = todayDisplay,
                         isLinkedWithPartner = isLinked
                     )
+                }
+                
+                // Cache the loaded data
+                try {
+                    questCache.cacheQuestData(
+                        userId = userId,
+                        quests = dailyQuests.map { it.toCachedQuest() },
+                        specialQuest = specialQuest?.toCachedQuest(),
+                        dailySummary = summary.toCachedDailySummary(),
+                        isLinkedWithPartner = isLinked
+                    )
+                    questCache.cacheCoins(userId, userCoins)
+                    questCache.cacheStreakInfo(
+                        userId = userId,
+                        currentStreak = streakInfo.currentStreak,
+                        longestStreak = streakInfo.longestStreak,
+                        missedDays = streakInfo.missedDays,
+                        lastClaimDate = streakInfo.lastClaimDate
+                    )
+                    Log.d(TAG, "💾 Quest data cached successfully")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to cache quest data", e)
                 }
 
             } catch (e: Exception) {
@@ -1242,3 +1353,67 @@ data class SavedQuestProgress(
     val currentProgress: Int,
     val status: QuestStatus
 )
+
+// ============ Cache Conversion Extension Functions ============
+
+/**
+ * Convert CachedQuest to domain Quest
+ */
+private fun CachedQuest.toQuest(): Quest {
+    return Quest(
+        id = this.id,
+        title = this.title,
+        description = this.description,
+        iconName = this.iconName,
+        type = try { QuestType.valueOf(this.type) } catch (e: Exception) { QuestType.OTHER },
+        targetProgress = this.targetProgress,
+        currentProgress = this.currentProgress,
+        coinReward = this.coinReward,
+        status = try { QuestStatus.valueOf(this.status) } catch (e: Exception) { QuestStatus.NOT_STARTED },
+        difficulty = try { QuestDifficulty.valueOf(this.difficulty) } catch (e: Exception) { QuestDifficulty.EASY },
+        timeLimit = this.timeLimit
+    )
+}
+
+/**
+ * Convert domain Quest to CachedQuest
+ */
+private fun Quest.toCachedQuest(): CachedQuest {
+    return CachedQuest(
+        id = this.id,
+        title = this.title,
+        description = this.description,
+        iconName = this.iconName,
+        type = this.type.name,
+        targetProgress = this.targetProgress,
+        currentProgress = this.currentProgress,
+        coinReward = this.coinReward,
+        status = this.status.name,
+        difficulty = this.difficulty.name,
+        timeLimit = this.timeLimit
+    )
+}
+
+/**
+ * Convert CachedDailySummary to domain DailySummary
+ */
+private fun CachedDailySummary.toDailySummary(): DailySummary {
+    return DailySummary(
+        totalQuests = this.totalQuests,
+        completedQuests = this.completedQuests,
+        totalCoinsEarned = this.totalCoinsEarned,
+        bonusRewardUnlocked = this.bonusRewardUnlocked
+    )
+}
+
+/**
+ * Convert domain DailySummary to CachedDailySummary
+ */
+private fun DailySummary.toCachedDailySummary(): CachedDailySummary {
+    return CachedDailySummary(
+        totalQuests = this.totalQuests,
+        completedQuests = this.completedQuests,
+        totalCoinsEarned = this.totalCoinsEarned,
+        bonusRewardUnlocked = this.bonusRewardUnlocked
+    )
+}

@@ -3,9 +3,11 @@ package com.example.coupleapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.MomentsCacheRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,25 +26,168 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 /**
- * ViewModel for Moments screen - Load real data from Firebase
+ * ViewModel for Moments screen - Load real data from Firebase with caching.
+ * 
+ * Cache-First Strategy:
+ * 1. On init: Load cached data immediately (instant UI)
+ * 2. Background refresh: Load fresh data from Firebase in background
+ * 3. Cache duration: 15 minutes (aggregates multiple data sources)
  */
 class MomentsViewModel : ViewModel() {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val momentsCache = MomentsCacheRepository.getInstance()
     
     private val _uiState = MutableStateFlow(MomentsUiState())
     val uiState: StateFlow<MomentsUiState> = _uiState.asStateFlow()
+    
+    private var currentCoupleId: String? = null
     
     companion object {
         private const val TAG = "MomentsViewModel"
     }
     
     init {
-        loadMoments()
+        loadMomentsWithCache()
     }
     
     /**
-     * Load all moments from Firebase data sources
+     * Load moments with cache-first strategy
+     */
+    private fun loadMomentsWithCache() {
+        viewModelScope.launch {
+            try {
+                val firebaseUser = authRepository.currentUser
+                if (firebaseUser == null) {
+                    Log.e(TAG, "User not logged in")
+                    _uiState.update { it.copy(isLoading = false, error = "User not logged in") }
+                    return@launch
+                }
+                
+                val userId = firebaseUser.uid
+                
+                // Get coupleId first
+                val userResult = firestoreRepository.getDocument("users", userId, FirebaseUser::class.java)
+                val currentUser = userResult.getOrNull()
+                val coupleId = currentUser?.coupleId
+                
+                if (coupleId.isNullOrEmpty()) {
+                    Log.w(TAG, "User not linked to partner, showing empty moments")
+                    _uiState.update { it.copy(isLoading = false, momentsGroups = emptyList()) }
+                    return@launch
+                }
+                
+                currentCoupleId = coupleId
+                
+                // Try to load from cache first
+                val hasCached = momentsCache.hasCachedMoments(coupleId)
+                val isCacheFresh = momentsCache.isMomentsCacheFresh(coupleId)
+                
+                if (hasCached) {
+                    Log.d(TAG, "📦 Cache found! Loading from cache first...")
+                    val cachedGroups = momentsCache.getCachedMomentsGroups(coupleId)
+                    
+                    if (cachedGroups != null && cachedGroups.isNotEmpty()) {
+                        // Show cached data immediately
+                        _uiState.update { 
+                            it.copy(
+                                isLoading = false,
+                                momentsGroups = cachedGroups,
+                                error = null
+                            ) 
+                        }
+                        
+                        // Refresh in background if cache is stale
+                        if (!isCacheFresh) {
+                            Log.d(TAG, "🔄 Cache is stale, refreshing in background...")
+                            loadMomentsFromFirebase(showLoading = false)
+                        } else {
+                            Log.d(TAG, "✅ Cache is fresh, no refresh needed")
+                        }
+                    } else {
+                        // Cache parsing failed, load from Firebase
+                        _uiState.update { it.copy(isLoading = true) }
+                        loadMomentsFromFirebase(showLoading = true)
+                    }
+                } else {
+                    Log.d(TAG, "🌐 No cache, loading from Firebase...")
+                    _uiState.update { it.copy(isLoading = true) }
+                    loadMomentsFromFirebase(showLoading = true)
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in loadMomentsWithCache", e)
+                _uiState.update { it.copy(isLoading = true) }
+                loadMoments()
+            }
+        }
+    }
+    
+    /**
+     * Load moments from Firebase and update cache
+     */
+    private suspend fun loadMomentsFromFirebase(showLoading: Boolean) {
+        try {
+            if (showLoading) {
+                _uiState.update { it.copy(isLoading = true) }
+            }
+            
+            val firebaseUser = authRepository.currentUser ?: return
+            val userId = firebaseUser.uid
+            
+            val userResult = firestoreRepository.getDocument("users", userId, FirebaseUser::class.java)
+            val currentUser = userResult.getOrNull() ?: return
+            val coupleId = currentUser.coupleId ?: return
+            
+            // Load partner info
+            val partnerId = currentUser.partnerId
+            val partnerResult = if (partnerId != null) {
+                firestoreRepository.getDocument("users", partnerId, FirebaseUser::class.java)
+            } else {
+                Result.failure(Exception("No partner"))
+            }
+            val partner = partnerResult.getOrNull()
+            
+            // Collect all moments
+            val allMoments = mutableListOf<MomentItem>()
+            
+            // Load all moment types
+            loadSleepMoments(currentUser, partner)?.let { allMoments.addAll(it) }
+            loadMissingMoments(coupleId, currentUser, partner)?.let { allMoments.addAll(it) }
+            loadLocketMoments(coupleId, currentUser, partner)?.let { allMoments.addAll(it) }
+            loadAnniversaryMoments(currentUser, partner)?.let { allMoments.add(it) }
+            loadUpcomingEvents(coupleId)?.let { allMoments.addAll(it) }
+            loadGardenMoments(coupleId, currentUser, partner)?.let { allMoments.addAll(it) }
+            loadMessageMoments(currentUser, partner)?.let { allMoments.addAll(it) }
+            
+            // Group by date
+            val groupedMoments = groupMomentsByDate(allMoments)
+            
+            // Cache the results
+            momentsCache.cacheMomentsGroups(coupleId, groupedMoments)
+            
+            Log.d(TAG, "✅ Loaded and cached ${allMoments.size} moments in ${groupedMoments.size} groups")
+            
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    momentsGroups = groupedMoments,
+                    error = null
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading moments from Firebase", e)
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    error = e.message
+                )
+            }
+        }
+    }
+    
+    /**
+     * Load all moments from Firebase data sources (fallback/force refresh)
      */
     fun loadMoments() {
         viewModelScope.launch {
@@ -73,6 +218,8 @@ class MomentsViewModel : ViewModel() {
                     _uiState.update { it.copy(isLoading = false, momentsGroups = emptyList()) }
                     return@launch
                 }
+                
+                currentCoupleId = coupleId
                 
                 // Load partner info
                 val partnerId = currentUser.partnerId
@@ -110,7 +257,10 @@ class MomentsViewModel : ViewModel() {
                 // Group by date
                 val groupedMoments = groupMomentsByDate(allMoments)
                 
-                Log.d(TAG, "Loaded ${allMoments.size} moments")
+                // Cache the results
+                momentsCache.cacheMomentsGroups(coupleId, groupedMoments)
+                
+                Log.d(TAG, "Loaded and cached ${allMoments.size} moments")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -131,10 +281,15 @@ class MomentsViewModel : ViewModel() {
     }
     
     /**
-     * Refresh moments data
+     * Refresh moments data (force refresh from network)
      */
     fun refreshMoments() {
-        loadMoments()
+        viewModelScope.launch {
+            // Invalidate cache first
+            currentCoupleId?.let { momentsCache.invalidateCache(it) }
+            // Reload from Firebase
+            loadMoments()
+        }
     }
     
     /**

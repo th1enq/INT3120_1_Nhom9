@@ -54,9 +54,29 @@ fun LocationHistoryTimeline(
     onLocationClick: (LocationHistory) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Group locations by date for better organization
+    // Group locations by date and merge consecutive same-location entries
     val groupedHistory = remember(locationHistory) {
-        locationHistory.groupBy { it.arrivalTime.toLocalDate() }
+        val today = LocalDate.now()
+        
+        // First, ensure only the most recent entry can have departureTime = null
+        val processedHistory = locationHistory.sortedByDescending { it.arrivalTime }.mapIndexed { index, entry ->
+            if (index == 0) {
+                // Most recent entry - can keep departureTime as is
+                entry
+            } else if (entry.departureTime == null) {
+                // Not the most recent, but has no departure time - fix it
+                val entryDate = entry.arrivalTime.toLocalDate()
+                val endOfDay = entryDate.atTime(23, 59, 59)
+                entry.copy(
+                    departureTime = endOfDay,
+                    durationMinutes = java.time.Duration.between(entry.arrivalTime, endOfDay).toMinutes().toInt()
+                )
+            } else {
+                entry
+            }
+        }
+        
+        processedHistory.groupBy { it.arrivalTime.toLocalDate() }
             .toSortedMap(compareByDescending { it })
     }
     
@@ -168,6 +188,7 @@ private fun EmptyHistoryState() {
 
 /**
  * A date section containing date label on left and location cards on right
+ * Merges consecutive entries at the same location within the same day
  */
 @Composable
 private fun DateSection(
@@ -178,6 +199,11 @@ private fun DateSection(
 ) {
     val today = LocalDate.now()
     val yesterday = today.minusDays(1)
+    
+    // Merge consecutive entries at the same location (within ~300m)
+    val mergedLocations = remember(locations) {
+        mergeConsecutiveLocations(locations)
+    }
     
     val dateLabel = when (date) {
         today -> "Hôm nay"
@@ -243,9 +269,9 @@ private fun DateSection(
                 }
                 
                 // Vertical timeline line with dots
-                if (locations.size > 1) {
+                if (mergedLocations.size > 1) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    VerticalTimelineLine(itemCount = locations.size)
+                    VerticalTimelineLine(itemCount = mergedLocations.size)
                 }
             }
             
@@ -254,7 +280,7 @@ private fun DateSection(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                locations.forEachIndexed { index, location ->
+                mergedLocations.forEachIndexed { index, location ->
                     LocationCard(
                         location = location,
                         animationDelay = index * 80,
@@ -264,6 +290,68 @@ private fun DateSection(
             }
         }
     }
+}
+
+/**
+ * Merge consecutive locations that are at the same place (within ~300m)
+ * This prevents showing multiple cards for the same location
+ */
+private fun mergeConsecutiveLocations(locations: List<LocationHistory>): List<LocationHistory> {
+    if (locations.isEmpty()) return emptyList()
+    
+    val sorted = locations.sortedByDescending { it.arrivalTime }
+    val result = mutableListOf<LocationHistory>()
+    
+    for (location in sorted) {
+        if (result.isEmpty()) {
+            result.add(location)
+            continue
+        }
+        
+        val lastEntry = result.last()
+        val distance = calculateDistanceForMerge(location.coordinate, lastEntry.coordinate)
+        
+        // Consider same location if within 300 meters
+        if (distance <= 300.0) {
+            // Merge: extend the time range
+            val mergedEntry = lastEntry.copy(
+                arrivalTime = location.arrivalTime, // Use earlier arrival
+                departureTime = lastEntry.departureTime ?: location.departureTime,
+                durationMinutes = calculateMergedDuration(location.arrivalTime, lastEntry.departureTime ?: location.departureTime)
+            )
+            result[result.lastIndex] = mergedEntry
+        } else {
+            result.add(location)
+        }
+    }
+    
+    return result
+}
+
+/**
+ * Calculate distance between two coordinates for merging check
+ */
+private fun calculateDistanceForMerge(coord1: com.example.coupleapp.data.model.LocationCoordinate, coord2: com.example.coupleapp.data.model.LocationCoordinate): Double {
+    val earthRadius = 6371000.0 // meters
+    val lat1 = Math.toRadians(coord1.latitude)
+    val lat2 = Math.toRadians(coord2.latitude)
+    val deltaLat = Math.toRadians(coord2.latitude - coord1.latitude)
+    val deltaLon = Math.toRadians(coord2.longitude - coord1.longitude)
+    
+    val a = kotlin.math.sin(deltaLat / 2) * kotlin.math.sin(deltaLat / 2) +
+            kotlin.math.cos(lat1) * kotlin.math.cos(lat2) *
+            kotlin.math.sin(deltaLon / 2) * kotlin.math.sin(deltaLon / 2)
+    val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+    
+    return earthRadius * c
+}
+
+/**
+ * Calculate merged duration in minutes
+ */
+private fun calculateMergedDuration(arrivalTime: java.time.LocalDateTime, departureTime: java.time.LocalDateTime?): Int {
+    val endTime = departureTime ?: java.time.LocalDateTime.now()
+    return java.time.Duration.between(arrivalTime, endTime).toMinutes().toInt()
 }
 
 /**
@@ -470,8 +558,13 @@ private fun LocationCard(
                         }
                     }
                     
-                    // Current location indicator
-                    if (location.departureTime == null) {
+                    // Current location indicator - only show if:
+                    // 1. departureTime is null AND
+                    // 2. arrival date is today
+                    val isCurrentlyHere = location.departureTime == null && 
+                        location.arrivalTime.toLocalDate() == LocalDate.now()
+                    
+                    if (isCurrentlyHere) {
                         CurrentLocationIndicator()
                     }
                 }
@@ -517,14 +610,30 @@ private fun CurrentLocationIndicator() {
 
 /**
  * Format time range (arrival → departure)
+ * Handles edge cases:
+ * - Same day: "HH:mm → HH:mm"
+ * - Still here today: "HH:mm → hiện tại"
+ * - Past day without proper departure: "HH:mm → 23:59"
  */
 private fun formatTimeRange(location: LocationHistory): String {
     val arrivalTime = location.arrivalTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-    return if (location.departureTime != null) {
-        val departureTime = location.departureTime.format(DateTimeFormatter.ofPattern("HH:mm"))
-        "$arrivalTime → $departureTime"
-    } else {
-        "$arrivalTime → hiện tại"
+    val today = LocalDate.now()
+    val arrivalDate = location.arrivalTime.toLocalDate()
+    
+    return when {
+        // Still at this location (only valid if it's today and departureTime is null)
+        location.departureTime == null && arrivalDate == today -> {
+            "$arrivalTime → hiện tại"
+        }
+        // Has departure time
+        location.departureTime != null -> {
+            val departureTime = location.departureTime.format(DateTimeFormatter.ofPattern("HH:mm"))
+            "$arrivalTime → $departureTime"
+        }
+        // Past day but no departure time (shouldn't happen after processing, but handle gracefully)
+        else -> {
+            "$arrivalTime → 23:59"
+        }
     }
 }
 

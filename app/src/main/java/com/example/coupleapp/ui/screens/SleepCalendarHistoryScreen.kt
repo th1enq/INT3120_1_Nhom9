@@ -60,7 +60,7 @@ fun SleepCalendarHistoryScreen(
             visible = false
         } else {
             if (!visible) {
-                delay(400)
+                delay(100)  // Minimal delay for smooth animation
                 visible = true
             }
         }

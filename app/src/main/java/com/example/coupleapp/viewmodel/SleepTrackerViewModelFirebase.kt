@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
+import com.example.coupleapp.data.repository.SleepCacheRepository
 import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.example.coupleapp.data.sleep.GoogleSleepApiManager
 import com.example.coupleapp.widget.SleepWidgetManager
@@ -20,12 +21,18 @@ import java.time.ZoneId
 import java.util.Date
 
 /**
- * Sleep Tracker ViewModel with Firebase integration
+ * Sleep Tracker ViewModel with Firebase integration and local caching.
+ * 
+ * Cache-First Strategy:
+ * 1. On init: Load cached data immediately for instant UI
+ * 2. Background sync: Refresh from Firebase in background
+ * 3. Result: User sees data instantly, no waiting for network
  */
 class SleepTrackerViewModelFirebase(
     private val context: Context? = null
 ) : ViewModel() {
     private val sleepRepository = SleepFirebaseRepository(context)
+    private val sleepCache = context?.let { SleepCacheRepository.getInstance(it) }
     private val googleSleepApiManager = context?.let { GoogleSleepApiManager(it) }
     private val auth = FirebaseAuth.getInstance()
     private val prefs = context?.getSharedPreferences("sleep_prefs", Context.MODE_PRIVATE)
@@ -48,10 +55,131 @@ class SleepTrackerViewModelFirebase(
 
     init {
         Log.d(TAG, "SleepTrackerViewModelFirebase initialized")
-        loadInitialData()
+        loadInitialDataWithCache()
         checkAndAutoSync()
         checkActiveSleepSession()
         checkGoogleSleepApiStatus()
+    }
+
+    /**
+     * Load initial data with cache-first strategy:
+     * 1. Show cached data immediately (instant UI)
+     * 2. Load fresh data from Firebase in background
+     * 3. Update UI when fresh data arrives
+     */
+    private fun loadInitialDataWithCache() {
+        viewModelScope.launch {
+            try {
+                val currentUser = auth.currentUser
+                if (currentUser == null) {
+                    Log.e(TAG, "User not logged in")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return@launch
+                }
+
+                val userId = currentUser.uid
+                Log.d(TAG, "Loading data with cache-first strategy for user: $userId")
+
+                // Step 1: Try to load from cache first (instant UI)
+                val hasCached = sleepCache?.hasCachedData(userId) == true
+                
+                if (hasCached) {
+                    Log.d(TAG, "📦 Cache found! Loading from cache first...")
+                    loadFromCacheAndSyncBackground(userId)
+                } else {
+                    Log.d(TAG, "🌐 No cache, loading from Firebase...")
+                    _uiState.update { it.copy(isLoading = true) }
+                    loadInitialData()
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in loadInitialDataWithCache", e)
+                // Fallback to Firebase loading
+                loadInitialData()
+            }
+        }
+    }
+    
+    /**
+     * Load data from cache immediately, then sync in background
+     */
+    private suspend fun loadFromCacheAndSyncBackground(userId: String) {
+        try {
+            // Load cached settings
+            val cachedSettings = sleepCache?.getCachedSettings(userId)
+            val cachedHistory = sleepCache?.getCachedHistory(userId)
+            val cachedTodayRecord = sleepCache?.getCachedTodayRecord(userId)
+            
+            Log.d(TAG, "📦 Cached data: settings=${cachedSettings != null}, history=${cachedHistory?.size ?: 0}, today=${cachedTodayRecord != null}")
+            
+            // Update UI with cached data immediately
+            if (cachedSettings != null || cachedHistory != null) {
+                val settings = cachedSettings?.let { sleepRepository.convertToSleepSettings(it) }
+                    ?: SleepSettings(
+                        targetSleepDuration = 480,
+                        idealBedTime = LocalTime.of(22, 0),
+                        idealWakeUpTime = LocalTime.of(6, 0),
+                        userId = userId
+                    )
+                
+                val sleepHistory = cachedHistory?.map { sleepRepository.convertToSleepRecord(it) } ?: emptyList()
+                var sleepRecord = cachedTodayRecord?.let { sleepRepository.convertToSleepRecord(it) }
+                
+                // If no today's record, use most recent from history
+                if (sleepRecord == null && sleepHistory.isNotEmpty()) {
+                    sleepRecord = sleepHistory.first()
+                }
+                
+                // Load user profiles from cache or Firebase
+                val currentUserResult = sleepRepository.getUserProfile(userId)
+                val currentUserProfile = currentUserResult.getOrElse {
+                    UserProfile(userId, "User", null)
+                }
+                
+                val partnerIdResult = sleepRepository.getPartnerId()
+                val partnerId = partnerIdResult.getOrNull()
+                var partnerProfile = UserProfile("", "Partner", null)
+                if (partnerId != null) {
+                    val partnerResult = sleepRepository.getUserProfile(partnerId)
+                    partnerProfile = partnerResult.getOrElse {
+                        UserProfile(partnerId, "Partner", null)
+                    }
+                }
+                
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        currentUser = currentUserProfile,
+                        partnerUser = partnerProfile,
+                        isCurrentUser = true,
+                        sleepRecord = sleepRecord,
+                        sleepHistory = sleepHistory.take(3),
+                        settings = settings,
+                        isLoading = false
+                    )
+                }
+                
+                Log.d(TAG, "✅ UI updated from cache, starting background sync...")
+                
+                // Check bedtime reminder
+                val hasActiveSession = _uiState.value.activeSleepSession != null
+                if (!hasActiveSession) {
+                    checkBedtimeReminder(settings.idealBedTime)
+                }
+                
+                // Sync in background if cache is stale
+                if (sleepCache?.isSettingsCacheFresh(userId) != true || 
+                    sleepCache?.isHistoryCacheFresh(userId) != true) {
+                    Log.d(TAG, "🔄 Cache is stale, refreshing in background...")
+                    loadUserDataAndUpdateCache(userId, isInitialLoad = true, showLoading = false)
+                }
+            } else {
+                // No usable cache, load from Firebase
+                loadInitialData()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading from cache", e)
+            loadInitialData()
+        }
     }
 
     private fun loadInitialData() {
@@ -121,20 +249,80 @@ class SleepTrackerViewModelFirebase(
         }
 
         _uiState.update { it.copy(isCurrentUser = newIsCurrentUser) }
-        loadUserData(userId, isInitialLoad = false)
+        
+        // Try cache first for toggled user
+        viewModelScope.launch {
+            val hasCached = sleepCache?.hasCachedData(userId) == true
+            if (hasCached) {
+                loadFromCacheForUser(userId)
+            } else {
+                loadUserDataAndUpdateCache(userId, isInitialLoad = false, showLoading = true)
+            }
+        }
+    }
+    
+    /**
+     * Load cached data for a specific user (when toggling)
+     */
+    private suspend fun loadFromCacheForUser(userId: String) {
+        try {
+            val cachedSettings = sleepCache?.getCachedSettings(userId)
+            val cachedHistory = sleepCache?.getCachedHistory(userId)
+            val cachedTodayRecord = sleepCache?.getCachedTodayRecord(userId)
+            
+            if (cachedSettings != null || cachedHistory != null) {
+                val settings = cachedSettings?.let { sleepRepository.convertToSleepSettings(it) }
+                    ?: _uiState.value.settings
+                
+                val sleepHistory = cachedHistory?.map { sleepRepository.convertToSleepRecord(it) } 
+                    ?: emptyList()
+                var sleepRecord = cachedTodayRecord?.let { sleepRepository.convertToSleepRecord(it) }
+                
+                if (sleepRecord == null && sleepHistory.isNotEmpty()) {
+                    sleepRecord = sleepHistory.first()
+                }
+                
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        sleepRecord = sleepRecord,
+                        sleepHistory = sleepHistory.take(3),
+                        settings = settings,
+                        isLoading = false
+                    )
+                }
+                
+                Log.d(TAG, "✅ Loaded cached data for toggled user: $userId")
+                
+                // Sync in background if stale
+                if (sleepCache?.isSettingsCacheFresh(userId) != true) {
+                    loadUserDataAndUpdateCache(userId, isInitialLoad = false, showLoading = false)
+                }
+            } else {
+                loadUserDataAndUpdateCache(userId, isInitialLoad = false, showLoading = true)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading cache for user", e)
+            loadUserDataAndUpdateCache(userId, isInitialLoad = false, showLoading = true)
+        }
     }
 
     private fun loadUserData(userId: String, isInitialLoad: Boolean) {
+        loadUserDataAndUpdateCache(userId, isInitialLoad, showLoading = true)
+    }
+    
+    /**
+     * Load user data from Firebase and update cache
+     */
+    private fun loadUserDataAndUpdateCache(userId: String, isInitialLoad: Boolean, showLoading: Boolean) {
         loadDataJob?.cancel()
-        _uiState.update { it.copy(isLoading = true) }
+        if (showLoading) {
+            _uiState.update { it.copy(isLoading = true) }
+        }
 
         loadDataJob = viewModelScope.launch {
             try {
-                if (isInitialLoad) {
-                    kotlinx.coroutines.delay(500)
-                } else {
-                    kotlinx.coroutines.delay(200)
-                }
+                // Minimal delay before API calls for smooth transition
+                kotlinx.coroutines.delay(50)
 
                 Log.d(TAG, "Loading sleep data for user: $userId")
 
@@ -142,6 +330,11 @@ class SleepTrackerViewModelFirebase(
                 val settingsResult = sleepRepository.getSleepSettings(userId)
                 val firebaseSettings = settingsResult.getOrNull()
                 Log.d(TAG, "loadUserData: Firebase settings = $firebaseSettings")
+                
+                // Cache settings
+                if (firebaseSettings != null) {
+                    sleepCache?.cacheSettings(userId, firebaseSettings)
+                }
                 
                 val settings = firebaseSettings?.let { sleepRepository.convertToSleepSettings(it) }
                     ?: SleepSettings(
@@ -157,6 +350,11 @@ class SleepTrackerViewModelFirebase(
                 val firebaseRecord = todayRecordResult.getOrNull()
                 var sleepRecord = firebaseRecord?.let { sleepRepository.convertToSleepRecord(it) }
                 Log.d(TAG, "loadUserData: Today's record = ${sleepRecord?.id}")
+                
+                // Cache today's record
+                if (firebaseRecord != null) {
+                    sleepCache?.cacheTodayRecord(userId, firebaseRecord)
+                }
 
                 // Load sleep history
                 val historyResult = sleepRepository.getSleepHistory(userId, 7)
@@ -176,6 +374,11 @@ class SleepTrackerViewModelFirebase(
                     .values
                     .filterNotNull()
                     .sortedByDescending { it.date }
+                
+                // Cache history
+                if (deduplicatedHistory.isNotEmpty()) {
+                    sleepCache?.cacheHistory(userId, deduplicatedHistory)
+                }
                 
                 val sleepHistory = deduplicatedHistory.map { sleepRepository.convertToSleepRecord(it) }
                 
@@ -202,7 +405,7 @@ class SleepTrackerViewModelFirebase(
                     checkBedtimeReminder(settings.idealBedTime)
                 }
 
-                Log.d(TAG, "Sleep data loaded successfully")
+                Log.d(TAG, "Sleep data loaded and cached successfully")
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading sleep data", e)

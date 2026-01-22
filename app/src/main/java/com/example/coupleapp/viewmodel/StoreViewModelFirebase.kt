@@ -7,6 +7,7 @@ import com.example.coupleapp.R
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.StoreCacheRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,10 +19,16 @@ import java.time.format.DateTimeFormatter
 /**
  * Firebase-backed ViewModel for Store Screen
  * Manages store items, purchases, and user wallet from Firestore
+ * 
+ * Uses LAZY LOADING strategy with StoreCacheRepository:
+ * 1. Show cached wallet data immediately (no loading spinner if cache exists)
+ * 2. Background refresh if cache is stale (> 15 minutes)
+ * 3. Force refresh on purchase or pull-to-refresh
  */
 class StoreViewModelFirebase(
     private val authRepository: FirebaseAuthRepository = FirebaseAuthRepository(),
-    private val firestoreRepository: FirebaseFirestoreRepository = FirebaseFirestoreRepository()
+    private val firestoreRepository: FirebaseFirestoreRepository = FirebaseFirestoreRepository(),
+    private val storeCache: StoreCacheRepository = StoreCacheRepository.getInstance()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StoreUiState())
@@ -35,10 +42,9 @@ class StoreViewModelFirebase(
 
     /**
      * Load store data including categories and user wallet
+     * @param forceRefresh If true, skip cache and load from network
      */
-    private fun loadStoreData() {
-        _uiState.update { it.copy(isLoading = true) }
-
+    fun loadStoreData(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             try {
                 val currentUserId = authRepository.currentUser?.uid
@@ -52,8 +58,45 @@ class StoreViewModelFirebase(
                     return@launch
                 }
                 
-                // Load user wallet
-                val wallet = loadUserWallet(currentUserId)
+                // ========== LAZY LOADING: Try cache first ==========
+                if (!forceRefresh) {
+                    val (cachedWallet, needsRefresh) = storeCache.loadWallet(currentUserId)
+                    
+                    if (cachedWallet != null) {
+                        Log.d(TAG, "✅ Cache hit! Showing cached wallet immediately")
+                        
+                        // Create store categories (static data - no caching needed)
+                        val categories = createStoreCategories()
+                        
+                        // Check free gift availability
+                        val canClaimFree = checkFreeGiftAvailability(cachedWallet)
+                        val cooldownDays = calculateCooldownDays(cachedWallet)
+                        
+                        // Show cached data immediately (no loading spinner!)
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                categories = categories,
+                                userWallet = cachedWallet,
+                                canClaimFreeGift = canClaimFree,
+                                freeGiftCooldownDays = cooldownDays
+                            )
+                        }
+                        
+                        // Background refresh if cache is stale
+                        if (needsRefresh) {
+                            Log.d(TAG, "📦 Cache stale, background refresh...")
+                            refreshWalletInBackground(currentUserId)
+                        }
+                        return@launch
+                    }
+                }
+                
+                // ========== No cache or force refresh: Load from network ==========
+                _uiState.update { it.copy(isLoading = true) }
+                
+                // Load user wallet from network
+                val wallet = loadUserWalletFromNetwork(currentUserId)
                 
                 // Check free gift availability
                 val canClaimFree = checkFreeGiftAvailability(wallet)
@@ -83,11 +126,33 @@ class StoreViewModelFirebase(
             }
         }
     }
+    
+    /**
+     * Refresh wallet in background without showing loading spinner
+     */
+    private fun refreshWalletInBackground(userId: String) {
+        viewModelScope.launch {
+            Log.d(TAG, "🔄 Background wallet refresh started")
+            val wallet = storeCache.loadWalletFromNetwork(userId)
+            if (wallet != null) {
+                val canClaimFree = checkFreeGiftAvailability(wallet)
+                val cooldownDays = calculateCooldownDays(wallet)
+                _uiState.update { 
+                    it.copy(
+                        userWallet = wallet,
+                        canClaimFreeGift = canClaimFree,
+                        freeGiftCooldownDays = cooldownDays
+                    ) 
+                }
+                Log.d(TAG, "✅ Background wallet refresh completed")
+            }
+        }
+    }
 
     /**
-     * Load user wallet from Firestore
+     * Load user wallet from Firestore (network call)
      */
-    private suspend fun loadUserWallet(userId: String): UserWallet {
+    private suspend fun loadUserWalletFromNetwork(userId: String): UserWallet {
         return try {
             val result = firestoreRepository.getDocument(
                 "user_wallets", 
@@ -100,7 +165,7 @@ class StoreViewModelFirebase(
                     if (walletDoc != null) {
                         Log.d(TAG, "[STORE] Wallet loaded from user_wallets/$userId")
                         Log.d(TAG, "[STORE] Wallet has ${walletDoc.coins} coins")
-                        UserWallet(
+                        val wallet = UserWallet(
                             coins = walletDoc.coins,
                             lastFreeClaimTime = walletDoc.lastFreeGiftDate?.let { 
                                 LocalDate.parse(it, DateTimeFormatter.ISO_LOCAL_DATE)
@@ -110,6 +175,9 @@ class StoreViewModelFirebase(
                                     .toEpochMilli()
                             }
                         )
+                        // Cache the wallet
+                        storeCache.cacheWallet(userId, wallet)
+                        wallet
                     } else {
                         Log.d(TAG, "[STORE] No wallet found at document: user_wallets/$userId")
                         Log.d(TAG, "[STORE] Creating default wallet with 1000 coins")
@@ -122,7 +190,9 @@ class StoreViewModelFirebase(
                         )
                         firestoreRepository.setDocument("user_wallets", userId, defaultWallet)
                         
-                        UserWallet(coins = 1000)
+                        val wallet = UserWallet(coins = 1000)
+                        storeCache.cacheWallet(userId, wallet)
+                        wallet
                     }
                 },
                 onFailure = { e ->
@@ -401,6 +471,9 @@ class StoreViewModelFirebase(
                         // Record purchase
                         recordPurchase(currentUserId, item, "coin")
                         
+                        // Invalidate cache after purchase
+                        storeCache.invalidateCache(currentUserId)
+                        
                         // Update local state
                         _uiState.update { 
                             it.copy(
@@ -436,6 +509,9 @@ class StoreViewModelFirebase(
                         // Record purchase
                         recordPurchase(currentUserId, item, "free")
                         
+                        // Invalidate cache after free gift claim
+                        storeCache.invalidateCache(currentUserId)
+                        
                         // Update local state
                         _uiState.update { 
                             it.copy(
@@ -452,6 +528,9 @@ class StoreViewModelFirebase(
                         // For now, just add to inventory
                         addToInventory(currentUserId, item)
                         recordPurchase(currentUserId, item, "ad")
+                        
+                        // Invalidate cache after ad reward
+                        storeCache.invalidateCache(currentUserId)
                         
                         _uiState.update { 
                             it.copy(

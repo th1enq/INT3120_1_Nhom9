@@ -29,13 +29,13 @@ fun StoreScreen(
     val uiState by viewModel.uiState.collectAsState()
     var visible by remember { mutableStateOf(false) }
 
-    // Animation timing like Friend page
+    // Animation timing - minimal delay for smooth transition
     LaunchedEffect(uiState.isLoading) {
         if (uiState.isLoading) {
             visible = false
         } else {
             if (!visible) {
-                delay(200)  // Match Friend page delay
+                delay(50)  // Minimal delay for smooth transition
                 visible = true
             }
         }
@@ -43,7 +43,7 @@ fun StoreScreen(
     
     LaunchedEffect(Unit) {
         if (!uiState.isLoading) {
-            delay(200)
+            delay(50)
             visible = true
         }
     }

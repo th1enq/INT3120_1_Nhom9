@@ -143,7 +143,7 @@ fun OnboardingPermissionsDialog(
                                 icon = Icons.Filled.LocationOn,
                                 iconColor = Color(0xFF4CAF50),
                                 title = "Chia sẻ vị trí",
-                                description = "Cho phép chia sẻ vị trí để người yêu biết bạn đang ở đâu và gửi thông báo khi bạn đến các địa điểm quan trọng.",
+                                description = "Cho phép chia sẻ vị trí để người yêu biết bạn đang ở đâu.",
                                 isGranted = locationPermission.status.isGranted,
                                 onRequestPermission = {
                                     if (locationPermission.status.shouldShowRationale) {

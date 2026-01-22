@@ -35,7 +35,6 @@ fun SleepSettingsBottomSheet(
     onSleepGoalClick: () -> Unit,
     onMyHistoryClick: () -> Unit,
     onSyncHealthConnectClick: () -> Unit = {},
-    onInsertMockDataClick: () -> Unit = {},
     onToggleGoogleSleepApi: (Boolean) -> Unit = {},
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -141,18 +140,6 @@ fun SleepSettingsBottomSheet(
             title = stringResource(R.string.sync_health_connect),
             currentValue = "",
             onClick = onSyncHealthConnectClick
-        )
-        
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 24.dp),
-            color = Color(0xFFF5F5F5)
-        )
-        
-        SettingsItem(
-            icon = Icons.Default.Edit,
-            title = stringResource(R.string.insert_mock_data),
-            currentValue = "",
-            onClick = onInsertMockDataClick
         )
         
         Spacer(modifier = Modifier.height(16.dp))

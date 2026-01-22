@@ -85,8 +85,8 @@ class PhoneLoginViewModel : ViewModel() {
         
         viewModelScope.launch {
             try {
-                // Simulate network delay (Backend will handle actual authentication)
-                delay(1500)
+                // Minimal delay for visual feedback (Backend will handle actual authentication)
+                delay(300)
                 
                 // Mock success for now
                 _uiState.update { 

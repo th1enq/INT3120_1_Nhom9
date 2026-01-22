@@ -3,7 +3,11 @@ package com.example.coupleapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.model.*
+import com.example.coupleapp.data.repository.CalendarCacheRepository
+import com.example.coupleapp.data.repository.CachedCalendarEvent
+import com.example.coupleapp.data.repository.CachedCalendarProfile
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
 import kotlinx.coroutines.Job
@@ -20,10 +24,16 @@ import java.util.UUID
 
 /**
  * Firebase-integrated ViewModel for Calendar screen
+ * 
+ * Uses Cache-First Strategy:
+ * 1. On init: Load cached data immediately (instant UI)
+ * 2. Background refresh: Load fresh data from Firebase
+ * 3. Cache duration: 1 hour for profile, 30 minutes for events
  */
 class CalendarViewModelFirebase : ViewModel() {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val calendarCache = CalendarCacheRepository.getInstance()
 
     companion object {
         private const val TAG = "CalendarViewModelFB"
@@ -35,10 +45,121 @@ class CalendarViewModelFirebase : ViewModel() {
 
     // Live counter update job
     private var counterUpdateJob: Job? = null
+    
+    // Track current coupleId for caching
+    private var currentCoupleId: String? = null
 
     init {
-        loadData()
+        loadDataWithCache()
         startLiveCounter()
+    }
+
+    /**
+     * Load data with cache-first strategy
+     */
+    private fun loadDataWithCache() {
+        viewModelScope.launch {
+            val userId = authRepository.currentUser?.uid
+            if (userId == null) {
+                _uiState.update { it.copy(isLoading = false) }
+                Log.e(TAG, "User not logged in")
+                return@launch
+            }
+
+            try {
+                // Get user to find coupleId
+                val userResult = firestoreRepository.getDocument("users", userId, FirebaseUser::class.java)
+                val currentUser = userResult.getOrNull()
+                val coupleId = currentUser?.coupleId
+                
+                if (coupleId.isNullOrEmpty()) {
+                    _uiState.update { it.copy(isLoading = false) }
+                    return@launch
+                }
+                
+                currentCoupleId = coupleId
+                
+                // Try to load from cache first
+                val hasCached = calendarCache.hasCachedData(coupleId)
+                
+                if (hasCached) {
+                    Log.d(TAG, "📦 Cache found! Loading from cache first...")
+                    loadFromCacheAndSyncBackground(coupleId, currentUser)
+                } else {
+                    Log.d(TAG, "🌐 No cache, loading from Firebase...")
+                    _uiState.update { it.copy(isLoading = true) }
+                    loadData()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in loadDataWithCache", e)
+                _uiState.update { it.copy(isLoading = true) }
+                loadData()
+            }
+        }
+    }
+    
+    /**
+     * Load from cache immediately, then sync in background
+     */
+    private suspend fun loadFromCacheAndSyncBackground(coupleId: String, currentUser: FirebaseUser) {
+        try {
+            val cachedProfile = calendarCache.getCachedCoupleProfile(coupleId)
+            val cachedEvents = calendarCache.getCachedEvents(coupleId)
+            
+            if (cachedProfile != null) {
+                Log.d(TAG, "📦 Using cached couple profile")
+                
+                // Convert cached profile to domain model
+                val coupleProfile = cachedProfile.toCoupleProfile()
+                
+                // Update UI with cached data immediately
+                _uiState.update {
+                    it.copy(
+                        coupleProfile = coupleProfile,
+                        isLoading = false,
+                        settings = it.settings.copy(
+                            backgroundImageUrl = coupleProfile.backgroundImageUrl,
+                            useDefaultBackground = coupleProfile.backgroundImageUrl.isEmpty()
+                        )
+                    )
+                }
+                updateLoveDaysCounter(coupleProfile.relationshipStartDate)
+                
+                // Process cached events
+                if (cachedEvents != null) {
+                    val anniversaries = cachedEvents.mapNotNull { it.toAnniversary() }
+                    _uiState.update { it.copy(allAnniversaries = anniversaries) }
+                    updateUpcomingEvents(anniversaries)
+                    updateCalendarEvents(anniversaries)
+                    Log.d(TAG, "📦 Loaded ${anniversaries.size} cached events")
+                }
+                
+                // Check if cache is stale and refresh in background
+                val isProfileFresh = calendarCache.isProfileCacheFresh(coupleId)
+                val isEventsFresh = calendarCache.isEventsCacheFresh(coupleId)
+                
+                if (!isProfileFresh || !isEventsFresh) {
+                    Log.d(TAG, "🔄 Cache is stale, refreshing in background...")
+                    loadDataFromFirebase(showLoading = false)
+                }
+            } else {
+                // No usable cache, load from Firebase
+                loadData()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading from cache", e)
+            loadData()
+        }
+    }
+    
+    /**
+     * Load data from Firebase and update cache
+     */
+    private fun loadDataFromFirebase(showLoading: Boolean) {
+        if (showLoading) {
+            _uiState.update { it.copy(isLoading = true) }
+        }
+        loadData()
     }
 
     /**
@@ -246,9 +367,29 @@ class CalendarViewModelFirebase : ViewModel() {
                     val anniversaries = events.mapNotNull { it.toAnniversary() }
                     Log.d(TAG, "Converted to ${anniversaries.size} anniversaries")
                     
+                    // Cache the events
+                    try {
+                        val cachedEvents = anniversaries.map { it.toCachedEvent() }
+                        calendarCache.cacheEvents(coupleId, cachedEvents)
+                        Log.d(TAG, "📦 Cached ${cachedEvents.size} calendar events")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error caching events", e)
+                    }
+                    
                     _uiState.update { it.copy(allAnniversaries = anniversaries) }
                     updateUpcomingEvents(anniversaries)
                     updateCalendarEvents(anniversaries)
+                    
+                    // Also cache the couple profile if available
+                    val coupleProfile = _uiState.value.coupleProfile
+                    if (coupleProfile != null) {
+                        try {
+                            calendarCache.cacheCoupleProfile(coupleId, coupleProfile.toCachedProfile(coupleId))
+                            Log.d(TAG, "📦 Cached couple profile")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error caching couple profile", e)
+                        }
+                    }
                     
                     Log.d(TAG, "Updated UI with anniversaries")
                 },
@@ -865,4 +1006,117 @@ class CalendarViewModelFirebase : ViewModel() {
         super.onCleared()
         counterUpdateJob?.cancel()
     }
+}
+
+// ============ Cache Extension Functions ============
+
+/**
+ * Convert CachedCalendarProfile to CoupleProfile domain model
+ */
+private fun CachedCalendarProfile.toCoupleProfile(): CoupleProfile {
+    val user1 = CalendarUserProfile(
+        id = user1Id,
+        name = user1Name,
+        nickname = user1Nickname,
+        avatarUrl = user1AvatarUrl,
+        dateOfBirth = user1DateOfBirth?.let { 
+            try { LocalDate.parse(it) } catch (e: Exception) { LocalDate.now().minusYears(25) }
+        } ?: LocalDate.now().minusYears(25),
+        zodiacSign = ZodiacSign.UNKNOWN
+    )
+    
+    val user2 = CalendarUserProfile(
+        id = user2Id,
+        name = user2Name,
+        nickname = user2Nickname,
+        avatarUrl = user2AvatarUrl,
+        dateOfBirth = user2DateOfBirth?.let { 
+            try { LocalDate.parse(it) } catch (e: Exception) { LocalDate.now().minusYears(25) }
+        } ?: LocalDate.now().minusYears(25),
+        zodiacSign = ZodiacSign.UNKNOWN
+    )
+    
+    val startDate = try {
+        LocalDateTime.parse(relationshipStartDate)
+    } catch (e: Exception) {
+        LocalDateTime.now().minusDays(365)
+    }
+    
+    return CoupleProfile(
+        user1 = user1,
+        user2 = user2,
+        relationshipStartDate = startDate,
+        backgroundImageUrl = backgroundImageUrl
+    )
+}
+
+/**
+ * Convert CachedCalendarEvent to Anniversary domain model
+ */
+private fun CachedCalendarEvent.toAnniversary(): Anniversary? {
+    return try {
+        val date = LocalDate.parse(this.date, DateTimeFormatter.ISO_LOCAL_DATE)
+        val dateTime = if (!this.time.isNullOrEmpty()) {
+            LocalDateTime.parse("${this.date}T${this.time}:00")
+        } else {
+            date.atStartOfDay()
+        }
+
+        val type = when (this.eventType.lowercase()) {
+            "date" -> AnniversaryType.FIRST_DATE
+            "anniversary" -> AnniversaryType.RELATIONSHIP_START
+            "birthday" -> AnniversaryType.BIRTHDAY
+            "trip" -> AnniversaryType.TRIP
+            else -> AnniversaryType.CUSTOM
+        }
+
+        Anniversary(
+            id = this.id,
+            title = this.title,
+            description = this.description,
+            date = dateTime,
+            type = type,
+            isRecurring = this.isRecurring,
+            reminderEnabled = this.reminderMinutes > 0
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/**
+ * Convert CoupleProfile to CachedCalendarProfile for storage
+ */
+private fun CoupleProfile.toCachedProfile(coupleId: String): CachedCalendarProfile {
+    return CachedCalendarProfile(
+        coupleId = coupleId,
+        user1Id = user1.id,
+        user1Name = user1.name,
+        user1Nickname = user1.nickname,
+        user1AvatarUrl = user1.avatarUrl,
+        user1DateOfBirth = user1.dateOfBirth.toString(),
+        user2Id = user2.id,
+        user2Name = user2.name,
+        user2Nickname = user2.nickname,
+        user2AvatarUrl = user2.avatarUrl,
+        user2DateOfBirth = user2.dateOfBirth.toString(),
+        relationshipStartDate = relationshipStartDate.toString(),
+        backgroundImageUrl = backgroundImageUrl
+    )
+}
+
+/**
+ * Convert Anniversary to CachedCalendarEvent for storage
+ */
+private fun Anniversary.toCachedEvent(): CachedCalendarEvent {
+    return CachedCalendarEvent(
+        id = id,
+        title = title,
+        description = description,
+        date = date.toLocalDate().toString(),
+        time = if (date.hour > 0 || date.minute > 0) "${date.hour}:${date.minute.toString().padStart(2, '0')}" else null,
+        eventType = type.name.lowercase(),
+        isRecurring = isRecurring,
+        reminderMinutes = if (reminderEnabled) 60 else 0
+    )
 }

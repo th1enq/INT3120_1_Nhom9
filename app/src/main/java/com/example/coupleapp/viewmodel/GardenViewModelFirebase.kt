@@ -6,7 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.GardenCacheRepository
+import com.example.coupleapp.data.repository.CachedPlant
+import com.example.coupleapp.data.repository.CachedGardenInventory
+import com.example.coupleapp.data.repository.CachedGalleryItem
+import com.example.coupleapp.data.repository.CachedCollectionPlant
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,28 +29,145 @@ import kotlin.random.Random
 /**
  * Firebase-integrated ViewModel for Garden Screen
  * Manages plant state, inventory from Store purchases, and gallery
+ * 
+ * Uses Cache-First Strategy:
+ * 1. On init: Load cached data immediately (instant UI)
+ * 2. Background refresh: Load fresh data from Firebase
+ * 3. Real-time sync: Enabled when user is viewing Garden screen
+ * 
+ * Cache freshness:
+ * - Plant: 5 minutes (frequent changes)
+ * - Inventory: 15 minutes (changes on use/purchase)
+ * - Gallery: 1 hour (rarely changes)
+ * - Collection: 30 minutes (changes on harvest)
  */
 class GardenViewModelFirebase : ViewModel() {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val gardenCache = GardenCacheRepository.getInstance()
 
     private val _uiState = MutableStateFlow(GardenUiState())
     val uiState: StateFlow<GardenUiState> = _uiState.asStateFlow()
 
     private var statusDecayJob: Job? = null
     private var thoughtBubbleJob: Job? = null
+    
+    // Real-time listener for plant updates (only active when user is viewing garden)
+    private var plantListener: ListenerRegistration? = null
+    private var currentPlantId: String? = null
+    private var isRealTimeEnabled = false
 
     init {
-        loadGardenData()
+        loadGardenDataWithCache()
         startStatusDecay()
         startThoughtBubbleCheck()
+    }
+    
+    /**
+     * Load garden data with cache-first strategy
+     */
+    private fun loadGardenDataWithCache() {
+        viewModelScope.launch {
+            val userId = authRepository.currentUser?.uid
+            if (userId == null) {
+                _uiState.update {
+                    it.copy(isLoading = false, errorMessage = "Bạn chưa đăng nhập")
+                }
+                return@launch
+            }
+            
+            // Try to load from cache first
+            val hasCached = gardenCache.hasCachedData(userId)
+            
+            if (hasCached) {
+                Log.d("GardenViewModel", "📦 Cache found! Loading from cache first...")
+                
+                try {
+                    val cachedPlant = gardenCache.getCachedPlant(userId)
+                    val cachedInventory = gardenCache.getCachedInventory(userId)
+                    val cachedGallery = gardenCache.getCachedGallery(userId)
+                    val cachedCollection = gardenCache.getCachedCollection(userId)
+                    
+                    // Show cached data immediately
+                    val plant = cachedPlant?.toPlant()
+                    val inventory = cachedInventory?.toGardenInventory() ?: createDefaultInventory()
+                    val gallery = cachedGallery?.map { it.toGalleryPlant() } ?: createDefaultGallery()
+                    val collection = cachedCollection?.map { it.toCollectedPlant() } ?: emptyList()
+                    
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            plant = plant,
+                            inventory = inventory,
+                            gallery = gallery,
+                            collection = collection,
+                            coupleId = cachedPlant?.coupleId ?: ""
+                        )
+                    }
+                    Log.d("GardenViewModel", "✅ UI updated from cache")
+                    
+                    // Refresh in background if cache is stale
+                    val isPlantFresh = gardenCache.isPlantCacheFresh(userId)
+                    val isInventoryFresh = gardenCache.isInventoryCacheFresh(userId)
+                    
+                    if (!isPlantFresh || !isInventoryFresh) {
+                        Log.d("GardenViewModel", "🔄 Cache is stale, refreshing in background...")
+                        loadGardenData(showLoading = false)
+                    }
+                    
+                    // Setup real-time listener if enabled
+                    if (plant != null && isRealTimeEnabled) {
+                        setupPlantListener(plant.id)
+                    }
+                    
+                } catch (e: Exception) {
+                    Log.e("GardenViewModel", "Error loading from cache", e)
+                    loadGardenData(showLoading = true)
+                }
+            } else {
+                Log.d("GardenViewModel", "🌐 No cache, loading from Firebase...")
+                loadGardenData(showLoading = true)
+            }
+        }
+    }
+    
+    /**
+     * Enable real-time sync when user enters Garden screen
+     * This saves battery and data by only listening when needed
+     */
+    fun enableRealTimeSync() {
+        if (isRealTimeEnabled) return
+        isRealTimeEnabled = true
+        
+        val plantId = _uiState.value.plant?.id
+        if (plantId != null) {
+            Log.d("GardenViewModel", "[GARDEN] 🔔 Enabling real-time sync for plant: $plantId")
+            setupPlantListener(plantId)
+        }
+    }
+    
+    /**
+     * Disable real-time sync when user leaves Garden screen
+     * This saves battery and data
+     */
+    fun disableRealTimeSync() {
+        if (!isRealTimeEnabled) return
+        isRealTimeEnabled = false
+        
+        Log.d("GardenViewModel", "[GARDEN] 🔕 Disabling real-time sync")
+        plantListener?.remove()
+        plantListener = null
+        currentPlantId = null
     }
 
     /**
      * Load garden data from Firebase
+     * @param showLoading Whether to show loading indicator (false for background refresh)
      */
-    private fun loadGardenData() {
-        _uiState.update { it.copy(isLoading = true) }
+    private fun loadGardenData(showLoading: Boolean = true) {
+        if (showLoading) {
+            _uiState.update { it.copy(isLoading = true) }
+        }
 
         viewModelScope.launch {
             val userId = authRepository.currentUser?.uid
@@ -159,12 +284,19 @@ class GardenViewModelFirebase : ViewModel() {
                                             )
                                         }
                                         
+                                        // Cache the loaded data
+                                        cacheGardenData(userId, plant, firebaseInventory, galleryItems, collection)
+                                        
                                         // Check for pending evolution and decay after loading
                                         if (plant != null) {
                                             // Apply any pending status decay based on time elapsed
                                             applyPendingStatusDecay(plant)
                                             // Check if plant should evolve
                                             checkPlantEvolution()
+                                            // Only setup listener if real-time sync is enabled
+                                            if (isRealTimeEnabled) {
+                                                setupPlantListener(plant.id)
+                                            }
                                         }
                                     },
                                     onFailure = { error ->
@@ -350,6 +482,79 @@ class GardenViewModelFirebase : ViewModel() {
                 }
             }
         }
+    }
+
+    /**
+     * Setup real-time listener for plant updates from partner
+     * This ensures when partner fertilizes/waters, our UI updates immediately
+     */
+    private fun setupPlantListener(plantId: String) {
+        // Don't re-register if already listening to this plant
+        if (plantId == currentPlantId && plantListener != null) {
+            Log.d("GardenViewModel", "[GARDEN] Already listening to plant: $plantId")
+            return
+        }
+        
+        // Remove previous listener if exists
+        plantListener?.remove()
+        currentPlantId = plantId
+        
+        Log.d("GardenViewModel", "[GARDEN] 👂 Setting up real-time listener for plant: $plantId")
+        
+        plantListener = Firebase.firestore.collection("garden_plants")
+            .document(plantId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("GardenViewModel", "[GARDEN] Error listening to plant", error)
+                    return@addSnapshotListener
+                }
+                
+                if (snapshot != null && snapshot.exists()) {
+                    try {
+                        val firebasePlant = snapshot.toObject(FirebaseGardenPlant::class.java)
+                        if (firebasePlant != null) {
+                            val currentUserId = authRepository.currentUser?.uid ?: ""
+                            val currentPlant = _uiState.value.plant
+                            
+                            // Only update if the change came from partner (different lastCaredByUserId)
+                            // or if fertilizer boost changed
+                            val isPartnerUpdate = firebasePlant.lastCaredByUserId != currentUserId && 
+                                                  firebasePlant.lastCaredByUserId.isNotEmpty()
+                            val hasBoostChange = currentPlant?.fertilizerBoostHours != firebasePlant.fertilizerBoostHours
+                            val hasStatusChange = currentPlant?.status?.water != firebasePlant.water ||
+                                                  currentPlant?.status?.sunlight != firebasePlant.sunlight ||
+                                                  currentPlant?.status?.health != firebasePlant.health
+                            
+                            if (isPartnerUpdate || hasBoostChange || hasStatusChange) {
+                                Log.d("GardenViewModel", "[GARDEN] 🔄 Received real-time update: " +
+                                        "water=${firebasePlant.water}, sun=${firebasePlant.sunlight}, " +
+                                        "health=${firebasePlant.health}, boost=${firebasePlant.fertilizerBoostHours}h, " +
+                                        "lastCaredBy=${firebasePlant.lastCaredByUserId}")
+                                
+                                val updatedPlant = firebasePlant.toPlant()
+                                _uiState.update { state ->
+                                    state.copy(
+                                        plant = updatedPlant,
+                                        lastPartnerCareTime = if (isPartnerUpdate) System.currentTimeMillis() else state.lastPartnerCareTime
+                                    )
+                                }
+                                
+                                // Check if plant can evolve now
+                                checkPlantEvolution()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("GardenViewModel", "[GARDEN] Error parsing plant update", e)
+                    }
+                } else if (snapshot != null && !snapshot.exists()) {
+                    // Plant was deleted (harvested or died)
+                    Log.d("GardenViewModel", "[GARDEN] Plant document deleted")
+                    _uiState.update { it.copy(plant = null) }
+                    plantListener?.remove()
+                    plantListener = null
+                    currentPlantId = null
+                }
+            }
     }
 
     /**
@@ -979,6 +1184,11 @@ class GardenViewModelFirebase : ViewModel() {
                     }
 
                     saveInventory(updatedInventory)
+                    
+                    // Setup real-time listener for the new plant only if enabled
+                    if (isRealTimeEnabled) {
+                        setupPlantListener(firebasePlant.id)
+                    }
                 },
                 onFailure = { error ->
                     _uiState.update {
@@ -1263,12 +1473,234 @@ class GardenViewModelFirebase : ViewModel() {
      * Refresh garden data
      */
     fun refreshGarden() {
-        loadGardenData()
+        // Invalidate cache and reload
+        viewModelScope.launch {
+            val userId = authRepository.currentUser?.uid
+            if (userId != null) {
+                gardenCache.invalidateCache(userId)
+            }
+            loadGardenData(showLoading = true)
+        }
+    }
+    
+    /**
+     * Cache garden data after successful Firebase load
+     */
+    private fun cacheGardenData(
+        userId: String,
+        plant: Plant?,
+        inventory: FirebaseGardenInventory?,
+        galleryItems: List<FirebaseGalleryItem>,
+        collection: List<CollectedPlant>
+    ) {
+        viewModelScope.launch {
+            try {
+                // Cache plant
+                if (plant != null) {
+                    gardenCache.cachePlant(userId, plant.toCachedPlant())
+                }
+                
+                // Cache inventory
+                if (inventory != null) {
+                    gardenCache.cacheInventory(userId, inventory.toCachedGardenInventory())
+                }
+                
+                // Cache gallery
+                val cachedGallery = galleryItems.map { it.toCachedGalleryItem() }
+                gardenCache.cacheGallery(userId, cachedGallery)
+                
+                // Cache collection
+                val cachedCollection = collection.map { it.toCachedCollectionPlant() }
+                gardenCache.cacheCollection(userId, cachedCollection)
+                
+                Log.d("GardenViewModel", "💾 Garden data cached successfully")
+            } catch (e: Exception) {
+                Log.w("GardenViewModel", "Failed to cache garden data", e)
+            }
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
         statusDecayJob?.cancel()
         thoughtBubbleJob?.cancel()
+        plantListener?.remove()
+        plantListener = null
     }
+}
+
+// ============ Cache Conversion Extension Functions ============
+
+/**
+ * Convert CachedPlant to domain Plant
+ */
+private fun CachedPlant.toPlant(): Plant {
+    val stage = when (this.stage) {
+        0 -> PlantStage.SEED
+        1 -> PlantStage.SPROUT
+        2 -> PlantStage.SEEDLING
+        3 -> PlantStage.GROWING
+        4 -> PlantStage.MATURE
+        5 -> PlantStage.BLOOMING
+        else -> PlantStage.SEED
+    }
+    
+    val rarity = when (this.rarity.lowercase()) {
+        "uncommon" -> PlantRarity.UNCOMMON
+        "rare" -> PlantRarity.RARE
+        "super_rare" -> PlantRarity.SUPER_RARE
+        else -> PlantRarity.COMMON
+    }
+    
+    val flowerColor = PlantFlowerColor.values().find { 
+        it.name.lowercase() == this.flowerColor.lowercase() 
+    } ?: PlantFlowerColor.PINK
+    
+    val plantType = PlantType.values().find {
+        it.name.lowercase() == this.plantType.lowercase()
+    } ?: PlantType.ROSE
+    
+    return Plant(
+        id = this.id,
+        name = plantType.vietnameseName,
+        stage = stage,
+        status = PlantStatus(
+            sunlight = this.sunlight,
+            water = this.water,
+            health = this.health,
+            lastUpdateTime = this.lastUpdated
+        ),
+        rarity = rarity,
+        plantType = plantType,
+        flowerColor = flowerColor,
+        fertilizerBoostHours = this.fertilizerBoostHours,
+        coupleId = this.coupleId
+    )
+}
+
+/**
+ * Convert domain Plant to CachedPlant
+ */
+private fun Plant.toCachedPlant(): CachedPlant {
+    return CachedPlant(
+        id = this.id,
+        plantType = this.plantType.name,
+        stage = this.stage.ordinal,
+        water = this.status.water,
+        sunlight = this.status.sunlight,
+        health = this.status.health,
+        flowerColor = this.flowerColor.name,
+        rarity = this.rarity.name,
+        fertilizerBoostHours = this.fertilizerBoostHours,
+        coupleId = this.coupleId,
+        lastUpdated = this.status.lastUpdateTime
+    )
+}
+
+/**
+ * Convert CachedGardenInventory to domain GardenInventory
+ */
+private fun CachedGardenInventory.toGardenInventory(): GardenInventory {
+    val items = mapOf(
+        CareItemType.WATER to createDefaultItem(CareItemType.WATER).copy(quantity = this.waterAmount),
+        CareItemType.SUNLIGHT to createDefaultItem(CareItemType.SUNLIGHT).copy(quantity = this.sunlightAmount),
+        CareItemType.FERTILIZER_4H to createDefaultItem(CareItemType.FERTILIZER_4H).copy(quantity = this.fertilizerAmount)
+    )
+    return GardenInventory(items = items)
+}
+
+/**
+ * Convert FirebaseGardenInventory to CachedGardenInventory
+ */
+private fun FirebaseGardenInventory.toCachedGardenInventory(): CachedGardenInventory {
+    return CachedGardenInventory(
+        waterAmount = this.wateringCan,
+        sunlightAmount = this.sunlightBottle,
+        fertilizerAmount = this.fertilizer4h + this.fertilizer8h + this.fertilizer12h,
+        seeds = listOf()
+    )
+}
+
+/**
+ * Convert CachedGalleryItem to domain GalleryPlant
+ */
+private fun CachedGalleryItem.toGalleryPlant(): GalleryPlant {
+    val flowerColor = PlantFlowerColor.values().find { 
+        it.name.lowercase() == this.flowerColor.lowercase() 
+    } ?: PlantFlowerColor.PINK
+    
+    val rarity = when (this.rarity.lowercase()) {
+        "uncommon" -> PlantRarity.UNCOMMON
+        "rare" -> PlantRarity.RARE
+        "super_rare" -> PlantRarity.SUPER_RARE
+        else -> PlantRarity.COMMON
+    }
+    
+    val plantType = PlantType.values().find {
+        it.name.lowercase() == this.plantType.lowercase()
+    } ?: PlantType.ROSE
+    
+    return GalleryPlant(
+        id = this.id,
+        flowerColor = flowerColor,
+        rarity = rarity,
+        plantType = plantType,
+        isUnlocked = this.isUnlocked,
+        unlockedAt = this.unlockedDate
+    )
+}
+
+/**
+ * Convert FirebaseGalleryItem to CachedGalleryItem
+ */
+private fun FirebaseGalleryItem.toCachedGalleryItem(): CachedGalleryItem {
+    return CachedGalleryItem(
+        id = this.id,
+        flowerColor = this.flowerColor,
+        rarity = this.rarity,
+        plantType = this.plantType,
+        isUnlocked = this.isUnlocked,
+        unlockedDate = this.unlockedDate?.time
+    )
+}
+
+/**
+ * Convert CachedCollectionPlant to domain CollectedPlant
+ */
+private fun CachedCollectionPlant.toCollectedPlant(): CollectedPlant {
+    val plantType = PlantType.values().find {
+        it.name.lowercase() == this.plantType.lowercase()
+    } ?: PlantType.ROSE
+    
+    val flowerColor = PlantFlowerColor.values().find { 
+        it.name.lowercase() == this.flowerColor.lowercase() 
+    } ?: PlantFlowerColor.PINK
+    
+    val rarity = when (this.rarity.lowercase()) {
+        "uncommon" -> PlantRarity.UNCOMMON
+        "rare" -> PlantRarity.RARE
+        "super_rare" -> PlantRarity.SUPER_RARE
+        else -> PlantRarity.COMMON
+    }
+    
+    return CollectedPlant(
+        id = this.id,
+        plantType = plantType,
+        flowerColor = flowerColor,
+        rarity = rarity,
+        unlockedAt = this.harvestedAt
+    )
+}
+
+/**
+ * Convert domain CollectedPlant to CachedCollectionPlant
+ */
+private fun CollectedPlant.toCachedCollectionPlant(): CachedCollectionPlant {
+    return CachedCollectionPlant(
+        id = this.id,
+        plantType = this.plantType.name,
+        flowerColor = this.flowerColor.name,
+        rarity = this.rarity.name,
+        harvestedAt = this.unlockedAt
+    )
 }

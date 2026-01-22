@@ -22,9 +22,12 @@ import com.example.coupleapp.data.local.entity.*
         PartnerSleepEntity::class,
         PartnerLocationEntity::class,
         PartnerPhotoEntity::class,
-        SyncMetadataEntity::class
+        SyncMetadataEntity::class,
+        MissingEntity::class,
+        MissingSummaryEntity::class,
+        MissingUserProfileEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class CoupleAppDatabase : RoomDatabase() {
@@ -33,6 +36,7 @@ abstract class CoupleAppDatabase : RoomDatabase() {
     abstract fun partnerLocationDao(): PartnerLocationDao
     abstract fun partnerPhotoDao(): PartnerPhotoDao
     abstract fun syncMetadataDao(): SyncMetadataDao
+    abstract fun missingDao(): MissingDao
     
     companion object {
         private const val DATABASE_NAME = "couple_app_database"

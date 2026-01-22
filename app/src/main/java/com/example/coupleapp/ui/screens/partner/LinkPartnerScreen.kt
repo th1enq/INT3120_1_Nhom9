@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import com.example.coupleapp.R
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.data.model.FirebaseUser
+import com.example.coupleapp.ui.components.home.BottomNavItem
+import com.example.coupleapp.ui.components.home.CoupleBottomNavigation
 import com.example.coupleapp.ui.theme.*
 import com.example.coupleapp.viewmodel.LinkPartnerViewModel
 import kotlinx.coroutines.delay
@@ -49,6 +51,10 @@ import kotlinx.coroutines.delay
 fun LinkPartnerScreen(
     onBackClick: () -> Unit,
     onLinkSuccess: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToPartnerHub: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     viewModel: LinkPartnerViewModel = viewModel()
 ) {
     val linkCode by viewModel.linkCode.collectAsState()
@@ -61,6 +67,17 @@ fun LinkPartnerScreen(
     
     val clipboardManager = LocalClipboardManager.current
     var showCopiedMessage by remember { mutableStateOf(false) }
+    var selectedBottomNavItem by remember { mutableStateOf(BottomNavItem.FRIENDS) }
+    
+    // Handle bottom navigation
+    LaunchedEffect(selectedBottomNavItem) {
+        when (selectedBottomNavItem) {
+            BottomNavItem.HOME -> onNavigateToHome()
+            BottomNavItem.FRIENDS -> { /* Already on partner screen */ }
+            BottomNavItem.ACTIVITIES -> onNavigateToMoments()
+            BottomNavItem.PROFILE -> onNavigateToProfile()
+        }
+    }
     
     // Animation khi gửi yêu cầu thành công
     LaunchedEffect(requestSent) {
@@ -78,24 +95,34 @@ fun LinkPartnerScreen(
         }
     }
     
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF5F8),
-                        Color(0xFFFFFBF5),
-                        Color(0xFFFFFAF0)
-                    )
-                )
+    Scaffold(
+        bottomBar = {
+            CoupleBottomNavigation(
+                selectedItem = selectedBottomNavItem,
+                onItemSelected = { selectedBottomNavItem = it }
             )
-    ) {
-        Column(
+        },
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .padding(paddingValues)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFFF5F8),
+                            Color(0xFFFFFBF5),
+                            Color(0xFFFFFAF0)
+                        )
+                    )
+                )
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
             // Header
             LinkPartnerHeader(onBackClick = onBackClick)
             
@@ -199,6 +226,7 @@ fun LinkPartnerScreen(
                     )
                 }
             }
+        }
         }
     }
 }

@@ -69,7 +69,7 @@ class PartnerRepository {
      * Tìm người dùng bằng link code
      */
     suspend fun findUserByLinkCode(linkCode: String): Result<PartnerUser?> {
-        delay(1000) // Simulate network delay
+        delay(200) // Mock network delay
         
         // Mock: Tìm theo link code
         return if (linkCode.uppercase() == "XYZ789") {
@@ -101,7 +101,7 @@ class PartnerRepository {
      * Gửi yêu cầu liên kết
      */
     suspend fun sendLinkRequest(targetUserId: String, message: String = ""): Result<LinkRequest> {
-        delay(800)
+        delay(200) // Mock network delay
         
         val currentUser = _currentUser.value
         val request = LinkRequest(
@@ -124,7 +124,7 @@ class PartnerRepository {
      * Chấp nhận yêu cầu liên kết
      */
     suspend fun acceptLinkRequest(requestId: String): Result<Boolean> {
-        delay(500)
+        delay(100) // Mock network delay
         
         val request = _pendingLinkRequest.value
         if (request != null && request.id == requestId) {
@@ -144,7 +144,7 @@ class PartnerRepository {
      * Từ chối yêu cầu liên kết
      */
     suspend fun rejectLinkRequest(requestId: String): Result<Boolean> {
-        delay(500)
+        delay(100) // Mock network delay
         
         _pendingLinkRequest.value = null
         _linkStatus.value = LinkStatus.NOT_LINKED
@@ -156,7 +156,7 @@ class PartnerRepository {
      * Hủy liên kết với partner
      */
     suspend fun unlinkPartner(): Result<Boolean> {
-        delay(500)
+        delay(100) // Mock network delay
         
         _partner.value = null
         _linkStatus.value = LinkStatus.NOT_LINKED

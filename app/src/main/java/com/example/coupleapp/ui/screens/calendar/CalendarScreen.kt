@@ -45,7 +45,7 @@ fun CalendarScreen(
             visible = false
         } else {
             if (!visible) {
-                kotlinx.coroutines.delay(300)
+                kotlinx.coroutines.delay(100)  // Minimal delay for smooth animation
                 visible = true
             }
         }

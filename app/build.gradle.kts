@@ -132,6 +132,9 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     
+    // Gson for JSON serialization (caching)
+    implementation("com.google.code.gson:gson:2.10.1")
+    
     // Hilt for Dependency Injection
     implementation("com.google.dagger:hilt-android:2.51.1")
     ksp("com.google.dagger:hilt-android-compiler:2.51.1")

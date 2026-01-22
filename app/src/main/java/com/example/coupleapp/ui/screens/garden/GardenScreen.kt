@@ -41,6 +41,15 @@ fun GardenScreen(
     var showBloomCelebration by remember { mutableStateOf(false) }
     var isItemAnimating by remember { mutableStateOf(false) }
 
+    // Enable real-time sync when entering garden, disable when leaving
+    // This saves battery and data by only listening when user is viewing
+    DisposableEffect(Unit) {
+        viewModel.enableRealTimeSync()
+        onDispose {
+            viewModel.disableRealTimeSync()
+        }
+    }
+
     // Check for plant death
     LaunchedEffect(uiState.plant?.status?.isDead) {
         if (uiState.plant?.status?.isDead == true) {

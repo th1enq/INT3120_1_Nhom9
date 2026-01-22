@@ -1,10 +1,12 @@
 package com.example.coupleapp.viewmodel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.FirebaseSleepRecord
+import com.example.coupleapp.data.repository.SleepCacheRepository
 import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -21,7 +23,11 @@ import java.time.ZoneId
 /**
  * ViewModel for Sleep Calendar History Screen
  * Manages calendar state, date selection, and sleep records
- * Uses SleepFirebaseRepository to fetch real data from Firestore
+ * 
+ * Uses Cache-First Strategy:
+ * 1. On init: Load cached data immediately (instant UI)
+ * 2. Background refresh: Load fresh data from Firebase
+ * 3. Cache duration: 30 minutes for history data
  */
 class SleepCalendarViewModel(
     private val userId: String,
@@ -29,18 +35,133 @@ class SleepCalendarViewModel(
 ) : ViewModel() {
     
     private val firebaseRepository = SleepFirebaseRepository(context)
+    private val sleepCache = context?.let { SleepCacheRepository.getInstance(it) }
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+    
+    companion object {
+        private const val TAG = "SleepCalendarVM"
+    }
     
     private val _uiState = MutableStateFlow(SleepCalendarUiState())
     val uiState: StateFlow<SleepCalendarUiState> = _uiState.asStateFlow()
     
     init {
-        loadCalendarData()
+        loadCalendarDataWithCache()
     }
     
     /**
-     * Load calendar data from Firebase
+     * Load calendar data with cache-first strategy
+     */
+    private fun loadCalendarDataWithCache() {
+        viewModelScope.launch {
+            try {
+                // Get user name first
+                val userName = getUserName(userId)
+                _uiState.update { it.copy(userName = userName) }
+                
+                // Try to load from cache first
+                val cachedHistory = sleepCache?.getCachedHistory(userId)
+                val isCacheFresh = sleepCache?.isHistoryCacheFresh(userId) == true
+                
+                if (cachedHistory != null && cachedHistory.isNotEmpty()) {
+                    Log.d(TAG, "📦 Cache found! ${cachedHistory.size} records")
+                    
+                    // Deduplicate cached history
+                    val deduplicatedHistory = deduplicateHistory(cachedHistory)
+                    
+                    // Show cached data immediately
+                    _uiState.update { 
+                        it.copy(
+                            isLoading = false,
+                            sleepHistory = deduplicatedHistory,
+                            currentMonth = YearMonth.now()
+                        ) 
+                    }
+                    
+                    // Refresh in background if cache is stale
+                    if (!isCacheFresh) {
+                        Log.d(TAG, "🔄 Cache is stale, refreshing in background...")
+                        loadAndCacheFromFirebase(showLoading = false)
+                    } else {
+                        Log.d(TAG, "✅ Cache is fresh, no refresh needed")
+                    }
+                } else {
+                    Log.d(TAG, "🌐 No cache, loading from Firebase...")
+                    _uiState.update { it.copy(isLoading = true) }
+                    loadAndCacheFromFirebase(showLoading = true)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in loadCalendarDataWithCache", e)
+                _uiState.update { it.copy(isLoading = true) }
+                loadCalendarData()
+            }
+        }
+    }
+    
+    /**
+     * Load from Firebase and update cache
+     */
+    private suspend fun loadAndCacheFromFirebase(showLoading: Boolean) {
+        try {
+            if (showLoading) {
+                _uiState.update { it.copy(isLoading = true) }
+            }
+            
+            val historyResult = firebaseRepository.getSleepHistory(userId, days = 90)
+            val rawSleepHistory = historyResult.getOrElse { emptyList() }
+            
+            // Cache the history
+            if (rawSleepHistory.isNotEmpty()) {
+                sleepCache?.cacheHistory(userId, rawSleepHistory)
+                Log.d(TAG, "📦 Cached ${rawSleepHistory.size} records for user: $userId")
+            }
+            
+            // Deduplicate
+            val sleepHistory = deduplicateHistory(rawSleepHistory)
+            
+            _uiState.update { 
+                it.copy(
+                    isLoading = false,
+                    sleepHistory = sleepHistory,
+                    currentMonth = YearMonth.now(),
+                    errorMessage = null
+                ) 
+            }
+            Log.d(TAG, "✅ Loaded and cached ${sleepHistory.size} records from Firebase")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading from Firebase", e)
+            _uiState.update { 
+                it.copy(
+                    isLoading = false, 
+                    errorMessage = "Unable to load history. Please try again."
+                ) 
+            }
+        }
+    }
+    
+    /**
+     * Deduplicate history by date
+     */
+    private fun deduplicateHistory(history: List<FirebaseSleepRecord>): List<FirebaseSleepRecord> {
+        return history
+            .groupBy { record ->
+                record.date?.let { timestamp ->
+                    timestamp.toDate().toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate()
+                }
+            }
+            .mapValues { (_, records) ->
+                records.maxByOrNull { it.createdAt ?: com.google.firebase.Timestamp.now() }
+            }
+            .values
+            .filterNotNull()
+    }
+    
+    /**
+     * Load calendar data from Firebase (fallback)
      */
     private fun loadCalendarData() {
         _uiState.update { it.copy(isLoading = true) }
@@ -54,21 +175,8 @@ class SleepCalendarViewModel(
                 val historyResult = firebaseRepository.getSleepHistory(userId, days = 90)
                 val rawSleepHistory = historyResult.getOrElse { emptyList() }
                 
-                // Deduplicate by date - keep only the most recent record for each date
-                val sleepHistory = rawSleepHistory
-                    .groupBy { record ->
-                        record.date?.let { timestamp ->
-                            timestamp.toDate().toInstant()
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate()
-                        }
-                    }
-                    .mapValues { (_, records) ->
-                        // Keep the most recent record (by createdAt timestamp)
-                        records.maxByOrNull { it.createdAt ?: com.google.firebase.Timestamp.now() }
-                    }
-                    .values
-                    .filterNotNull()
+                // Deduplicate by date
+                val sleepHistory = deduplicateHistory(rawSleepHistory)
                 
                 val currentMonth = YearMonth.now()
                 
@@ -133,16 +241,26 @@ class SleepCalendarViewModel(
     }
     
     /**
-     * Refresh calendar data from Firebase
+     * Refresh calendar data from Firebase (force refresh)
      */
     fun refreshData() {
         _uiState.update { it.copy(isRefreshing = true) }
         
         viewModelScope.launch {
             try {
+                // Invalidate cache first
+                sleepCache?.invalidateCache(userId)
+                
                 // Reload sleep history from Firebase
                 val historyResult = firebaseRepository.getSleepHistory(userId, days = 90)
-                val sleepHistory = historyResult.getOrElse { emptyList() }
+                val rawSleepHistory = historyResult.getOrElse { emptyList() }
+                
+                // Cache the new data
+                if (rawSleepHistory.isNotEmpty()) {
+                    sleepCache?.cacheHistory(userId, rawSleepHistory)
+                }
+                
+                val sleepHistory = deduplicateHistory(rawSleepHistory)
                 
                 _uiState.update { 
                     it.copy(
@@ -151,8 +269,10 @@ class SleepCalendarViewModel(
                         errorMessage = null
                     ) 
                 }
+                Log.d(TAG, "✅ Refreshed and cached ${sleepHistory.size} records")
                 
             } catch (e: Exception) {
+                Log.e(TAG, "Error refreshing data", e)
                 _uiState.update { 
                     it.copy(
                         isRefreshing = false, 

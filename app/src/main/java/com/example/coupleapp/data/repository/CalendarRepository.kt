@@ -1,7 +1,6 @@
 package com.example.coupleapp.data.repository
 
 import com.example.coupleapp.data.model.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,7 +99,6 @@ class CalendarRepository {
      * Add new anniversary
      */
     suspend fun addAnniversary(anniversary: Anniversary) {
-        delay(100) // Simulate database operation
         val currentList = _anniversaries.value.toMutableList()
         currentList.add(anniversary)
         _anniversaries.value = currentList.sortedBy { it.date }
@@ -110,7 +108,6 @@ class CalendarRepository {
      * Update existing anniversary
      */
     suspend fun updateAnniversary(anniversary: Anniversary) {
-        delay(100) // Simulate database operation
         val currentList = _anniversaries.value.toMutableList()
         val index = currentList.indexOfFirst { it.id == anniversary.id }
         if (index != -1) {
@@ -123,7 +120,6 @@ class CalendarRepository {
      * Delete anniversary
      */
     suspend fun deleteAnniversary(anniversaryId: String) {
-        delay(100) // Simulate database operation
         val currentList = _anniversaries.value.toMutableList()
         currentList.removeAll { it.id == anniversaryId }
         _anniversaries.value = currentList
@@ -133,7 +129,6 @@ class CalendarRepository {
      * Update couple profile
      */
     suspend fun updateCoupleProfile(profile: CoupleProfile) {
-        delay(100) // Simulate database operation
         _coupleProfile.value = profile
     }
     
@@ -141,7 +136,6 @@ class CalendarRepository {
      * Update user profile (nickname, avatar, etc.)
      */
     suspend fun updateUserProfile(userId: String, updatedProfile: CalendarUserProfile) {
-        delay(100) // Simulate database operation
         val currentProfile = _coupleProfile.value
         val newProfile = when (userId) {
             currentProfile.user1.id -> currentProfile.copy(user1 = updatedProfile)
@@ -155,7 +149,6 @@ class CalendarRepository {
      * Update calendar settings
      */
     suspend fun updateSettings(settings: CalendarSettings) {
-        delay(100) // Simulate database operation
         _settings.value = settings
     }
     
@@ -163,7 +156,6 @@ class CalendarRepository {
      * Update background image
      */
     suspend fun updateBackgroundImage(imageUrl: String) {
-        delay(100) // Simulate database operation
         val currentProfile = _coupleProfile.value
         _coupleProfile.value = currentProfile.copy(backgroundImageUrl = imageUrl)
     }

@@ -1,10 +1,13 @@
 package com.example.coupleapp.ui.screens.profile
 
+import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -14,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.example.coupleapp.R
@@ -23,6 +27,7 @@ import kotlinx.coroutines.delay
 
 /**
  * Notification Settings Screen - Allows user to manage notification preferences
+ * Settings are persisted to SharedPreferences
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,17 +35,25 @@ fun NotificationSettingsScreen(
     onBackClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("notification_prefs", Context.MODE_PRIVATE) }
     var visible by remember { mutableStateOf(false) }
     
-    // Notification settings
-    var pushEnabled by remember { mutableStateOf(true) }
-    var locketNotifications by remember { mutableStateOf(true) }
-    var missingNotifications by remember { mutableStateOf(true) }
-    var questNotifications by remember { mutableStateOf(true) }
-    var calendarReminders by remember { mutableStateOf(true) }
-    var sleepReminders by remember { mutableStateOf(false) }
-    var soundEnabled by remember { mutableStateOf(true) }
-    var vibrationEnabled by remember { mutableStateOf(true) }
+    // Load notification settings from SharedPreferences
+    var pushEnabled by remember { mutableStateOf(prefs.getBoolean("push_enabled", true)) }
+    var locketNotifications by remember { mutableStateOf(prefs.getBoolean("locket_notifications", true)) }
+    var missingNotifications by remember { mutableStateOf(prefs.getBoolean("missing_notifications", true)) }
+    var questNotifications by remember { mutableStateOf(prefs.getBoolean("quest_notifications", true)) }
+    var calendarReminders by remember { mutableStateOf(prefs.getBoolean("calendar_reminders", true)) }
+    var sleepReminders by remember { mutableStateOf(prefs.getBoolean("sleep_reminders", true)) }
+    var gardenNotifications by remember { mutableStateOf(prefs.getBoolean("garden_notifications", true)) }
+    var soundEnabled by remember { mutableStateOf(prefs.getBoolean("sound_enabled", true)) }
+    var vibrationEnabled by remember { mutableStateOf(prefs.getBoolean("vibration_enabled", true)) }
+    
+    // Helper function to save preferences
+    fun savePreference(key: String, value: Boolean) {
+        prefs.edit().putBoolean(key, value).apply()
+    }
     
     LaunchedEffect(Unit) {
         delay(100)
@@ -90,6 +103,7 @@ fun NotificationSettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
@@ -119,7 +133,10 @@ fun NotificationSettingsScreen(
                                     title = "Push Notifications",
                                     subtitle = "Receive notifications on your device",
                                     checked = pushEnabled,
-                                    onCheckedChange = { pushEnabled = it }
+                                    onCheckedChange = { 
+                                        pushEnabled = it
+                                        savePreference("push_enabled", it)
+                                    }
                                 )
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
@@ -127,7 +144,10 @@ fun NotificationSettingsScreen(
                                     title = "Sound",
                                     subtitle = "Play sound for notifications",
                                     checked = soundEnabled,
-                                    onCheckedChange = { soundEnabled = it },
+                                    onCheckedChange = { 
+                                        soundEnabled = it
+                                        savePreference("sound_enabled", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
@@ -136,7 +156,10 @@ fun NotificationSettingsScreen(
                                     title = "Vibration",
                                     subtitle = "Vibrate for notifications",
                                     checked = vibrationEnabled,
-                                    onCheckedChange = { vibrationEnabled = it },
+                                    onCheckedChange = { 
+                                        vibrationEnabled = it
+                                        savePreference("vibration_enabled", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                             }
@@ -170,7 +193,10 @@ fun NotificationSettingsScreen(
                                     title = "Locket",
                                     subtitle = "When partner sends a locket",
                                     checked = locketNotifications,
-                                    onCheckedChange = { locketNotifications = it },
+                                    onCheckedChange = { 
+                                        locketNotifications = it
+                                        savePreference("locket_notifications", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
@@ -179,7 +205,22 @@ fun NotificationSettingsScreen(
                                     title = "Missing",
                                     subtitle = "When partner sends a miss",
                                     checked = missingNotifications,
-                                    onCheckedChange = { missingNotifications = it },
+                                    onCheckedChange = { 
+                                        missingNotifications = it
+                                        savePreference("missing_notifications", it)
+                                    },
+                                    enabled = pushEnabled
+                                )
+                                HorizontalDivider(color = Color(0xFFF0F0F0))
+                                NotificationToggleItem(
+                                    icon = Icons.Filled.Grass,
+                                    title = "Garden",
+                                    subtitle = "When partner cares for plant",
+                                    checked = gardenNotifications,
+                                    onCheckedChange = { 
+                                        gardenNotifications = it
+                                        savePreference("garden_notifications", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
@@ -188,7 +229,10 @@ fun NotificationSettingsScreen(
                                     title = "Quests",
                                     subtitle = "Daily quest reminders",
                                     checked = questNotifications,
-                                    onCheckedChange = { questNotifications = it },
+                                    onCheckedChange = { 
+                                        questNotifications = it
+                                        savePreference("quest_notifications", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
@@ -197,7 +241,10 @@ fun NotificationSettingsScreen(
                                     title = "Calendar",
                                     subtitle = "Anniversary and event reminders",
                                     checked = calendarReminders,
-                                    onCheckedChange = { calendarReminders = it },
+                                    onCheckedChange = { 
+                                        calendarReminders = it
+                                        savePreference("calendar_reminders", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
@@ -206,13 +253,18 @@ fun NotificationSettingsScreen(
                                     title = "Sleep Reminders",
                                     subtitle = "Bedtime and wake-up reminders",
                                     checked = sleepReminders,
-                                    onCheckedChange = { sleepReminders = it },
+                                    onCheckedChange = { 
+                                        sleepReminders = it
+                                        savePreference("sleep_reminders", it)
+                                    },
                                     enabled = pushEnabled
                                 )
                             }
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -267,5 +319,57 @@ private fun NotificationToggleItem(
                 uncheckedTrackColor = Color(0xFFE0E0E0)
             )
         )
+    }
+}
+
+/**
+ * Helper object to check notification settings throughout the app
+ */
+object NotificationPreferences {
+    private const val PREFS_NAME = "notification_prefs"
+    
+    fun isPushEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("push_enabled", true)
+    }
+    
+    fun isLocketNotificationEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("locket_notifications", true)
+    }
+    
+    fun isMissingNotificationEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("missing_notifications", true)
+    }
+    
+    fun isGardenNotificationEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("garden_notifications", true)
+    }
+    
+    fun isQuestNotificationEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("quest_notifications", true)
+    }
+    
+    fun isCalendarReminderEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("calendar_reminders", true)
+    }
+    
+    fun isSleepReminderEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("sleep_reminders", true)
+    }
+    
+    fun isSoundEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("sound_enabled", true)
+    }
+    
+    fun isVibrationEnabled(context: Context): Boolean {
+        return isPushEnabled(context) && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("vibration_enabled", true)
     }
 }
