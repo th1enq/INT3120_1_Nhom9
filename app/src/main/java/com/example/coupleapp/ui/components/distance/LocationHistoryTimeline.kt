@@ -5,6 +5,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,11 +45,13 @@ import java.time.temporal.ChronoUnit
  * - Date on the LEFT column with vertical dotted line separator
  * - Location cards on the RIGHT
  * - Days separated by dotted vertical lines
+ * - Click on location card to navigate to that location on map
  */
 @Composable
 fun LocationHistoryTimeline(
     locationHistory: List<LocationHistory>,
     userName: String,
+    onLocationClick: (LocationHistory) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Group locations by date for better organization
@@ -99,7 +102,8 @@ fun LocationHistoryTimeline(
                         DateSection(
                             date = date,
                             locations = locations,
-                            showTopDottedLine = !isFirstDate
+                            showTopDottedLine = !isFirstDate,
+                            onLocationClick = onLocationClick
                         )
                         isFirstDate = false
                     }
@@ -169,7 +173,8 @@ private fun EmptyHistoryState() {
 private fun DateSection(
     date: LocalDate,
     locations: List<LocationHistory>,
-    showTopDottedLine: Boolean
+    showTopDottedLine: Boolean,
+    onLocationClick: (LocationHistory) -> Unit = {}
 ) {
     val today = LocalDate.now()
     val yesterday = today.minusDays(1)
@@ -252,7 +257,8 @@ private fun DateSection(
                 locations.forEachIndexed { index, location ->
                     LocationCard(
                         location = location,
-                        animationDelay = index * 80
+                        animationDelay = index * 80,
+                        onClick = { onLocationClick(location) }
                     )
                 }
             }
@@ -325,11 +331,13 @@ private fun VerticalTimelineLine(itemCount: Int) {
 
 /**
  * Beautiful location card with time, place name, address and duration
+ * Click to navigate to this location on the map
  */
 @Composable
 private fun LocationCard(
     location: LocationHistory,
-    animationDelay: Int
+    animationDelay: Int,
+    onClick: () -> Unit = {}
 ) {
     var visible by remember { mutableStateOf(false) }
     
@@ -343,7 +351,9 @@ private fun LocationCard(
         enter = fadeIn(tween(300)) + slideInHorizontally(tween(300)) { it / 4 }
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
             shape = RoundedCornerShape(16.dp),
             color = Color.White,
             shadowElevation = 2.dp

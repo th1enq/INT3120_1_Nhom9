@@ -828,6 +828,8 @@ class SleepTrackerViewModelFirebase(
     
     /**
      * Check Google Sleep API status from SharedPreferences
+     * Also auto-enables Google Sleep API if user has Activity Recognition permission
+     * but hasn't explicitly enabled it yet (as fallback for manual tracking)
      */
     private fun checkGoogleSleepApiStatus() {
         viewModelScope.launch {
@@ -836,22 +838,44 @@ class SleepTrackerViewModelFirebase(
                 val savedEnabled = prefs?.getBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, false) ?: false
                 // Also verify PendingIntent exists
                 val isRegistered = googleSleepApiManager?.isSleepTrackingRegistered() ?: false
+                // Check if has permission
+                val hasPermission = googleSleepApiManager?.hasActivityRecognitionPermission() ?: false
                 
-                // If saved as enabled but not registered, try to re-register
-                if (savedEnabled && !isRegistered) {
-                    Log.d(TAG, "checkGoogleSleepApiStatus: Re-registering Google Sleep API")
-                    val result = googleSleepApiManager?.registerSleepUpdates()
-                    if (result?.isSuccess == true) {
-                        _uiState.update { it.copy(isGoogleSleepApiEnabled = true) }
-                        Log.d(TAG, "checkGoogleSleepApiStatus: Re-registration successful")
-                    } else {
-                        // Registration failed, update preference
-                        prefs?.edit()?.putBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, false)?.apply()
-                        _uiState.update { it.copy(isGoogleSleepApiEnabled = false) }
-                        Log.w(TAG, "checkGoogleSleepApiStatus: Re-registration failed")
+                Log.d(TAG, "checkGoogleSleepApiStatus: savedEnabled=$savedEnabled, isRegistered=$isRegistered, hasPermission=$hasPermission")
+                
+                when {
+                    // Case 1: Saved as enabled but not registered -> re-register
+                    savedEnabled && !isRegistered -> {
+                        Log.d(TAG, "checkGoogleSleepApiStatus: Re-registering Google Sleep API")
+                        val result = googleSleepApiManager?.registerSleepUpdates()
+                        if (result?.isSuccess == true) {
+                            _uiState.update { it.copy(isGoogleSleepApiEnabled = true) }
+                            Log.d(TAG, "checkGoogleSleepApiStatus: Re-registration successful")
+                        } else {
+                            // Registration failed, update preference
+                            prefs?.edit()?.putBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, false)?.apply()
+                            _uiState.update { it.copy(isGoogleSleepApiEnabled = false) }
+                            Log.w(TAG, "checkGoogleSleepApiStatus: Re-registration failed")
+                        }
                     }
-                } else {
-                    _uiState.update { it.copy(isGoogleSleepApiEnabled = savedEnabled && isRegistered) }
+                    
+                    // Case 2: Has permission but not enabled -> auto-enable as fallback
+                    hasPermission && !isRegistered && !savedEnabled -> {
+                        Log.d(TAG, "checkGoogleSleepApiStatus: Auto-enabling Google Sleep API as fallback")
+                        val result = googleSleepApiManager?.registerSleepUpdates()
+                        if (result?.isSuccess == true) {
+                            prefs?.edit()?.putBoolean(PREF_GOOGLE_SLEEP_API_ENABLED, true)?.apply()
+                            _uiState.update { it.copy(isGoogleSleepApiEnabled = true) }
+                            Log.d(TAG, "checkGoogleSleepApiStatus: Auto-enable successful")
+                        } else {
+                            Log.w(TAG, "checkGoogleSleepApiStatus: Auto-enable failed")
+                        }
+                    }
+                    
+                    // Case 3: Already registered
+                    else -> {
+                        _uiState.update { it.copy(isGoogleSleepApiEnabled = savedEnabled && isRegistered) }
+                    }
                 }
                 
                 Log.d(TAG, "checkGoogleSleepApiStatus: Google Sleep API enabled = ${_uiState.value.isGoogleSleepApiEnabled}")

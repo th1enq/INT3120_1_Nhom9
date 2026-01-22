@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -77,6 +79,10 @@ class UnifiedFCMService : FirebaseMessagingService() {
         private const val NOTIFICATION_ID_MESSAGE = 2001
         private const val NOTIFICATION_ID_MISSING = 2002
         private const val NOTIFICATION_ID_LOCKET = 2003
+        
+        // Deduplication: Track recently shown notifications
+        private val recentNotifications = mutableMapOf<String, Long>()
+        private const val NOTIFICATION_DEDUP_WINDOW_MS = 5000L // 5 seconds window
         
         // Data payload keys
         private const val KEY_TYPE = "type"
@@ -320,7 +326,7 @@ class UnifiedFCMService : FirebaseMessagingService() {
     }
 
     /**
-     * Show local notification.
+     * Show local notification with deduplication.
      */
     private fun showNotification(
         title: String,
@@ -328,6 +334,24 @@ class UnifiedFCMService : FirebaseMessagingService() {
         type: String,
         notificationId: Int = NOTIFICATION_ID_MESSAGE
     ) {
+        // ========== DEDUPLICATION CHECK ==========
+        val dedupKey = "${type}_notification"
+        val currentTime = System.currentTimeMillis()
+        
+        synchronized(recentNotifications) {
+            val lastShownTime = recentNotifications[dedupKey] ?: 0L
+            if (currentTime - lastShownTime < NOTIFICATION_DEDUP_WINDOW_MS) {
+                Log.d(TAG, "⚠️ Skipping duplicate notification: $dedupKey (shown ${currentTime - lastShownTime}ms ago)")
+                return
+            }
+            
+            // Record this notification
+            recentNotifications[dedupKey] = currentTime
+            
+            // Cleanup old entries
+            recentNotifications.entries.removeIf { currentTime - it.value > 30000L }
+        }
+        
         val channelId = when (type) {
             TYPE_MESSAGE -> CHANNEL_ID_MESSAGES
             TYPE_MISSING -> CHANNEL_ID_MISSING
@@ -361,6 +385,8 @@ class UnifiedFCMService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
             .build()
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -375,13 +401,24 @@ class UnifiedFCMService : FirebaseMessagingService() {
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(NotificationManager::class.java)
+            
+            // Audio attributes for notification sound
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            
+            val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
             // Messages channel
             notificationManager.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID_MESSAGES, CHANNEL_NAME_MESSAGES, NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Thông báo tin nhắn mới từ người yêu"
                     enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 100, 250)
                     enableLights(true)
+                    lightColor = 0xFFFF69B4.toInt() // Pink
+                    setSound(defaultSoundUri, audioAttributes)
                 }
             )
 
@@ -390,7 +427,10 @@ class UnifiedFCMService : FirebaseMessagingService() {
                 NotificationChannel(CHANNEL_ID_MISSING, CHANNEL_NAME_MISSING, NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Thông báo khi người yêu nhớ bạn"
                     enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 300, 200, 300) // Heartbeat pattern
                     enableLights(true)
+                    lightColor = 0xFFFF69B4.toInt() // Pink
+                    setSound(defaultSoundUri, audioAttributes)
                 }
             )
 
@@ -399,7 +439,10 @@ class UnifiedFCMService : FirebaseMessagingService() {
                 NotificationChannel(CHANNEL_ID_LOCKET, CHANNEL_NAME_LOCKET, NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Thông báo ảnh Locket mới"
                     enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 100, 250)
                     enableLights(true)
+                    lightColor = 0xFF9C27B0.toInt() // Purple
+                    setSound(defaultSoundUri, audioAttributes)
                 }
             )
 

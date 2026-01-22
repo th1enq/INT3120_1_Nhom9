@@ -31,6 +31,12 @@ class MissingViewModelFirebase : ViewModel() {
 
     private var loadDataJob: Job? = null
     private var animationJob: Job? = null
+    private var sendJob: Job? = null
+    
+    // Debounce mechanism for rapid clicks
+    private var pendingApiCount = 0
+    private var lastApiCallTime = 0L
+    private val API_DEBOUNCE_MS = 500L // Wait 500ms after last click before calling API
 
     init {
         Log.d(TAG, "MissingViewModelFirebase initialized")
@@ -349,65 +355,77 @@ class MissingViewModelFirebase : ViewModel() {
 
     /**
      * Send a missing signal to partner
-     * Uses OPTIMISTIC UPDATE for smooth UI:
-     * 1. Update UI immediately (pendingHearts + 1)
-     * 2. Send to API in background
-     * 3. On success: confirm by loading real data
-     * 4. On error: rollback pendingHearts
+     * Uses OPTIMISTIC UPDATE with DEBOUNCE for smooth UI:
+     * 1. Update UI IMMEDIATELY on every click (no waiting)
+     * 2. Batch multiple rapid clicks into single API call (debounce 500ms)
+     * 3. On success: sync with server data
+     * 4. On error: rollback only the failed batch
      */
     fun sendMissing() {
-        animationJob?.cancel()
-        
-        // ========== OPTIMISTIC UPDATE ==========
-        // Update UI IMMEDIATELY before API call
+        // ========== IMMEDIATE UI UPDATE ==========
+        // Update UI INSTANTLY - no waiting for anything
         val currentMyCount = _uiState.value.myTodayCount.todayCount
-        val newOptimisticCount = currentMyCount + _uiState.value.pendingHearts + 1
+        val newCount = currentMyCount + 1
         val partnerCount = _uiState.value.partnerTodayCount.todayCount
         
-        // Calculate if streak should be active after this send
-        val willHaveSentToday = true // We're sending now
-        val partnerHasSentToday = partnerCount > 0
-        val newHasSentToday = willHaveSentToday && partnerHasSentToday
+        // Track pending hearts for API batch
+        pendingApiCount++
         
-        // Calculate potential new streak
+        // Calculate streak status
+        val partnerHasSentToday = partnerCount > 0
+        val newHasSentToday = partnerHasSentToday // Both sent
         val currentStreak = _uiState.value.summary.currentStreak
         val newStreak = if (!_uiState.value.summary.hasSentToday && newHasSentToday) {
-            currentStreak + 1 // First time both sent today, streak increases
+            currentStreak + 1
         } else {
             currentStreak
         }
         
+        // INSTANT UI update - user sees change immediately
         _uiState.update {
             it.copy(
                 isHeartAnimating = true,
                 clickCount = it.clickCount + 1,
-                pendingHearts = it.pendingHearts + 1,
-                // Optimistic update for displayed count
-                myTodayCount = it.myTodayCount.copy(todayCount = newOptimisticCount),
+                pendingHearts = pendingApiCount,
+                myTodayCount = it.myTodayCount.copy(todayCount = newCount),
                 summary = it.summary.copy(
-                    myTodayCount = newOptimisticCount,
-                    todayMissCount = newOptimisticCount + partnerCount,
+                    myTodayCount = newCount,
+                    todayMissCount = newCount + partnerCount,
                     hasSentToday = newHasSentToday,
-                    meSentToday = true, // I'm sending now, so always true
+                    meSentToday = true,
                     partnerSentToday = partnerHasSentToday,
                     currentStreak = if (newHasSentToday) maxOf(newStreak, 1) else it.summary.currentStreak
                 )
             )
         }
-
+        
+        // Start animation reset timer (short, independent of API)
+        animationJob?.cancel()
         animationJob = viewModelScope.launch {
+            delay(200)
+            _uiState.update { it.copy(isHeartAnimating = false) }
+        }
+        
+        // ========== DEBOUNCED API CALL ==========
+        // Cancel previous pending API call and schedule new one
+        sendJob?.cancel()
+        lastApiCallTime = System.currentTimeMillis()
+        
+        sendJob = viewModelScope.launch {
+            // Wait for user to stop clicking
+            delay(API_DEBOUNCE_MS)
+            
+            // User stopped clicking, now send all pending hearts in one batch
+            val heartsToSend = pendingApiCount
+            if (heartsToSend <= 0) return@launch
+            
             try {
                 val currentUserId = _uiState.value.currentUser.id
                 val partnerId = _uiState.value.partnerUser?.id
 
                 if (currentUserId.isEmpty() || partnerId == null) {
                     Log.e(TAG, "Cannot send missing: no partner")
-                    // Rollback optimistic update
-                    _uiState.update { it.copy(
-                        isHeartAnimating = false,
-                        pendingHearts = maxOf(0, it.pendingHearts - 1),
-                        myTodayCount = it.myTodayCount.copy(todayCount = currentMyCount)
-                    ) }
+                    rollbackPendingHearts(heartsToSend)
                     return@launch
                 }
 
@@ -415,24 +433,25 @@ class MissingViewModelFirebase : ViewModel() {
                 val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
                 val recordId = "${coupleId}_${currentUserId}_$today"
 
-                Log.d(TAG, "Sending missing for recordId: $recordId")
+                Log.d(TAG, "Sending $heartsToSend hearts for recordId: $recordId")
 
-                // Load current count
+                // Load current server count
                 val currentRecord = firestoreRepository.getDocument(
                     "missing_records",
                     recordId,
                     FirebaseMissingRecord::class.java
                 ).getOrNull()
 
-                val newCount = (currentRecord?.count ?: 0) + 1
+                val serverCount = currentRecord?.count ?: 0
+                val finalCount = serverCount + heartsToSend
 
-                // Update or create record
+                // Update Firestore with batch count
                 val record = FirebaseMissingRecord(
                     id = recordId,
                     coupleId = coupleId,
                     userId = currentUserId,
                     date = today,
-                    count = newCount
+                    count = finalCount
                 )
 
                 firestoreRepository.setDocument(
@@ -442,47 +461,80 @@ class MissingViewModelFirebase : ViewModel() {
                     merge = true
                 )
 
-                // API call successful - clear pending and confirm
+                // Clear pending count after successful send
+                pendingApiCount = 0
+                
                 _uiState.update {
                     it.copy(
-                        pendingHearts = maxOf(0, it.pendingHearts - 1),
+                        pendingHearts = 0,
                         lastSentTime = System.currentTimeMillis(),
                         sendSuccess = true
                     )
                 }
 
-                Log.d(TAG, "Missing sent successfully, new count: $newCount")
+                Log.d(TAG, "Batch sent successfully: $heartsToSend hearts, total: $finalCount")
                 
-                // Update widget immediately after sending missing
+                // Update widget
                 WidgetManager.onMissingUpdated(CoupleApplication.instance)
                 
-                // Notify partner via sync trigger (no Cloud Functions needed!)
+                // Notify partner (only once per batch)
                 com.example.coupleapp.util.SyncTriggerHelper.notifyMissingSent(CoupleApplication.instance)
 
-                // Reload data to sync with server (also gets partner's latest count)
-                // This will update streak correctly based on server data
-                loadMissingData()
-
-                // Animation
-                delay(300)
-                _uiState.update { it.copy(isHeartAnimating = false) }
+                // Sync with server to get latest partner data (don't reset our count)
+                loadMissingDataSilent()
 
                 delay(200)
                 _uiState.update { it.copy(sendSuccess = false) }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error sending missing", e)
-                // Rollback optimistic update on error
-                val rolledBackCount = maxOf(0, _uiState.value.myTodayCount.todayCount - 1)
+                Log.e(TAG, "Error sending missing batch", e)
+                rollbackPendingHearts(heartsToSend)
+            }
+        }
+    }
+    
+    /**
+     * Rollback pending hearts on error
+     */
+    private fun rollbackPendingHearts(count: Int) {
+        pendingApiCount = maxOf(0, pendingApiCount - count)
+        val rolledBackCount = maxOf(0, _uiState.value.myTodayCount.todayCount - count)
+        _uiState.update {
+            it.copy(
+                pendingHearts = pendingApiCount,
+                myTodayCount = it.myTodayCount.copy(todayCount = rolledBackCount),
+                summary = it.summary.copy(myTodayCount = rolledBackCount),
+                error = "Không thể gửi. Vui lòng thử lại."
+            )
+        }
+    }
+    
+    /**
+     * Load missing data silently without resetting optimistic counts
+     * Used after successful API call to sync partner data
+     */
+    private fun loadMissingDataSilent() {
+        viewModelScope.launch {
+            try {
+                val currentUserId = _uiState.value.currentUser.id
+                val partnerId = _uiState.value.partnerUser?.id ?: return@launch
+                val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
+                val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                
+                // Only load partner's count to update display
+                val partnerTodayResult = loadTodayCount(coupleId, partnerId, today)
+                
                 _uiState.update {
                     it.copy(
-                        isHeartAnimating = false,
-                        pendingHearts = maxOf(0, it.pendingHearts - 1),
-                        myTodayCount = it.myTodayCount.copy(todayCount = rolledBackCount),
-                        summary = it.summary.copy(myTodayCount = rolledBackCount),
-                        error = e.message
+                        partnerTodayCount = partnerTodayResult,
+                        summary = it.summary.copy(
+                            partnerTodayCount = partnerTodayResult.todayCount,
+                            partnerSentToday = partnerTodayResult.todayCount > 0
+                        )
                     )
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in silent load", e)
             }
         }
     }
@@ -505,6 +557,7 @@ class MissingViewModelFirebase : ViewModel() {
         super.onCleared()
         loadDataJob?.cancel()
         animationJob?.cancel()
+        sendJob?.cancel()
     }
 }
 

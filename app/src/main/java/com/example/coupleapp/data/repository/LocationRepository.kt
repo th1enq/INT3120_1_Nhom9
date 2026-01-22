@@ -37,7 +37,7 @@ class LocationRepository(
         const val COLOCATION_SESSIONS_COLLECTION = "colocation_sessions"
         
         // Constants for shared place detection
-        const val COLOCATION_RADIUS_METERS = 200.0 // Distance to consider "same location" (200m for better detection)
+        const val COLOCATION_RADIUS_METERS = 300.0 // Distance to consider "same location" (300m)
         const val COLOCATION_TIME_MINUTES = 5 // Time together to create shared place (5 minutes for easier testing)
         const val LOCATION_UPDATE_INTERVAL_MS = 15_000L // 15 seconds for more responsive updates
         const val LOCATION_FASTEST_INTERVAL_MS = 10_000L // 10 seconds fastest interval
@@ -829,17 +829,29 @@ data class FirebaseLocationData(
     val isOnline: Boolean = true,
     val timestamp: Date? = null
 ) {
+    /**
+     * Convert Firebase data to UserLocation.
+     * IMPORTANT: isOnline is calculated based on timestamp, not stored value.
+     * User is considered OFFLINE if last update was more than 5 minutes ago.
+     */
     fun toUserLocation(): UserLocation {
+        val lastUpdatedTime = timestamp?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDateTime() 
+            ?: LocalDateTime.now()
+        
+        // Calculate if user is actually online based on timestamp
+        // User is considered OFFLINE if last location update was more than 5 minutes ago
+        val minutesSinceUpdate = java.time.Duration.between(lastUpdatedTime, LocalDateTime.now()).toMinutes()
+        val isActuallyOnline = minutesSinceUpdate <= LocationRepository.LOCATION_STALE_THRESHOLD_MINUTES
+        
         return UserLocation(
             userId = userId,
             userName = userName,
             avatarUrl = avatarUrl,
             coordinate = LocationCoordinate(latitude, longitude),
             address = address,
-            lastUpdated = timestamp?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDateTime() 
-                ?: LocalDateTime.now(),
+            lastUpdated = lastUpdatedTime,
             batteryLevel = batteryLevel,
-            isOnline = isOnline
+            isOnline = isActuallyOnline // Use calculated value instead of stored value
         )
     }
 }

@@ -5,14 +5,21 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.coupleapp.data.model.LocationCoordinate
+import com.example.coupleapp.data.model.LocationHistory
 import com.example.coupleapp.data.model.SharedPlace
 import com.example.coupleapp.data.model.UserLocation
 import com.example.coupleapp.ui.theme.PastelGreen
@@ -20,18 +27,23 @@ import com.example.coupleapp.ui.theme.PastelPink
 import com.example.coupleapp.ui.theme.PastelPurple
 import com.example.coupleapp.ui.theme.SoftPink
 import com.example.coupleapp.ui.theme.SoftLavender
+import com.example.coupleapp.util.LocationUtils
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
 
 /**
- * State holder for camera animation triggers
+ * State holder for camera animation triggers and selected history location
  */
 class CoupleMapCameraState {
     var animateToMyLocation: (() -> Unit)? = null
     var animateToPartnerLocation: (() -> Unit)? = null
     var animateToSharedPlace: ((SharedPlace) -> Unit)? = null
+    var animateToHistoryLocation: ((LocationHistory) -> Unit)? = null
+    
+    // Selected history location to show marker
+    var selectedHistoryLocation: LocationHistory? by mutableStateOf(null)
 }
 
 /**
@@ -125,6 +137,20 @@ fun CoupleGoogleMap(
         }
     }
     
+    // Function to animate to history location and show marker
+    fun animateToHistoryLocation(history: LocationHistory) {
+        cameraState?.selectedHistoryLocation = history
+        coroutineScope.launch {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(history.coordinate.latitude, history.coordinate.longitude),
+                    17f
+                ),
+                durationMs = 800
+            )
+        }
+    }
+    
     // Register animation callbacks with cameraState
     LaunchedEffect(cameraState, myLocation, partnerLocation) {
         cameraState?.animateToMyLocation = {
@@ -135,6 +161,9 @@ fun CoupleGoogleMap(
         }
         cameraState?.animateToSharedPlace = { place ->
             animateToSharedPlace(place)
+        }
+        cameraState?.animateToHistoryLocation = { history ->
+            animateToHistoryLocation(history)
         }
     }
     
@@ -225,6 +254,19 @@ fun CoupleGoogleMap(
                 onClick = {
                     animateToLocation(user)
                     onPartnerMarkerClick()
+                    true
+                }
+            )
+        }
+        
+        // Selected history location marker (when user clicks on history timeline)
+        cameraState?.selectedHistoryLocation?.let { history ->
+            HistoryLocationMarker(
+                position = LatLng(history.coordinate.latitude, history.coordinate.longitude),
+                history = history,
+                onClick = {
+                    // Clear selection when clicked again
+                    cameraState.selectedHistoryLocation = null
                     true
                 }
             )
@@ -559,6 +601,131 @@ private fun createSharedPlaceMarkerBitmap(place: SharedPlace): BitmapDescriptor 
         val countText = if (place.photosCount > 99) "99+" else place.photosCount.toString()
         canvas.drawText(countText, centerX + circleRadius - 10, circleCenterY - circleRadius + 25, countPaint)
     }
+    
+    return BitmapDescriptorFactory.fromBitmap(bitmap)
+}
+
+/**
+ * Marker for history location (when user clicks on location history timeline)
+ */
+@Composable
+fun HistoryLocationMarker(
+    position: LatLng,
+    history: LocationHistory,
+    onClick: () -> Boolean
+) {
+    val markerIcon = remember(history) {
+        createHistoryLocationMarkerBitmap(history)
+    }
+    
+    MarkerInfoWindowContent(
+        state = MarkerState(position = position),
+        title = history.locationName,
+        snippet = history.address,
+        icon = markerIcon,
+        onClick = { onClick() }
+    ) { marker ->
+        // Custom info window for history location
+        Column(
+            modifier = Modifier
+                .background(Color.White, shape = RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = history.locationName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF333333)
+            )
+            if (history.address.isNotEmpty()) {
+                Text(
+                    text = history.address,
+                    fontSize = 12.sp,
+                    color = Color(0xFF666666),
+                    maxLines = 2
+                )
+            }
+            Text(
+                text = "⏱️ ${history.durationMinutes} phút",
+                fontSize = 11.sp,
+                color = SoftPink
+            )
+        }
+    }
+}
+
+/**
+ * Create bitmap for history location marker
+ */
+private fun createHistoryLocationMarkerBitmap(history: LocationHistory): BitmapDescriptor {
+    val size = 100
+    val arrowHeight = 14
+    val totalHeight = size + arrowHeight
+    val bitmap = Bitmap.createBitmap(size, totalHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    
+    // Get color based on location type
+    val typeColor = LocationUtils.getLocationTypeColor(history.locationType)
+    val backgroundColor = typeColor.copy(alpha = 0.9f).toArgb()
+    val borderColor = typeColor.toArgb()
+    
+    val centerX = size / 2f
+    val circleRadius = size / 2f - 12
+    val circleCenterY = size / 2f - 6
+    
+    // Draw shadow
+    val shadowPaint = Paint().apply {
+        color = android.graphics.Color.argb(50, 0, 0, 0)
+        isAntiAlias = true
+        maskFilter = android.graphics.BlurMaskFilter(8f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    canvas.drawCircle(centerX + 2, circleCenterY + 4, circleRadius, shadowPaint)
+    
+    // Draw main circle background
+    val bgPaint = Paint().apply {
+        color = backgroundColor
+        isAntiAlias = true
+    }
+    canvas.drawCircle(centerX, circleCenterY, circleRadius, bgPaint)
+    
+    // Draw white inner circle
+    val innerPaint = Paint().apply {
+        color = android.graphics.Color.WHITE
+        isAntiAlias = true
+    }
+    canvas.drawCircle(centerX, circleCenterY, circleRadius - 6, innerPaint)
+    
+    // Draw border
+    val borderPaint = Paint().apply {
+        color = borderColor
+        style = Paint.Style.STROKE
+        strokeWidth = 4f
+        isAntiAlias = true
+    }
+    canvas.drawCircle(centerX, circleCenterY, circleRadius - 2, borderPaint)
+    
+    // Draw arrow pointing down
+    val arrowPaint = Paint().apply {
+        color = borderColor
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+    val arrowPath = Path().apply {
+        moveTo(centerX - 10f, circleCenterY + circleRadius - 4)
+        lineTo(centerX + 10f, circleCenterY + circleRadius - 4)
+        lineTo(centerX, circleCenterY + circleRadius + arrowHeight)
+        close()
+    }
+    canvas.drawPath(arrowPath, arrowPaint)
+    
+    // Draw location pin emoji in center
+    val emojiPaint = Paint().apply {
+        textSize = 32f
+        textAlign = Paint.Align.CENTER
+        isAntiAlias = true
+    }
+    canvas.drawText("📍", centerX, circleCenterY + 10f, emojiPaint)
     
     return BitmapDescriptorFactory.fromBitmap(bitmap)
 }

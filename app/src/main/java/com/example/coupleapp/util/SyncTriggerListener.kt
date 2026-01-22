@@ -36,6 +36,10 @@ object SyncTriggerListener {
     private const val TAG = "SyncTriggerListener"
     private const val COLLECTION_SYNC_TRIGGERS = "sync_triggers"
     
+    // Deduplication: Track recently shown notifications to avoid duplicates
+    private val recentNotifications = mutableMapOf<String, Long>()
+    private const val NOTIFICATION_DEDUP_WINDOW_MS = 5000L // 5 seconds window
+    
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     
@@ -147,6 +151,7 @@ object SyncTriggerListener {
     
     /**
      * Show notification based on trigger type
+     * Includes deduplication to avoid showing same notification twice
      */
     private suspend fun showNotificationForTrigger(
         context: Context,
@@ -155,6 +160,24 @@ object SyncTriggerListener {
         senderId: String,
         extraData: String?
     ) {
+        // ========== DEDUPLICATION CHECK ==========
+        // Create unique key for this notification type + sender
+        val dedupKey = "${dataType}_${senderId}"
+        val currentTime = System.currentTimeMillis()
+        
+        // Check if we recently showed this notification
+        val lastShownTime = recentNotifications[dedupKey] ?: 0L
+        if (currentTime - lastShownTime < NOTIFICATION_DEDUP_WINDOW_MS) {
+            Log.d(TAG, "⚠️ Skipping duplicate notification: $dedupKey (shown ${currentTime - lastShownTime}ms ago)")
+            return
+        }
+        
+        // Record this notification
+        recentNotifications[dedupKey] = currentTime
+        
+        // Cleanup old entries (older than 30 seconds)
+        recentNotifications.entries.removeIf { currentTime - it.value > 30000L }
+        
         // Skip notification if app is in foreground and user is viewing the relevant screen
         if (CoupleApplication.isAppInForeground) {
             Log.d(TAG, "App in foreground, showing subtle notification")

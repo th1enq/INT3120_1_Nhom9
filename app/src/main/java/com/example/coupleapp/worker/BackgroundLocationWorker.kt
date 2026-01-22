@@ -40,19 +40,29 @@ class BackgroundLocationWorker(
         private const val TAG = "BackgroundLocationWorker"
         const val WORK_NAME = "background_location_update"
         
-        // Time constants
-        private const val MIN_UPDATE_INTERVAL_MINUTES = 15L
-        private const val MAX_UPDATE_INTERVAL_MINUTES = 30L
-        private const val LOW_BATTERY_THRESHOLD = 20
+        // PHƯƠNG ÁN B: Khi app bị kill, worker này là cơ chế DUY NHẤT đáng tin cậy
+        // Chạy mỗi 15 phút để lấy location history
+        private const val MIN_UPDATE_INTERVAL_MINUTES = 15L // 15 phút - cân bằng giữa history accuracy và battery
+        private const val FLEX_INTERVAL_MINUTES = 5L // Cho phép ±5 phút flexibility
+        private const val LOW_BATTERY_THRESHOLD = 20 // Skip khi pin < 20%
         
         // Distance threshold for considering same location (meters)
-        private const val SAME_LOCATION_THRESHOLD_METERS = 200.0
+        private const val SAME_LOCATION_THRESHOLD_METERS = 300.0
         
         // Minimum stay duration to record in history (minutes)
+        // User must stay at location for at least this long before creating history entry
         private const val MIN_HISTORY_DURATION_MINUTES = 10
         
+        // SharedPreferences key for tracking pending location
+        private const val PREF_PENDING_LOCATION = "pending_location_for_history"
+        private const val PREF_PENDING_LOCATION_TIME = "pending_location_time"
+        private const val PREF_PENDING_LOCATION_LAT = "pending_location_lat"
+        private const val PREF_PENDING_LOCATION_LNG = "pending_location_lng"
+        private const val PREF_PENDING_LOCATION_ADDRESS = "pending_location_address"
+        
         /**
-         * Schedule background location updates
+         * Schedule background location updates.
+         * Đây là cơ chế chính khi app bị kill để tracking location history.
          */
         fun schedule(context: Context) {
             val constraints = Constraints.Builder()
@@ -63,7 +73,7 @@ class BackgroundLocationWorker(
             val request = PeriodicWorkRequestBuilder<BackgroundLocationWorker>(
                 repeatInterval = MIN_UPDATE_INTERVAL_MINUTES,
                 repeatIntervalTimeUnit = TimeUnit.MINUTES,
-                flexTimeInterval = 5,
+                flexTimeInterval = FLEX_INTERVAL_MINUTES,
                 flexTimeIntervalUnit = TimeUnit.MINUTES
             )
                 .setConstraints(constraints)
@@ -82,7 +92,7 @@ class BackgroundLocationWorker(
                     request
                 )
             
-            Log.d(TAG, "Background location worker scheduled")
+            Log.d(TAG, "Background location worker scheduled every $MIN_UPDATE_INTERVAL_MINUTES minutes")
         }
         
         /**
@@ -242,8 +252,17 @@ class BackgroundLocationWorker(
     }
     
     /**
-     * Intelligently update location history by merging nearby locations
-     * to avoid creating duplicate entries when user stays at same place
+     * Intelligently update location history using a "pending location" approach.
+     * 
+     * LOGIC:
+     * 1. Khi worker chạy, check xem có "pending location" (vị trí đang chờ xác nhận) không
+     * 2. Nếu có pending location và user VẪN Ở ĐÓ (trong 200m) → Confirm & tạo history entry
+     * 3. Nếu có pending location nhưng user ĐÃ RỜI ĐI → Xóa pending (user chỉ đi qua, không ở lại)
+     * 4. Nếu không có pending và đang ở vị trí mới → Lưu làm pending, đợi lần sau xác nhận
+     * 
+     * Cách này đảm bảo:
+     * - User phải ở một chỗ ít nhất 2 lần worker chạy (~30 phút) mới được ghi vào history
+     * - Không tạo entry khi user đang di chuyển trên đường
      */
     private suspend fun updateLocationHistory(
         userId: String,
@@ -252,97 +271,171 @@ class BackgroundLocationWorker(
         address: String
     ) {
         try {
-            // Get recent location history entries
-            val recentHistory = db.collection("location_history")
-                .whereEqualTo("userId", userId)
-                .whereEqualTo("coupleId", coupleId)
-                .limit(10)
-                .get()
-                .await()
+            val prefs = context.getSharedPreferences("background_location_worker", Context.MODE_PRIVATE)
             
-            val now = Date()
-            var shouldCreateNewEntry = true
+            // Get pending location info
+            val pendingLat = prefs.getFloat(PREF_PENDING_LOCATION_LAT, 0f).toDouble()
+            val pendingLng = prefs.getFloat(PREF_PENDING_LOCATION_LNG, 0f).toDouble()
+            val pendingTime = prefs.getLong(PREF_PENDING_LOCATION_TIME, 0L)
+            val pendingAddress = prefs.getString(PREF_PENDING_LOCATION_ADDRESS, "") ?: ""
+            val hasPendingLocation = pendingLat != 0.0 && pendingLng != 0.0 && pendingTime > 0
             
-            // Check each recent entry to see if we're still at the same location
-            for (doc in recentHistory.documents) {
-                val historyLat = doc.getDouble("latitude") ?: continue
-                val historyLng = doc.getDouble("longitude") ?: continue
-                val historyCoord = LocationCoordinate(historyLat, historyLng)
+            if (hasPendingLocation) {
+                val pendingCoordinate = LocationCoordinate(pendingLat, pendingLng)
+                val distanceFromPending = calculateDistance(coordinate, pendingCoordinate)
                 
-                val distance = calculateDistance(coordinate, historyCoord)
-                
-                if (distance <= SAME_LOCATION_THRESHOLD_METERS) {
-                    // We're still at the same location - update departure time
-                    val arrivalTime = doc.getDate("arrivalTime")
-                    if (arrivalTime != null) {
-                        val durationMinutes = ((now.time - arrivalTime.time) / 60_000).toInt()
-                        
-                        doc.reference.update(
-                            mapOf(
-                                "departureTime" to now,
-                                "durationMinutes" to durationMinutes
-                            )
-                        ).await()
-                        
-                        Log.d(TAG, "Updated existing history entry: ${doc.id}, duration: ${durationMinutes}min")
-                        shouldCreateNewEntry = false
-                        break
+                if (distanceFromPending <= SAME_LOCATION_THRESHOLD_METERS) {
+                    // User is STILL at the pending location → Confirm and create/update history entry
+                    val stayDurationMinutes = ((System.currentTimeMillis() - pendingTime) / 60_000).toInt()
+                    
+                    if (stayDurationMinutes >= MIN_HISTORY_DURATION_MINUTES) {
+                        // Long enough stay - create or update history entry
+                        createOrUpdateHistoryEntry(userId, coupleId, pendingCoordinate, pendingAddress, pendingTime)
+                        Log.d(TAG, "✅ Confirmed location stay: $pendingAddress, duration: ${stayDurationMinutes}min")
+                    } else {
+                        Log.d(TAG, "⏳ Still at pending location, waiting for min duration: ${stayDurationMinutes}/${MIN_HISTORY_DURATION_MINUTES}min")
                     }
-                }
-            }
-            
-            // Only create new entry if we've moved to a new location
-            if (shouldCreateNewEntry) {
-                // Check if we have an active entry without departure time
-                val activeEntry = recentHistory.documents.find { 
-                    it.getDate("departureTime") == null 
-                }
-                
-                if (activeEntry != null) {
-                    // Close the active entry first
-                    val arrivalTime = activeEntry.getDate("arrivalTime")
-                    if (arrivalTime != null) {
-                        val durationMinutes = ((now.time - arrivalTime.time) / 60_000).toInt()
-                        
-                        if (durationMinutes >= MIN_HISTORY_DURATION_MINUTES) {
-                            activeEntry.reference.update(
-                                mapOf(
-                                    "departureTime" to now,
-                                    "durationMinutes" to durationMinutes
-                                )
-                            ).await()
-                            Log.d(TAG, "Closed active entry: ${activeEntry.id}")
-                        } else {
-                            // Duration too short, delete the entry
-                            activeEntry.reference.delete().await()
-                            Log.d(TAG, "Deleted short entry: ${activeEntry.id}")
-                        }
+                } else {
+                    // User has MOVED AWAY from pending location
+                    // Check if they stayed long enough before leaving
+                    val stayDurationMinutes = ((System.currentTimeMillis() - pendingTime) / 60_000).toInt()
+                    
+                    if (stayDurationMinutes >= MIN_HISTORY_DURATION_MINUTES) {
+                        // They stayed long enough - save the history entry with departure time
+                        createOrUpdateHistoryEntry(userId, coupleId, pendingCoordinate, pendingAddress, pendingTime, departed = true)
+                        Log.d(TAG, "✅ User left location after ${stayDurationMinutes}min: $pendingAddress")
+                    } else {
+                        // Too short - user was just passing through, discard
+                        Log.d(TAG, "🚶 User moved away after only ${stayDurationMinutes}min - discarding (was just passing through)")
                     }
+                    
+                    // Clear pending and set new pending location
+                    savePendingLocation(prefs, coordinate, address)
                 }
+            } else {
+                // No pending location - check if we're at an existing history location or new place
+                val existingEntry = findExistingHistoryEntry(userId, coupleId, coordinate)
                 
-                // Create new entry for new location
-                val locationName = detectPlaceName(address)
-                val newEntry = mapOf(
-                    "userId" to userId,
-                    "coupleId" to coupleId,
-                    "locationName" to locationName,
-                    "address" to address,
-                    "latitude" to coordinate.latitude,
-                    "longitude" to coordinate.longitude,
-                    "arrivalTime" to now,
-                    "departureTime" to null,
-                    "durationMinutes" to 0,
-                    "locationType" to detectLocationType(address).name
-                )
-                
-                db.collection("location_history").add(newEntry)
-                    .addOnSuccessListener {
-                        Log.d(TAG, "Created new history entry: ${it.id}")
-                    }
+                if (existingEntry != null) {
+                    // Already have history for this location - just update departure time
+                    updateExistingHistoryEntry(existingEntry, coordinate)
+                    Log.d(TAG, "📍 At known location: ${existingEntry.getString("locationName")}")
+                } else {
+                    // New location - save as pending, wait for next worker run to confirm
+                    savePendingLocation(prefs, coordinate, address)
+                    Log.d(TAG, "📝 New location detected, saved as pending: $address")
+                }
             }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error updating location history", e)
+        }
+    }
+    
+    private fun savePendingLocation(prefs: android.content.SharedPreferences, coordinate: LocationCoordinate, address: String) {
+        prefs.edit()
+            .putFloat(PREF_PENDING_LOCATION_LAT, coordinate.latitude.toFloat())
+            .putFloat(PREF_PENDING_LOCATION_LNG, coordinate.longitude.toFloat())
+            .putLong(PREF_PENDING_LOCATION_TIME, System.currentTimeMillis())
+            .putString(PREF_PENDING_LOCATION_ADDRESS, address)
+            .apply()
+    }
+    
+    private fun clearPendingLocation(prefs: android.content.SharedPreferences) {
+        prefs.edit()
+            .remove(PREF_PENDING_LOCATION_LAT)
+            .remove(PREF_PENDING_LOCATION_LNG)
+            .remove(PREF_PENDING_LOCATION_TIME)
+            .remove(PREF_PENDING_LOCATION_ADDRESS)
+            .apply()
+    }
+    
+    private suspend fun findExistingHistoryEntry(
+        userId: String,
+        coupleId: String,
+        coordinate: LocationCoordinate
+    ): com.google.firebase.firestore.DocumentSnapshot? {
+        val recentHistory = db.collection("location_history")
+            .whereEqualTo("userId", userId)
+            .whereEqualTo("coupleId", coupleId)
+            .limit(20)
+            .get()
+            .await()
+        
+        for (doc in recentHistory.documents) {
+            val historyLat = doc.getDouble("latitude") ?: continue
+            val historyLng = doc.getDouble("longitude") ?: continue
+            val historyCoord = LocationCoordinate(historyLat, historyLng)
+            
+            if (calculateDistance(coordinate, historyCoord) <= SAME_LOCATION_THRESHOLD_METERS) {
+                return doc
+            }
+        }
+        return null
+    }
+    
+    private suspend fun updateExistingHistoryEntry(
+        existingEntry: com.google.firebase.firestore.DocumentSnapshot,
+        coordinate: LocationCoordinate
+    ) {
+        val arrivalTime = existingEntry.getDate("arrivalTime") ?: return
+        val now = Date()
+        val durationMinutes = ((now.time - arrivalTime.time) / 60_000).toInt()
+        
+        existingEntry.reference.update(
+            mapOf(
+                "departureTime" to now,
+                "durationMinutes" to durationMinutes
+            )
+        ).await()
+    }
+    
+    private suspend fun createOrUpdateHistoryEntry(
+        userId: String,
+        coupleId: String,
+        coordinate: LocationCoordinate,
+        address: String,
+        arrivalTimeMs: Long,
+        departed: Boolean = false
+    ) {
+        val now = Date()
+        val arrivalTime = Date(arrivalTimeMs)
+        val durationMinutes = ((now.time - arrivalTimeMs) / 60_000).toInt()
+        
+        // Check if we already have an entry for this location
+        val existingEntry = findExistingHistoryEntry(userId, coupleId, coordinate)
+        
+        if (existingEntry != null) {
+            // Update existing entry
+            val updateData = mutableMapOf<String, Any?>(
+                "durationMinutes" to durationMinutes
+            )
+            if (departed) {
+                updateData["departureTime"] = now
+            }
+            existingEntry.reference.update(updateData).await()
+            Log.d(TAG, "Updated existing history entry: ${existingEntry.id}")
+        } else {
+            // Create new entry
+            val locationName = detectPlaceName(address)
+            val newEntry = mapOf(
+                "userId" to userId,
+                "coupleId" to coupleId,
+                "locationName" to locationName,
+                "address" to address,
+                "latitude" to coordinate.latitude,
+                "longitude" to coordinate.longitude,
+                "arrivalTime" to arrivalTime,
+                "departureTime" to if (departed) now else null,
+                "durationMinutes" to durationMinutes,
+                "locationType" to detectLocationType(address).name,
+                "source" to "background_worker"
+            )
+            
+            db.collection("location_history").add(newEntry)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Created new history entry: ${it.id}")
+                }
         }
     }
     

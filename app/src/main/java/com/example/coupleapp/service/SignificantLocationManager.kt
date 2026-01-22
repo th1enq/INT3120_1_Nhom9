@@ -49,7 +49,7 @@ class SignificantLocationManager(private val context: Context) {
         private const val REQUEST_CODE = 2001
         
         // Significant change threshold - similar to Widgetable
-        private const val DISPLACEMENT_METERS = 200f // Trigger when moved 200m
+        private const val DISPLACEMENT_METERS = 500f // Trigger when moved 500m
         private const val MIN_UPDATE_INTERVAL_MS = 5 * 60 * 1000L // Minimum 5 minutes between updates
         private const val MAX_UPDATE_INTERVAL_MS = 30 * 60 * 1000L // Maximum 30 minutes (fallback)
         
@@ -288,7 +288,7 @@ class SignificantLocationReceiver : BroadcastReceiver() {
                 val histLng = doc.getDouble("longitude") ?: return@find false
                 
                 val distance = calculateDistance(latitude, longitude, histLat, histLng)
-                distance < 200 // Within 200m
+                distance < 300 // Within 300m (same location threshold)
             }
             
             if (activeEntry != null) {

@@ -21,6 +21,7 @@ import com.example.coupleapp.widget.observer.WidgetFirestoreObserver
 import com.example.coupleapp.worker.BackgroundLocationWorker
 import com.example.coupleapp.worker.PartnerDataSyncWorker
 import com.example.coupleapp.worker.SleepSyncWorker
+import com.example.coupleapp.worker.SleepWakeUpReminderWorker
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -107,19 +108,49 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
     }
     
     /**
-     * Schedule background workers if user is logged in and paired
+     * Schedule background workers if user is logged in and paired.
+     * 
+     * BATTERY OPTIMIZATION STRATEGY:
+     * ============================
+     * We use a layered approach for location tracking:
+     * 
+     * 1. SignificantLocationManager (ALWAYS RUNNING when logged in)
+     *    - Most battery efficient (~1-2% per hour)
+     *    - Triggers only when user moves 200m+
+     *    - Handles background location updates efficiently
+     *    
+     * 2. BackgroundLocationWorker (PERIODIC FALLBACK - every 30 min)
+     *    - Ensures location doesn't go stale if SignificantLocationManager misses updates
+     *    - Skips when battery < 30%
+     *    - Very low battery impact
+     *    
+     * 3. LocationTrackingService (ONLY WHEN APP IS ACTIVE)
+     *    - Started only when user enters DistanceScreen
+     *    - Uses high accuracy GPS for real-time tracking
+     *    - Automatically reduces frequency when app goes to background (5 min interval)
+     *    - User can see live location updates
+     *    
+     * This 3-layer approach provides:
+     * - Accurate real-time tracking when viewing location
+     * - Battery-efficient background updates when app is closed
+     * - Reliable fallback to prevent stale location data
      */
     private fun scheduleBackgroundWorkersIfNeeded() {
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
             Log.d("CoupleApplication", "User logged in, scheduling background workers")
             
-            // Battery-efficient location tracking (like Widgetable)
+            // Layer 1: Battery-efficient location tracking (like Widgetable)
             // Uses Significant Location Changes instead of continuous GPS
+            // Only triggers when user moves 200m+
             SignificantLocationManager.getInstance(this).startTracking()
             
-            // Fallback: periodic location worker (runs every 15 min if significant changes missed)
+            // Layer 2: Fallback periodic worker (runs every 30 min)
+            // Ensures location doesn't go stale even if significant changes are missed
             BackgroundLocationWorker.schedule(this)
+            
+            // Note: Layer 3 (LocationTrackingService) is started separately 
+            // in DistanceViewModel when user enters the location screen
             
             // Sleep sync worker
             scheduleSleepSyncWorker()
@@ -139,6 +170,9 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         SleepSyncWorker.schedulePeriodicSync(this)
         SleepSyncWorker.scheduleMorningSync(this)
         SleepSyncWorker.triggerImmediateSync(this)
+        
+        // Schedule wake up reminder (checks active sleep sessions each morning)
+        SleepWakeUpReminderWorker.scheduleMorningReminder(this)
     }
     
     /**

@@ -335,14 +335,10 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
             return
         }
         
-        // Also schedule background location worker for when app is closed
-        // This provides battery-efficient background updates
-        try {
-            com.example.coupleapp.worker.BackgroundLocationWorker.schedule(context)
-            android.util.Log.d("DistanceViewModel", "Background location worker scheduled")
-        } catch (e: Exception) {
-            android.util.Log.e("DistanceViewModel", "Failed to schedule background worker", e)
-        }
+        // Note: BackgroundLocationWorker is already scheduled in CoupleApplication.kt
+        // We don't need to schedule it again here to avoid duplicate work
+        // The worker uses ExistingPeriodicWorkPolicy.KEEP so duplicates are ignored anyway
+        android.util.Log.d("DistanceViewModel", "LocationTrackingService started, background worker already scheduled from Application")
         
         // Listen to my location updates from the service (via StateFlow)
         // The service uploads to Firebase, we just observe the local state
@@ -431,8 +427,8 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
             0.0
         }
         
-        // Check if within colocation range (200 meters for same location)
-        val isNearPartner = partnerLocation != null && distance <= 200.0
+        // Check if within colocation range (300 meters for same location)
+        val isNearPartner = partnerLocation != null && distance <= 300.0
         
         // Format distance text based on whether partner location is available
         val distanceText = when {
@@ -463,8 +459,8 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
             0.0
         }
         
-        // Check if within colocation range (200 meters for same location)
-        val isNearPartner = myLocation != null && location != null && distance <= 200.0
+        // Check if within colocation range (300 meters for same location)
+        val isNearPartner = myLocation != null && location != null && distance <= 300.0
         
         // Format distance text based on whether both locations are available
         val distanceText = when {

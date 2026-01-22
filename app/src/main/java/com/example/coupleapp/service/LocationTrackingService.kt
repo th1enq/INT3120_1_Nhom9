@@ -66,17 +66,19 @@ class LocationTrackingService : Service() {
         const val TRACKING_MODE_BACKGROUND = "background"  // App is in background
         
         // Location tracking constants - adaptive based on mode
-        const val LOCATION_UPDATE_INTERVAL_ACTIVE_MS = 5_000L    // 5 seconds when actively viewing location
-        const val LOCATION_UPDATE_INTERVAL_FOREGROUND_MS = 15_000L // 15 seconds when app in foreground
-        const val LOCATION_UPDATE_INTERVAL_BACKGROUND_MS = 60_000L // 60 seconds when app in background
+        // PHƯƠNG ÁN B: Trong app = 30s-1min, Kill app = dựa vào WorkManager 15-30 phút
+        // Foreground Service CHỈ hoạt động khi app đang mở
+        const val LOCATION_UPDATE_INTERVAL_ACTIVE_MS = 10_000L   // 10 seconds when actively viewing location screen
+        const val LOCATION_UPDATE_INTERVAL_FOREGROUND_MS = 30_000L // 30 seconds when app in foreground
+        const val LOCATION_UPDATE_INTERVAL_BACKGROUND_MS = 60_000L // 1 minute - nhưng service sẽ dừng khi kill app
         
-        const val LOCATION_FASTEST_INTERVAL_ACTIVE_MS = 3_000L   // 3 seconds fastest for active mode
-        const val LOCATION_FASTEST_INTERVAL_FOREGROUND_MS = 10_000L // 10 seconds fastest for foreground
+        const val LOCATION_FASTEST_INTERVAL_ACTIVE_MS = 5_000L    // 5 seconds fastest for active mode  
+        const val LOCATION_FASTEST_INTERVAL_FOREGROUND_MS = 15_000L // 15 seconds fastest for foreground
         const val LOCATION_FASTEST_INTERVAL_BACKGROUND_MS = 30_000L // 30 seconds fastest for background
         const val LOCATION_HISTORY_MIN_DURATION_MS = 300_000L // 5 minutes to record in history (changed from 10)
         const val LOCATION_HISTORY_MIN_DISTANCE_METERS = 500.0 // 500m minimum distance from last history entry
         const val LOCATION_SIGNIFICANT_CHANGE_METERS = 100.0 // 100 meters to consider a location change
-        const val COLOCATION_DISTANCE_METERS = 200.0 // 200 meters to be considered same location (increased for better detection)
+        const val COLOCATION_DISTANCE_METERS = 300.0 // 300 meters to be considered same location
         const val COLOCATION_TIME_MINUTES = 5L // 5 minutes to create shared place (reduced for easier testing)
         const val DUPLICATE_PLACE_DISTANCE_METERS = 500.0 // Don't create new place if one exists within 500m
         
@@ -421,15 +423,26 @@ class LocationTrackingService : Service() {
             )
         }
         
+        // Use BALANCED_POWER_ACCURACY for background mode to save battery
+        // HIGH_ACCURACY uses GPS continuously which drains battery fast
+        val priority = when (currentTrackingMode) {
+            TRACKING_MODE_BACKGROUND -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
+            else -> Priority.PRIORITY_HIGH_ACCURACY
+        }
+        
         android.util.Log.d("LocationTrackingService", 
-            "Starting location tracking with mode: $currentTrackingMode, interval: ${updateInterval}ms")
+            "Starting location tracking with mode: $currentTrackingMode, priority: $priority, interval: ${updateInterval}ms")
         
         val locationRequest = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY,
+            priority,
             updateInterval
         ).apply {
             setMinUpdateIntervalMillis(fastestInterval)
             setWaitForAccurateLocation(false)
+            // For background mode, also set displacement to avoid updates when stationary
+            if (currentTrackingMode == TRACKING_MODE_BACKGROUND) {
+                setMinUpdateDistanceMeters(50f) // Only update if moved 50m (battery optimization)
+            }
         }.build()
         
         try {

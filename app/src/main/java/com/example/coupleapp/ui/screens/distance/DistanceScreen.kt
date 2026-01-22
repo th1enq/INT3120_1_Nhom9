@@ -333,7 +333,11 @@ fun DistanceScreen(
                     user = uiState.selectedUser,
                     locationHistory = history,
                     isMe = isMe,
-                    onDismiss = { viewModel.dismissUserInfoSheet() }
+                    onDismiss = { viewModel.dismissUserInfoSheet() },
+                    onLocationHistoryClick = { location ->
+                        // Animate map to the clicked location history
+                        cameraState.animateToHistoryLocation?.invoke(location)
+                    }
                 )
             }
             

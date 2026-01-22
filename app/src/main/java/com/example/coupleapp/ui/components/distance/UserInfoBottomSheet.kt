@@ -48,6 +48,7 @@ fun UserInfoBottomSheet(
     locationHistory: List<LocationHistory>,
     isMe: Boolean,
     onDismiss: () -> Unit,
+    onLocationHistoryClick: (LocationHistory) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (user == null) return
@@ -108,7 +109,11 @@ fun UserInfoBottomSheet(
             // Location history timeline (compact)
             LocationHistoryTimeline(
                 locationHistory = locationHistory.take(3), // Show only last 3
-                userName = user.userName
+                userName = user.userName,
+                onLocationClick = { location ->
+                    onDismiss() // Close bottom sheet
+                    onLocationHistoryClick(location) // Navigate to location on map
+                }
             )
         }
     }
