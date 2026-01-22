@@ -43,7 +43,8 @@ fun MissingTopBar(
     streakCount: Int,
     isStreakActive: Boolean,
     onBackClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPartnerSent: Boolean = false // New param: whether partner has sent today
 ) {
     Row(
         modifier = modifier
@@ -82,41 +83,63 @@ fun MissingTopBar(
         // Streak indicator (like TikTok)
         StreakIndicator(
             streakCount = streakCount,
-            isActive = isStreakActive
+            isActive = isStreakActive,
+            isPartnerSent = isPartnerSent
         )
     }
 }
 
 /**
  * Streak indicator component (fire icon like TikTok)
+ * 
+ * States:
+ * - Both sent today: Full animation, bright orange
+ * - Only me sent: Animation, orange but waiting for partner
+ * - Nobody sent: Gray, no animation (streak at risk!)
  */
 @Composable
 fun StreakIndicator(
     streakCount: Int,
     isActive: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isPartnerSent: Boolean = false
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "flame")
+    
+    // Full activation when both sent
+    val isBothSent = isActive && isPartnerSent
     
     // Flame flicker animation when active
     val flameScale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = if (isActive) 1.15f else 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(500, easing = FastOutSlowInEasing),
+            animation = tween(if (isBothSent) 400 else 600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "flameScale"
     )
+    
+    // Background color based on state
+    val backgroundColor = when {
+        isBothSent -> Color(0xFFFFF3E0)    // Both sent - bright orange bg
+        isActive -> Color(0xFFFFF8E1)      // Only me sent - lighter orange bg
+        else -> Color(0xFFF5F5F5)          // Nobody sent - gray bg
+    }
+    
+    // Text color based on state
+    val textColor = when {
+        isBothSent -> Color(0xFFFF6D00)    // Both sent - bright orange
+        isActive -> Color(0xFFFFAB40)      // Only me sent - lighter orange
+        else -> Color(0xFFB0B0B0)          // Nobody sent - gray
+    }
     
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (isActive) Color(0xFFFFF3E0) else Color(0xFFF5F5F5)
-            )
+            .background(backgroundColor)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         // Fire emoji/icon
@@ -134,8 +157,17 @@ fun StreakIndicator(
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold
             ),
-            color = if (isActive) Color(0xFFFF6D00) else Color(0xFFB0B0B0)
+            color = textColor
         )
+        
+        // Show waiting indicator if only me sent (partner hasn't sent yet)
+        if (isActive && !isPartnerSent) {
+            Text(
+                text = "⏳",
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 2.dp)
+            )
+        }
     }
 }
 

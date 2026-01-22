@@ -319,8 +319,10 @@ class SignificantLocationReceiver : BroadcastReceiver() {
                     
                     if (durationMinutes >= 5) {
                         openEntry.reference.update(
-                            "departureTime" to now,
-                            "durationMinutes" to durationMinutes
+                            mapOf(
+                                "departureTime" to now,
+                                "durationMinutes" to durationMinutes
+                            )
                         ).await()
                     } else {
                         // Too short, delete

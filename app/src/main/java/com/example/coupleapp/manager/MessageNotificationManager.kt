@@ -34,7 +34,18 @@ object MessageNotificationManager {
     
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    // Make scope nullable and recreatable to properly manage lifecycle
+    private var scope: CoroutineScope? = null
+    private var scopeJob: Job? = null
+    
+    private fun getOrCreateScope(): CoroutineScope {
+        if (scope == null) {
+            scopeJob = SupervisorJob()
+            scope = CoroutineScope(Dispatchers.IO + scopeJob!!)
+        }
+        return scope!!
+    }
     
     /**
      * Initialize the manager with application context
@@ -71,7 +82,7 @@ object MessageNotificationManager {
      * Start listening for new messages
      */
     fun startListening() {
-        scope.launch {
+        getOrCreateScope().launch {
             try {
                 val firebaseUser = authRepository.currentUser
                 if (firebaseUser == null) {
@@ -235,8 +246,14 @@ object MessageNotificationManager {
      */
     fun cleanup() {
         stopListening()
-        scope.cancel()
+        scopeJob?.cancel()
+        scopeJob = null
+        scope = null
         isInitialized = false
+        currentUserId = null
+        partnerId = null
+        partnerName = null
+        lastKnownMessageIds = emptySet()
         Log.d(TAG, "MessageNotificationManager cleaned up")
     }
 }

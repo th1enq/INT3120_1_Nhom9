@@ -326,13 +326,37 @@ class LocketWidgetProvider : AppWidgetProvider() {
     /**
      * Decode Base64 string to Bitmap
      * Uses Base64.NO_WRAP flag as per app's Base64ImageDecoder
+     * Memory optimized with inSampleSize and RGB_565 for widgets
      */
     private fun decodeBase64ToBitmap(base64String: String): Bitmap? {
         return try {
             // Use NO_WRAP flag - same as Base64ImageLoader.kt uses
             val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.NO_WRAP)
             Log.d(TAG, "Decoded ${decodedBytes.size} bytes from base64")
-            val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+            
+            // First, decode bounds only to calculate sample size
+            val boundsOptions = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size, boundsOptions)
+            
+            // Calculate inSampleSize for memory efficiency (target 512px max)
+            val maxSize = 512
+            var sampleSize = 1
+            if (boundsOptions.outWidth > maxSize || boundsOptions.outHeight > maxSize) {
+                val halfWidth = boundsOptions.outWidth / 2
+                val halfHeight = boundsOptions.outHeight / 2
+                while ((halfWidth / sampleSize) >= maxSize && (halfHeight / sampleSize) >= maxSize) {
+                    sampleSize *= 2
+                }
+            }
+            
+            // Decode with calculated sample size and RGB_565 for less memory
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565 // Uses 2 bytes per pixel instead of 4
+            }
+            val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size, decodeOptions)
             if (bitmap == null) {
                 Log.e(TAG, "BitmapFactory.decodeByteArray returned null")
             }
@@ -340,11 +364,26 @@ class LocketWidgetProvider : AppWidgetProvider() {
         } catch (e: Exception) {
             Log.e(TAG, "Error decoding Base64 to bitmap: ${e.message}", e)
             null
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemoryError decoding Base64 to bitmap", e)
+            // Try with more aggressive sampling
+            try {
+                val decodedBytes = android.util.Base64.decode(base64String, android.util.Base64.NO_WRAP)
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = 4
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                }
+                BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size, options)
+            } catch (e2: Exception) {
+                Log.e(TAG, "Failed even with aggressive sampling", e2)
+                null
+            }
         }
     }
     
     /**
      * Load bitmap from URL
+     * Memory optimized with inSampleSize and RGB_565 for widgets
      */
     private fun loadBitmapFromUrl(urlString: String): Bitmap? {
         return try {
@@ -356,11 +395,37 @@ class LocketWidgetProvider : AppWidgetProvider() {
             connection.connect()
             
             val inputStream = connection.getInputStream()
-            val bitmap = BitmapFactory.decodeStream(inputStream)
+            val bytes = inputStream.readBytes()
             inputStream.close()
-            bitmap
+            
+            // First, decode bounds only
+            val boundsOptions = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOptions)
+            
+            // Calculate sample size for memory efficiency
+            val maxSize = 512
+            var sampleSize = 1
+            if (boundsOptions.outWidth > maxSize || boundsOptions.outHeight > maxSize) {
+                val halfWidth = boundsOptions.outWidth / 2
+                val halfHeight = boundsOptions.outHeight / 2
+                while ((halfWidth / sampleSize) >= maxSize && (halfHeight / sampleSize) >= maxSize) {
+                    sampleSize *= 2
+                }
+            }
+            
+            // Decode with calculated options
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
         } catch (e: Exception) {
             Log.e(TAG, "Error loading bitmap from URL: $urlString", e)
+            null
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemoryError loading bitmap from URL", e)
             null
         }
     }

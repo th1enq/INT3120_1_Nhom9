@@ -10,6 +10,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -20,6 +24,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.coupleapp.manager.MessageNotificationManager
 import com.example.coupleapp.navigation.NavGraph
 import com.example.coupleapp.service.LocationTrackingService
+import com.example.coupleapp.ui.components.OnboardingPermissionsDialog
 import com.example.coupleapp.ui.theme.CoupleAppTheme
 import com.example.coupleapp.util.LanguageManager
 import com.example.coupleapp.worker.PhotoSyncManager
@@ -110,10 +115,31 @@ class MainActivity : FragmentActivity() {
         setContent {
             CoupleAppTheme {
                 val navController = rememberNavController()
+                
+                // Check if onboarding should be shown (first launch)
+                val prefs = getSharedPreferences("couple_app_prefs", Context.MODE_PRIVATE)
+                var showOnboarding by remember { 
+                    mutableStateOf(!prefs.getBoolean("onboarding_completed", false)) 
+                }
+                
                 NavGraph(
                     navController = navController,
                     startDestination = targetRoute
                 )
+                
+                // Show onboarding dialog for first time users
+                if (showOnboarding) {
+                    OnboardingPermissionsDialog(
+                        onComplete = {
+                            prefs.edit().putBoolean("onboarding_completed", true).apply()
+                            showOnboarding = false
+                        },
+                        onDismiss = {
+                            prefs.edit().putBoolean("onboarding_completed", true).apply()
+                            showOnboarding = false
+                        }
+                    )
+                }
             }
         }
     }

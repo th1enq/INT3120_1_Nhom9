@@ -62,15 +62,24 @@ data class MissingRecord(
 
 /**
  * Summary data for missing feature
+ * 
+ * Streak logic:
+ * - currentStreak: Number of consecutive days where BOTH users sent hearts
+ * - hasSentToday: TRUE only when BOTH users have sent today (streak continues)
+ * - meSentToday: TRUE when current user has sent today (for UI indication)
+ * - partnerSentToday: TRUE when partner has sent today (for UI indication)
  */
 data class MissingSummary(
     val totalMissCount: Int = 0,
     val todayMissCount: Int = 0,
     val currentStreak: Int = 0,
     val longestStreak: Int = 0,
-    val hasSentToday: Boolean = false,
+    val hasSentToday: Boolean = false, // TRUE when BOTH sent today
     val myTodayCount: Int = 0,
-    val partnerTodayCount: Int = 0
+    val partnerTodayCount: Int = 0,
+    // New fields for better UI indication
+    val meSentToday: Boolean = false,    // TRUE when I have sent at least 1 heart today
+    val partnerSentToday: Boolean = false // TRUE when partner has sent today
 )
 
 /**

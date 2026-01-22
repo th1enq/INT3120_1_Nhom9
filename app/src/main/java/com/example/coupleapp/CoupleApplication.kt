@@ -12,9 +12,12 @@ import com.example.coupleapp.data.sync.PartnerSyncRepository
 import com.example.coupleapp.util.createImageLoaderWithBase64Support
 import com.example.coupleapp.util.SyncTriggerListener
 import com.example.coupleapp.service.SignificantLocationManager
+import com.example.coupleapp.service.LocationTrackingService
+import com.example.coupleapp.manager.MessageNotificationManager
 import com.example.coupleapp.util.PartnerNotificationManager
 import com.example.coupleapp.widget.WidgetManager
 import com.example.coupleapp.widget.observer.RoomWidgetObserver
+import com.example.coupleapp.widget.observer.WidgetFirestoreObserver
 import com.example.coupleapp.worker.BackgroundLocationWorker
 import com.example.coupleapp.worker.PartnerDataSyncWorker
 import com.example.coupleapp.worker.SleepSyncWorker
@@ -26,6 +29,7 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -177,6 +181,9 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
                 
                 // Restart Room observer (in case it was stopped)
                 RoomWidgetObserver.startObserving(this)
+                
+                // Periodic cache cleanup when app comes to foreground
+                LocationTrackingService.cleanupCaches()
             }
             Lifecycle.Event.ON_STOP -> {
                 // App moved to background
@@ -191,8 +198,37 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
     
     override fun onTerminate() {
         super.onTerminate()
-        // Clean up observers
+        Log.d("CoupleApplication", "Application terminating, cleaning up resources")
+        
+        // Clean up all observers and managers to prevent memory leaks
+        RoomWidgetObserver.cleanup()
+        WidgetFirestoreObserver.cleanup()
+        SyncTriggerListener.cleanup()
+        MessageNotificationManager.cleanup()
+        LocationTrackingService.resetAllCaches()
+        
+        // Cancel application scope
+        applicationScope.cancel()
+    }
+    
+    /**
+     * Call this when user logs out to cleanup user-specific resources
+     */
+    fun onUserLogout() {
+        Log.d("CoupleApplication", "User logged out, cleaning up user-specific resources")
+        
+        // Stop all observers
         RoomWidgetObserver.stopObserving()
+        WidgetFirestoreObserver.stopObserving()
+        SyncTriggerListener.stopListening()
+        MessageNotificationManager.cleanup()
+        
+        // Reset location tracking caches
+        LocationTrackingService.resetAllCaches()
+        LocationTrackingService.stopService(this)
+        
+        // Reset flags
+        isUserInChatScreen = false
     }
 }
 

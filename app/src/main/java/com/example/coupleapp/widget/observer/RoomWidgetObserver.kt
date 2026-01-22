@@ -111,6 +111,19 @@ object RoomWidgetObserver {
         observerScope?.cancel()
         observerScope = null
         partnerId = null
+        // Reset timestamps to allow fresh updates on restart
+        lastSleepUpdate = 0L
+        lastLocationUpdate = 0L
+        lastPhotoUpdate = 0L
+    }
+    
+    /**
+     * Full cleanup - same as stopObserving but more explicit
+     * Call this on app termination
+     */
+    fun cleanup() {
+        Log.d(TAG, "Cleaning up RoomWidgetObserver")
+        stopObserving()
     }
     
     /**

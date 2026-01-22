@@ -101,6 +101,57 @@ class LocationTrackingService : Service() {
         private val addingPhotos = mutableSetOf<String>()
         private val photoProcessingLock = Any()
         private const val DEBOUNCE_MS = 3000L // 3 seconds debounce window
+        private const val MAX_CACHE_SIZE = 200 // Maximum entries before cleanup
+        private const val CACHE_EXPIRY_MS = 60 * 60 * 1000L // 1 hour expiry for URI cache
+        
+        /**
+         * Periodic cleanup of stale entries in caches
+         * Should be called periodically to prevent memory buildup
+         */
+        fun cleanupCaches() {
+            synchronized(photoProcessingLock) {
+                val now = System.currentTimeMillis()
+                
+                // Clean recentlyProcessedUris - remove entries older than CACHE_EXPIRY_MS
+                val expiredUris = recentlyProcessedUris.filter { (_, timestamp) ->
+                    now - timestamp > CACHE_EXPIRY_MS
+                }.keys
+                expiredUris.forEach { recentlyProcessedUris.remove(it) }
+                
+                // Trim processedPhotoPaths if too large
+                if (processedPhotoPaths.size > MAX_CACHE_SIZE) {
+                    val toRemove = processedPhotoPaths.size - MAX_CACHE_SIZE / 2
+                    val iterator = processedPhotoPaths.iterator()
+                    repeat(toRemove) {
+                        if (iterator.hasNext()) {
+                            iterator.next()
+                            iterator.remove()
+                        }
+                    }
+                }
+                
+                // Clear addingPhotos that might be stuck
+                addingPhotos.clear()
+                
+                android.util.Log.d("LocationTrackingService", 
+                    "Cache cleanup: processedPhotoPaths=${processedPhotoPaths.size}, recentlyProcessedUris=${recentlyProcessedUris.size}")
+            }
+        }
+        
+        /**
+         * Full reset of all caches - call on logout or app termination
+         */
+        fun resetAllCaches() {
+            synchronized(photoProcessingLock) {
+                processedPhotoPaths.clear()
+                recentlyProcessedUris.clear()
+                addingPhotos.clear()
+                _lastKnownLocation.value = null
+                _isColocationActive.value = false
+                _colocationStartTime.value = null
+                android.util.Log.d("LocationTrackingService", "All caches reset")
+            }
+        }
         
         fun startService(
             context: Context,

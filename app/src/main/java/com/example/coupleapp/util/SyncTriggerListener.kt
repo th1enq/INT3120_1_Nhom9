@@ -38,7 +38,18 @@ object SyncTriggerListener {
     
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    
+    // Make scope nullable and recreatable to properly manage lifecycle
+    private var scope: CoroutineScope? = null
+    private var scopeJob: kotlinx.coroutines.Job? = null
+    
+    private fun getOrCreateScope(): CoroutineScope {
+        if (scope == null) {
+            scopeJob = SupervisorJob()
+            scope = CoroutineScope(scopeJob!! + Dispatchers.IO)
+        }
+        return scope!!
+    }
     
     private var listenerRegistration: ListenerRegistration? = null
     private var isListening = false
@@ -86,7 +97,7 @@ object SyncTriggerListener {
                     Log.d(TAG, "📥 Received sync trigger: $dataType from $senderName")
                     
                     // Trigger sync worker and show notification
-                    scope.launch {
+                    getOrCreateScope().launch {
                         try {
                             // Show notification based on data type
                             showNotificationForTrigger(
@@ -218,6 +229,18 @@ object SyncTriggerListener {
         listenerRegistration?.remove()
         listenerRegistration = null
         isListening = false
+    }
+    
+    /**
+     * Full cleanup - cancel scope and stop listening
+     * Call this on app termination or logout
+     */
+    fun cleanup() {
+        Log.d(TAG, "Cleaning up SyncTriggerListener")
+        stopListening()
+        scopeJob?.cancel()
+        scopeJob = null
+        scope = null
     }
     
     /**

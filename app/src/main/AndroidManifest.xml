@@ -180,6 +180,12 @@
             android:enabled="true"
             android:exported="false" />
         
+        <!-- Smart Geofence Receiver (for important places like Home/Work) -->
+        <receiver
+            android:name=".service.GeofenceReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        
         <!-- Location Tracking Foreground Service -->
         <service
             android:name=".service.LocationTrackingService"

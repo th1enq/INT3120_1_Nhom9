@@ -116,6 +116,7 @@ class MissingViewModelFirebase : ViewModel() {
 
     /**
      * Load missing data from Firestore
+     * Also handles day change detection and resets counts appropriately
      */
     private fun loadMissingData() {
         loadDataJob?.cancel()
@@ -133,8 +134,16 @@ class MissingViewModelFirebase : ViewModel() {
                 // Generate coupleId
                 val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
                 val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                
+                // ========== DAY CHANGE DETECTION ==========
+                val lastLoadedDate = _uiState.value.lastLoadedDate
+                if (lastLoadedDate.isNotEmpty() && lastLoadedDate != today) {
+                    Log.d(TAG, "📅 Day changed from $lastLoadedDate to $today - resetting counts")
+                    // New day! Reset pending hearts
+                    _uiState.update { it.copy(pendingHearts = 0, clickCount = 0) }
+                }
 
-                Log.d(TAG, "Loading missing data for coupleId: $coupleId")
+                Log.d(TAG, "Loading missing data for coupleId: $coupleId, date: $today")
 
                 // Load today's counts for both users
                 val myTodayResult = loadTodayCount(coupleId, currentUserId, today)
@@ -151,17 +160,26 @@ class MissingViewModelFirebase : ViewModel() {
                 // Calculate streak with longest
                 val (currentStreak, longestStreak) = calculateStreakWithLongest(historyList, currentUserId, partnerId)
                 
-                // Check if both users sent today
-                val hasSentToday = myTodayResult.todayCount > 0 && partnerTodayResult.todayCount > 0
+                // Check if both users sent today - THIS IS THE KEY FOR STREAK ACTIVATION
+                // hasSentToday = TRUE only when BOTH users have sent at least 1 heart today
+                val mySentToday = myTodayResult.todayCount > 0
+                val partnerSentToday = partnerTodayResult.todayCount > 0
+                val bothSentToday = mySentToday && partnerSentToday
+                
+                Log.d(TAG, "📊 Today stats: me=$mySentToday (${myTodayResult.todayCount}), " +
+                        "partner=$partnerSentToday (${partnerTodayResult.todayCount}), " +
+                        "bothSentToday=$bothSentToday, streak=$currentStreak")
 
                 val summary = MissingSummary(
                     totalMissCount = totalMissing,
                     todayMissCount = myTodayResult.todayCount + partnerTodayResult.todayCount,
                     currentStreak = currentStreak,
                     longestStreak = longestStreak,
-                    hasSentToday = hasSentToday,
+                    hasSentToday = bothSentToday, // Both must send for streak to be active
                     myTodayCount = myTodayResult.todayCount,
-                    partnerTodayCount = partnerTodayResult.todayCount
+                    partnerTodayCount = partnerTodayResult.todayCount,
+                    meSentToday = mySentToday,       // For UI - show if I sent today
+                    partnerSentToday = partnerSentToday // For UI - show if partner sent today
                 )
 
                 _uiState.update {
@@ -170,7 +188,9 @@ class MissingViewModelFirebase : ViewModel() {
                         summary = summary,
                         myTodayCount = myTodayResult,
                         partnerTodayCount = partnerTodayResult,
-                        isLoading = false
+                        isLoading = false,
+                        lastLoadedDate = today, // Remember current date
+                        pendingHearts = 0 // Clear pending after sync with server
                     )
                 }
 
@@ -329,14 +349,49 @@ class MissingViewModelFirebase : ViewModel() {
 
     /**
      * Send a missing signal to partner
+     * Uses OPTIMISTIC UPDATE for smooth UI:
+     * 1. Update UI immediately (pendingHearts + 1)
+     * 2. Send to API in background
+     * 3. On success: confirm by loading real data
+     * 4. On error: rollback pendingHearts
      */
     fun sendMissing() {
         animationJob?.cancel()
-
+        
+        // ========== OPTIMISTIC UPDATE ==========
+        // Update UI IMMEDIATELY before API call
+        val currentMyCount = _uiState.value.myTodayCount.todayCount
+        val newOptimisticCount = currentMyCount + _uiState.value.pendingHearts + 1
+        val partnerCount = _uiState.value.partnerTodayCount.todayCount
+        
+        // Calculate if streak should be active after this send
+        val willHaveSentToday = true // We're sending now
+        val partnerHasSentToday = partnerCount > 0
+        val newHasSentToday = willHaveSentToday && partnerHasSentToday
+        
+        // Calculate potential new streak
+        val currentStreak = _uiState.value.summary.currentStreak
+        val newStreak = if (!_uiState.value.summary.hasSentToday && newHasSentToday) {
+            currentStreak + 1 // First time both sent today, streak increases
+        } else {
+            currentStreak
+        }
+        
         _uiState.update {
             it.copy(
                 isHeartAnimating = true,
-                clickCount = it.clickCount + 1
+                clickCount = it.clickCount + 1,
+                pendingHearts = it.pendingHearts + 1,
+                // Optimistic update for displayed count
+                myTodayCount = it.myTodayCount.copy(todayCount = newOptimisticCount),
+                summary = it.summary.copy(
+                    myTodayCount = newOptimisticCount,
+                    todayMissCount = newOptimisticCount + partnerCount,
+                    hasSentToday = newHasSentToday,
+                    meSentToday = true, // I'm sending now, so always true
+                    partnerSentToday = partnerHasSentToday,
+                    currentStreak = if (newHasSentToday) maxOf(newStreak, 1) else it.summary.currentStreak
+                )
             )
         }
 
@@ -347,7 +402,12 @@ class MissingViewModelFirebase : ViewModel() {
 
                 if (currentUserId.isEmpty() || partnerId == null) {
                     Log.e(TAG, "Cannot send missing: no partner")
-                    _uiState.update { it.copy(isHeartAnimating = false) }
+                    // Rollback optimistic update
+                    _uiState.update { it.copy(
+                        isHeartAnimating = false,
+                        pendingHearts = maxOf(0, it.pendingHearts - 1),
+                        myTodayCount = it.myTodayCount.copy(todayCount = currentMyCount)
+                    ) }
                     return@launch
                 }
 
@@ -382,28 +442,16 @@ class MissingViewModelFirebase : ViewModel() {
                     merge = true
                 )
 
-                // Update UI immediately
-                val myCount = _uiState.value.myTodayCount.copy(todayCount = newCount)
-                val partnerCount = _uiState.value.partnerTodayCount
-                
-                // Update hasSentToday in summary
-                val hasSentToday = newCount > 0 && partnerCount.todayCount > 0
-                val updatedSummary = _uiState.value.summary.copy(
-                    hasSentToday = hasSentToday,
-                    myTodayCount = newCount,
-                    todayMissCount = newCount + partnerCount.todayCount
-                )
-                
+                // API call successful - clear pending and confirm
                 _uiState.update {
                     it.copy(
-                        myTodayCount = myCount,
-                        summary = updatedSummary,
+                        pendingHearts = maxOf(0, it.pendingHearts - 1),
                         lastSentTime = System.currentTimeMillis(),
                         sendSuccess = true
                     )
                 }
 
-                Log.d(TAG, "Missing sent successfully, new count: $newCount, hasSentToday: $hasSentToday")
+                Log.d(TAG, "Missing sent successfully, new count: $newCount")
                 
                 // Update widget immediately after sending missing
                 WidgetManager.onMissingUpdated(CoupleApplication.instance)
@@ -411,11 +459,12 @@ class MissingViewModelFirebase : ViewModel() {
                 // Notify partner via sync trigger (no Cloud Functions needed!)
                 com.example.coupleapp.util.SyncTriggerHelper.notifyMissingSent(CoupleApplication.instance)
 
-                // Reload data to update history and streak
+                // Reload data to sync with server (also gets partner's latest count)
+                // This will update streak correctly based on server data
                 loadMissingData()
 
                 // Animation
-                delay(400)
+                delay(300)
                 _uiState.update { it.copy(isHeartAnimating = false) }
 
                 delay(200)
@@ -423,9 +472,14 @@ class MissingViewModelFirebase : ViewModel() {
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending missing", e)
+                // Rollback optimistic update on error
+                val rolledBackCount = maxOf(0, _uiState.value.myTodayCount.todayCount - 1)
                 _uiState.update {
                     it.copy(
                         isHeartAnimating = false,
+                        pendingHearts = maxOf(0, it.pendingHearts - 1),
+                        myTodayCount = it.myTodayCount.copy(todayCount = rolledBackCount),
+                        summary = it.summary.copy(myTodayCount = rolledBackCount),
                         error = e.message
                     )
                 }
@@ -469,5 +523,9 @@ data class MissingUiStateFirebase(
     val clickCount: Int = 0,
     val lastSentTime: Long = 0L,
     val sendSuccess: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // Optimistic update: pending hearts waiting for API confirmation
+    val pendingHearts: Int = 0,
+    // Last loaded date - to detect day change
+    val lastLoadedDate: String = ""
 )

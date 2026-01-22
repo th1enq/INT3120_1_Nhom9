@@ -511,12 +511,24 @@ object WidgetDataRepository {
     
     // ==================== MISSING DATA ====================
     
+    // Key to store the last cached date for missing data
+    private const val KEY_MISSING_CACHED_DATE = "missing_cached_date"
+    
     suspend fun getMissingWidgetData(context: Context, forceRefresh: Boolean = false): MissingWidgetCachedData? {
         val prefs = getPrefs(context)
         val cachedTimestamp = prefs.getLong(KEY_MISSING_TIMESTAMP, 0)
+        val cachedDate = prefs.getString(KEY_MISSING_CACHED_DATE, "") ?: ""
+        val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
         val now = System.currentTimeMillis()
         
-        if (!forceRefresh && (now - cachedTimestamp) < MISSING_CACHE_EXPIRY_MS) {
+        // ========== DAY CHANGE DETECTION ==========
+        // Force refresh if day has changed (resets today's counts)
+        val dayChanged = cachedDate.isNotEmpty() && cachedDate != today
+        if (dayChanged) {
+            Log.d(TAG, "📅 Day changed from $cachedDate to $today - invalidating missing cache")
+        }
+        
+        if (!forceRefresh && !dayChanged && (now - cachedTimestamp) < MISSING_CACHE_EXPIRY_MS) {
             val cachedData = parseMissingCachedData(prefs.getString(KEY_MISSING_DATA, null))
             if (cachedData != null) {
                 Log.d(TAG, "Returning cached missing data")
@@ -603,9 +615,11 @@ object WidgetDataRepository {
     }
     
     private fun cacheMissingData(prefs: SharedPreferences, data: MissingWidgetCachedData) {
+        val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
         prefs.edit()
             .putString(KEY_MISSING_DATA, serializeMissingData(data))
             .putLong(KEY_MISSING_TIMESTAMP, System.currentTimeMillis())
+            .putString(KEY_MISSING_CACHED_DATE, today) // Store current date for day change detection
             .apply()
     }
     

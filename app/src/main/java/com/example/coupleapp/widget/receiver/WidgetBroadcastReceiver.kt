@@ -4,6 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.example.coupleapp.data.sleep.GoogleSleepApiManager
+import com.example.coupleapp.service.SignificantLocationManager
+import com.example.coupleapp.service.SmartGeofenceManager
 import com.example.coupleapp.widget.LocationWidgetProvider
 import com.example.coupleapp.widget.LocketWidgetProvider
 import com.example.coupleapp.widget.MissingWidgetProvider
@@ -11,6 +14,9 @@ import com.example.coupleapp.widget.SleepWidgetProvider
 import com.example.coupleapp.widget.WidgetManager
 import com.example.coupleapp.widget.data.WidgetDataRepository
 import com.example.coupleapp.widget.worker.WidgetUpdateWorker
+import com.example.coupleapp.worker.BackgroundLocationWorker
+import com.example.coupleapp.worker.SleepSyncWorker
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -99,13 +105,62 @@ class WidgetBroadcastReceiver : BroadcastReceiver() {
     }
     
     private fun handleBootCompleted(context: Context) {
-        Log.d(TAG, "Boot completed, scheduling widget updates")
-        CoroutineScope(Dispatchers.Main).launch {
-            // Reschedule periodic updates
-            WidgetUpdateWorker.schedulePeriodicUpdates(context)
+        Log.d(TAG, "Boot completed, rescheduling all background workers")
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Check if user is logged in
+                val currentUser = FirebaseAuth.getInstance().currentUser
+                if (currentUser == null) {
+                    Log.d(TAG, "No user logged in, skipping worker scheduling")
+                    return@launch
+                }
+                
+                // ========== CRITICAL: Re-register Google Sleep API ==========
+                // PendingIntents are cleared on reboot, must re-register!
+                val prefs = context.getSharedPreferences("sleep_preferences", Context.MODE_PRIVATE)
+                val googleSleepApiEnabled = prefs.getBoolean("google_sleep_api_enabled", false)
+                
+                if (googleSleepApiEnabled) {
+                    Log.d(TAG, "Re-registering Google Sleep API after boot")
+                    val googleSleepManager = GoogleSleepApiManager(context)
+                    if (googleSleepManager.hasActivityRecognitionPermission()) {
+                        googleSleepManager.registerSleepUpdates()
+                        Log.d(TAG, "✅ Google Sleep API re-registered successfully")
+                    } else {
+                        Log.w(TAG, "⚠️ Activity Recognition permission not granted")
+                    }
+                }
+                
+                // ========== Re-start Significant Location Tracking ==========
+                // Location PendingIntents are also cleared on reboot
+                Log.d(TAG, "Re-starting significant location tracking")
+                SignificantLocationManager.getInstance(context).startTracking()
+                
+                // ========== Re-schedule Background Location Worker ==========
+                BackgroundLocationWorker.schedule(context)
+                
+                // ========== Re-register Smart Geofences ==========
+                // Geofences are also cleared on reboot!
+                Log.d(TAG, "Re-registering smart geofences")
+                SmartGeofenceManager.getInstance(context).reRegisterAllGeofences()
+                
+                // ========== Re-schedule Sleep Sync Workers ==========
+                SleepSyncWorker.schedulePeriodicSync(context)
+                SleepSyncWorker.scheduleMorningSync(context)
+                
+                // ========== Reschedule Widget Updates ==========
+                WidgetUpdateWorker.schedulePeriodicUpdates(context)
+                
+                Log.d(TAG, "✅ All background workers rescheduled after boot")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error rescheduling workers after boot", e)
+            }
             
-            // Force update all widgets with fresh data
-            WidgetManager.forceRefreshAllWidgets(context)
+            // Force update all widgets with fresh data (on Main thread)
+            CoroutineScope(Dispatchers.Main).launch {
+                WidgetManager.forceRefreshAllWidgets(context)
+            }
         }
     }
     

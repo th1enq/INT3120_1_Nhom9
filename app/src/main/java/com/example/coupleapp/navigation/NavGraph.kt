@@ -45,6 +45,8 @@ import com.example.coupleapp.ui.screens.profile.ChangePasswordScreen
 import com.example.coupleapp.ui.screens.profile.ManageLinkScreen
 import com.example.coupleapp.ui.screens.profile.NotificationSettingsScreen
 import com.example.coupleapp.ui.screens.profile.LanguageSettingsScreen
+import com.example.coupleapp.ui.screens.profile.PermissionsSettingsScreen
+import com.example.coupleapp.ui.screens.profile.ImportantPlacesScreen
 import com.example.coupleapp.ui.screens.profile.HelpScreen
 import com.example.coupleapp.ui.screens.profile.AboutScreen
 
@@ -1312,6 +1314,16 @@ fun NavGraph(
                         launchSingleTop = true
                     }
                 },
+                onNavigateToPermissions = {
+                    navController.navigate(Screen.PermissionsSettings.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToImportantPlaces = {
+                    navController.navigate(Screen.ImportantPlaces.route) {
+                        launchSingleTop = true
+                    }
+                },
                 onNavigateToHelp = {
                     navController.navigate(Screen.Help.route) {
                         launchSingleTop = true
@@ -1560,6 +1572,72 @@ fun NavGraph(
             }
         ) {
             AboutScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        
+        // Permissions Settings Screen
+        composable(
+            route = Screen.PermissionsSettings.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            PermissionsSettingsScreen(
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+        
+        // Important Places Screen
+        composable(
+            route = Screen.ImportantPlaces.route,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(250)
+                ) + fadeIn(animationSpec = tween(250))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(250)
+                ) + fadeOut(animationSpec = tween(250))
+            }
+        ) {
+            ImportantPlacesScreen(
                 onBackClick = { navController.popBackStack() }
             )
         }

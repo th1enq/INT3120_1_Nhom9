@@ -11,7 +11,9 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -33,13 +35,20 @@ object WidgetFirestoreObserver {
     private var locketListener: ListenerRegistration? = null
     private var missingListener: ListenerRegistration? = null
     
-    private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // Make scope nullable and properly managed to avoid memory leaks
+    private var observerScope: CoroutineScope? = null
+    private var scopeJob: Job? = null
     
     /**
      * Start observing Firestore for widget data changes
      * Should be called when app starts or when user logs in
      */
     fun startObserving(context: Context) {
+        // Create a new scope if not exists
+        if (observerScope == null) {
+            scopeJob = SupervisorJob()
+            observerScope = CoroutineScope(scopeJob!! + Dispatchers.Main)
+        }
         val currentUser = auth.currentUser
         if (currentUser == null) {
             Log.d(TAG, "No user logged in, skipping Firestore observation")
@@ -67,6 +76,18 @@ object WidgetFirestoreObserver {
         
         missingListener?.remove()
         missingListener = null
+    }
+    
+    /**
+     * Full cleanup - cancel scope and remove all listeners
+     * Call this when app is terminated or user logs out
+     */
+    fun cleanup() {
+        Log.d(TAG, "Cleaning up WidgetFirestoreObserver")
+        stopObserving()
+        scopeJob?.cancel()
+        scopeJob = null
+        observerScope = null
     }
     
     /**
@@ -98,7 +119,7 @@ object WidgetFirestoreObserver {
                     
                     if (hasNewLocket) {
                         Log.d(TAG, "New locket received from partner, updating widget")
-                        observerScope.launch {
+                        observerScope?.launch {
                             // Invalidate cache and update widget
                             WidgetDataRepository.invalidateLocketCache(context)
                             LocketWidgetProvider.updateWidgets(context)
@@ -143,7 +164,7 @@ object WidgetFirestoreObserver {
                             val count = snapshot.getLong("count")?.toInt() ?: 0
                             if (count > 0) {
                                 Log.d(TAG, "Partner missing count updated: $count, updating widget")
-                                observerScope.launch {
+                                observerScope?.launch {
                                     // Invalidate cache and update widget
                                     WidgetDataRepository.invalidateMissingCache(context)
                                     MissingWidgetProvider.updateWidgets(context)

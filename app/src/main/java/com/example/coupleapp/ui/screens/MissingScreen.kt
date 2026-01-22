@@ -55,6 +55,19 @@ fun MissingScreen(
     // Snackbar for success feedback
     val snackbarHostState = remember { SnackbarHostState() }
     
+    // Auto-refresh when screen resumes to detect day change
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                // Refresh data when screen resumes - will detect day change
+                viewModel.refreshData()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    
     // Handle navigation
     LaunchedEffect(selectedBottomNavItem) {
         when (selectedBottomNavItem) {
@@ -145,6 +158,10 @@ fun MissingScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Top Bar with Streak Indicator
+                        // isStreakActive logic:
+                        // - Full active (both sent): hasSentToday = true → fire animation + bright color
+                        // - Partial active (only me sent): meSentToday = true → fire animation (dimmer)  
+                        // - Inactive (nobody sent today): meSentToday = false → gray/dim
                         AnimatedVisibility(
                             visible = visible,
                             enter = fadeIn(animationSpec = tween(300)) +
@@ -154,7 +171,11 @@ fun MissingScreen(
                                 title = stringResource(R.string.missing),
                                 onBackClick = onBackClick,
                                 streakCount = uiState.summary.currentStreak,
-                                isStreakActive = uiState.summary.hasSentToday
+                                // Streak is "active" when at least I have sent today
+                                // This encourages user to send and shows they've contributed
+                                isStreakActive = uiState.summary.meSentToday,
+                                // Show extra indicator if partner hasn't sent yet
+                                isPartnerSent = uiState.summary.partnerSentToday
                             )
                         }
                         

@@ -65,6 +65,8 @@ sealed class Screen(val route: String) {
     object ManageLink : Screen("manage_link")
     object NotificationSettings : Screen("notification_settings")
     object LanguageSettings : Screen("language_settings")
+    object PermissionsSettings : Screen("permissions_settings")
+    object ImportantPlaces : Screen("important_places")
     object Help : Screen("help")
     object About : Screen("about")
 }
