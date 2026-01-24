@@ -29,7 +29,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/distance"
-                android:contentDescription="My location" />
+                android:contentDescription="@string/widget_my_location_desc" />
 
             <!-- My name -->
             <TextView
@@ -37,7 +37,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Bạn"
+                android:text="@string/widget_you"
                 android:textColor="#4CAF50"
                 android:textSize="11sp"
                 android:textStyle="bold"
@@ -90,7 +90,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="📍 Đang chia sẻ"
+                android:text="@string/widget_sharing"
                 android:textColor="#4CAF50"
                 android:textSize="9sp" />
 
@@ -110,7 +110,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/distance"
-                android:contentDescription="Partner location" />
+                android:contentDescription="@string/widget_partner_location_desc" />
 
             <!-- Partner name -->
             <TextView
@@ -118,7 +118,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Người yêu"
+                android:text="@string/widget_lover"
                 android:textColor="#E91E63"
                 android:textSize="11sp"
                 android:textStyle="bold"
@@ -178,14 +178,14 @@
             android:layout_height="48dp"
             android:src="@drawable/distance"
             android:alpha="0.5"
-            android:contentDescription="No location" />
+            android:contentDescription="@string/widget_no_location_desc" />
 
         <TextView
             android:id="@+id/location_empty_message"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Chia sẻ vị trí để bắt đầu"
+            android:text="@string/widget_share_location_start"
             android:textColor="#888888"
             android:textSize="12sp" />
 
@@ -193,7 +193,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Nhấn để mở bản đồ"
+            android:text="@string/widget_tap_to_open_map"
             android:textColor="#2196F3"
             android:textSize="10sp" />
 

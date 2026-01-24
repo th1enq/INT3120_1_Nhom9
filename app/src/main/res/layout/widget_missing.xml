@@ -33,7 +33,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
-                android:text="ngày"
+                android:text="@string/widget_days"
                 android:textColor="#888888"
                 android:textSize="10sp" />
 
@@ -56,7 +56,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Nhớ người yêu"
+            android:text="@string/widget_miss_partner"
             android:textColor="#E91E63"
             android:textSize="9sp"
             android:textStyle="bold" />

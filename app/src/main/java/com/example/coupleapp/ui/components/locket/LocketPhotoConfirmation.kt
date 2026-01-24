@@ -42,6 +42,7 @@ fun LocketPhotoConfirmation(
     onSend: () -> Unit,
     onCancel: () -> Unit,
     onSaveToGallery: () -> Unit,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -134,7 +135,8 @@ fun LocketPhotoConfirmation(
                 
                 // Send button (main action)
                 SendButton(
-                    onClick = onSend
+                    onClick = onSend,
+                    enabled = !isSending
                 )
                 
                 // Save to gallery button
@@ -193,13 +195,14 @@ fun LocketPhotoConfirmation(
 @Composable
 private fun SendButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else 1f,
+        targetValue = if (isPressed && enabled) 0.9f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -207,21 +210,24 @@ private fun SendButton(
         label = "sendScale"
     )
     
+    val backgroundColor = if (enabled) Color(0xFF4CAF50) else Color(0xFF4CAF50).copy(alpha = 0.5f)
+    
     Box(
         modifier = modifier
             .size(80.dp)
             .clip(CircleShape)
-            .background(Color(0xFF4CAF50))
+            .background(backgroundColor)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null
+                indication = null,
+                enabled = enabled
             ) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.Send,
             contentDescription = "Send",
-            tint = Color.White,
+            tint = if (enabled) Color.White else Color.White.copy(alpha = 0.7f),
             modifier = Modifier
                 .size(36.dp)
                 .offset(x = 2.dp) // Slight offset to center the send icon visually

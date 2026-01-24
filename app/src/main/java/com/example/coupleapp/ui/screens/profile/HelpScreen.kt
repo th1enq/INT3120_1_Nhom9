@@ -41,28 +41,28 @@ fun HelpScreen(
     
     val faqs = listOf(
         Pair(
-            "How do I link with my partner?",
-            "Go to Profile > Manage Link and share your link code with your partner. They can enter your code in their app to connect with you."
+            stringResource(R.string.faq_link_partner),
+            stringResource(R.string.faq_link_partner_answer)
         ),
         Pair(
-            "How do I send a Locket?",
-            "Tap on the Locket feature from the home screen or profile. Choose an emoji, text, photo, or drawing to send to your partner."
+            stringResource(R.string.faq_send_locket),
+            stringResource(R.string.faq_send_locket_answer)
         ),
         Pair(
-            "What are Quests?",
-            "Quests are daily challenges that you and your partner can complete together to earn coins and strengthen your bond."
+            stringResource(R.string.faq_quests),
+            stringResource(R.string.faq_quests_answer)
         ),
         Pair(
-            "How does Sleep Tracking work?",
-            "Enable sleep tracking to monitor your sleep patterns. Share your sleep data with your partner to sync your rest schedules."
+            stringResource(R.string.faq_sleep_tracking),
+            stringResource(R.string.faq_sleep_tracking_answer)
         ),
         Pair(
-            "Can I change my link code?",
-            "Link codes are permanent and cannot be changed. They are unique to your account and help your partner find you."
+            stringResource(R.string.faq_change_code),
+            stringResource(R.string.faq_change_code_answer)
         ),
         Pair(
-            "How do I unlink from my partner?",
-            "Go to Profile > Manage Link > Unlink Partner. Note that this will remove all shared data between you and your partner."
+            stringResource(R.string.faq_unlink),
+            stringResource(R.string.faq_unlink_answer)
         )
     )
     
@@ -85,7 +85,7 @@ fun HelpScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                             tint = Color(0xFF2D3748)
                         )
                     }
@@ -141,22 +141,22 @@ fun HelpScreen(
                                 Column {
                                     HelpContactItem(
                                         icon = Icons.Filled.Email,
-                                        title = "Email Support",
-                                        subtitle = "support@coupleapp.com",
+                                        title = stringResource(R.string.email_support),
+                                        subtitle = stringResource(R.string.support_email),
                                         onClick = { }
                                     )
                                     HorizontalDivider(color = Color(0xFFF0F0F0))
                                     HelpContactItem(
                                         icon = Icons.Filled.Chat,
-                                        title = "Live Chat",
-                                        subtitle = "Chat with our support team",
+                                        title = stringResource(R.string.live_chat),
+                                        subtitle = stringResource(R.string.live_chat_desc),
                                         onClick = { }
                                     )
                                     HorizontalDivider(color = Color(0xFFF0F0F0))
                                     HelpContactItem(
                                         icon = Icons.Filled.BugReport,
-                                        title = "Report a Bug",
-                                        subtitle = "Help us improve the app",
+                                        title = stringResource(R.string.report_bug),
+                                        subtitle = stringResource(R.string.report_bug_desc),
                                         onClick = { }
                                     )
                                 }
@@ -230,15 +230,15 @@ fun HelpScreen(
                                 Column {
                                     HelpContactItem(
                                         icon = Icons.Filled.Star,
-                                        title = "Rate Us",
-                                        subtitle = "Love the app? Give us 5 stars!",
+                                        title = stringResource(R.string.rate_us),
+                                        subtitle = stringResource(R.string.rate_us_desc),
                                         onClick = { }
                                     )
                                     HorizontalDivider(color = Color(0xFFF0F0F0))
                                     HelpContactItem(
                                         icon = Icons.Filled.Feedback,
-                                        title = "Send Feedback",
-                                        subtitle = "Share your thoughts with us",
+                                        title = stringResource(R.string.send_feedback),
+                                        subtitle = stringResource(R.string.send_feedback_desc),
                                         onClick = { }
                                     )
                                 }

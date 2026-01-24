@@ -26,10 +26,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.coupleapp.R
 import com.example.coupleapp.util.BatteryOptimizationHelper
 import kotlinx.coroutines.delay
 
@@ -141,7 +143,7 @@ fun PermissionsSettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Quyền ứng dụng",
+                        text = stringResource(R.string.app_permissions),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2D3748)
                     )
@@ -150,7 +152,7 @@ fun PermissionsSettingsScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                             tint = Color(0xFF2D3748)
                         )
                     }
@@ -204,7 +206,7 @@ fun PermissionsSettingsScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "QUYỀN CẦN THIẾT",
+                            text = stringResource(R.string.required_permissions),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF718096),

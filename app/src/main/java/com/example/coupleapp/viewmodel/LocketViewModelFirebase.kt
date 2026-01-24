@@ -306,6 +306,11 @@ class LocketViewModelFirebase : ViewModel() {
 
     // Send locket
     fun sendLocket() {
+        // Guard: prevent duplicate sends when already sending
+        if (_uiState.value.isSending) {
+            return
+        }
+        
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true) }
             

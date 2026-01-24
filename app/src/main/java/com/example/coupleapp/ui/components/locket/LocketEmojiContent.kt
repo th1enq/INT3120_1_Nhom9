@@ -38,6 +38,7 @@ fun LocketEmojiContent(
     selectedEmoji: String?,
     onSelectEmoji: () -> Unit,
     onSendEmoji: () -> Unit,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -97,7 +98,8 @@ fun LocketEmojiContent(
         EmojiActionButton(
             hasEmoji = selectedEmoji != null,
             onSelectClick = onSelectEmoji,
-            onSendClick = onSendEmoji
+            onSendClick = onSendEmoji,
+            isSending = isSending
         )
     }
 }
@@ -110,6 +112,7 @@ private fun EmojiActionButton(
     hasEmoji: Boolean,
     onSelectClick: () -> Unit,
     onSendClick: () -> Unit,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -130,7 +133,8 @@ private fun EmojiActionButton(
             // Send button
             CaptureButton(
                 onClick = onSendClick,
-                color = Color(0xFF4CAF50)
+                color = Color(0xFF4CAF50),
+                enabled = !isSending
             )
         }
     }

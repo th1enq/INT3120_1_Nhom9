@@ -318,19 +318,22 @@ private fun CameraControls(
 fun CaptureButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    color: Color = Color(0xFF4CAF50)
+    color: Color = Color(0xFF4CAF50),
+    enabled: Boolean = true
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.85f else 1f,
+        targetValue = if (isPressed && enabled) 0.85f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "captureScale"
     )
+    
+    val actualColor = if (enabled) color else color.copy(alpha = 0.5f)
     
     Box(
         modifier = modifier
@@ -339,15 +342,16 @@ fun CaptureButton(
             .clip(CircleShape)
             .border(
                 width = 4.dp,
-                color = Color(0xFF2D2D2D),
+                color = if (enabled) Color(0xFF2D2D2D) else Color(0xFF2D2D2D).copy(alpha = 0.5f),
                 shape = CircleShape
             )
             .padding(4.dp)
             .clip(CircleShape)
-            .background(color)
+            .background(actualColor)
             .clickable(
                 interactionSource = interactionSource,
-                indication = null
+                indication = null,
+                enabled = enabled
             ) { onClick() },
         contentAlignment = Alignment.Center
     ) {

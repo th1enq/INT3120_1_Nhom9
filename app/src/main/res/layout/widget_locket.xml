@@ -36,7 +36,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:gravity="center"
-                android:text="I love you!"
+                android:text="@string/widget_i_love_you"
                 android:textColor="#333333"
                 android:textSize="12sp"
                 android:textStyle="italic"
@@ -53,7 +53,7 @@
                 android:scaleType="centerCrop"
                 android:src="@drawable/locket"
                 android:visibility="gone"
-                android:contentDescription="Locket image" />
+                android:contentDescription="@string/widget_locket_image_desc" />
 
             <!-- Caption overlay at bottom -->
             <TextView
@@ -85,7 +85,7 @@
                 android:layout_width="20dp"
                 android:layout_height="20dp"
                 android:src="@drawable/locket"
-                android:contentDescription="Locket" />
+                android:contentDescription="@string/feature_locket" />
 
             <!-- Sender and time -->
             <LinearLayout
@@ -99,7 +99,7 @@
                     android:id="@+id/locket_sender_name"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Partner"
+                    android:text="@string/partner"
                     android:textColor="#9C27B0"
                     android:textSize="10sp"
                     android:textStyle="bold"
@@ -144,14 +144,14 @@
             android:layout_height="40dp"
             android:src="@drawable/locket"
             android:alpha="0.5"
-            android:contentDescription="No Locket" />
+            android:contentDescription="@string/widget_no_locket_desc" />
 
         <TextView
             android:id="@+id/locket_empty_message"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Chưa có Locket"
+            android:text="@string/widget_no_locket_yet"
             android:textColor="#888888"
             android:textSize="10sp"
             android:gravity="center" />
@@ -160,7 +160,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text="Nhấn để gửi"
+            android:text="@string/widget_tap_to_send"
             android:textColor="#9C27B0"
             android:textSize="9sp" />
 

@@ -185,6 +185,32 @@
             android:name=".service.GeofenceReceiver"
             android:enabled="true"
             android:exported="false" />
+            
+        <!-- Location Restart Receiver - ensures tracking restarts after boot/update/clear RAM -->
+        <receiver
+            android:name=".receiver.LocationRestartReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+        
+        <!-- Location Alarm Receiver - periodic fallback for reliable location updates -->
+        <receiver
+            android:name=".receiver.LocationAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
+        
+        <!-- Sleep Alarm Receiver - Layer 3 for reliable sleep sync (survives Doze mode) -->
+        <receiver
+            android:name=".receiver.SleepAlarmReceiver"
+            android:enabled="true"
+            android:exported="false" />
         
         <!-- Location Tracking Foreground Service -->
         <service

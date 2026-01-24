@@ -522,105 +522,78 @@ class LocationRepository(
     }
     
     /**
-     * Process location history to fix common issues:
-     * 1. Validate and fix startTime > endTime issues
-     * 2. Merge consecutive entries at the same location (within 300m)
-     * 3. Fix entries from past days that still have departureTime = null
-     * 4. Ensure only the MOST RECENT entry can have departureTime = null ("currently here")
+     * Process location history for display:
+     * 1. Sort by arrival time (most recent first)
+     * 2. Fix swapped times (departureTime < arrivalTime)
+     * 3. For current location (today, no departure): show real-time duration
+     * 4. For past entries without departure: infer from next entry's arrival
+     * 
+     * SIMPLE: No merging - each entry is displayed separately
      */
     private fun processLocationHistory(rawHistory: List<LocationHistory>): List<LocationHistory> {
         if (rawHistory.isEmpty()) return emptyList()
         
-        val today = java.time.LocalDate.now()
-        val result = mutableListOf<LocationHistory>()
-        var foundCurrentLocation = false
+        val now = LocalDateTime.now()
+        val today = now.toLocalDate()
         
         // Sort by arrival time descending (most recent first)
         val sorted = rawHistory.sortedByDescending { it.arrivalTime }
         
-        for ((index, entry) in sorted.withIndex()) {
-            var processedEntry = entry
-            val entryDate = entry.arrivalTime.toLocalDate()
-            
-            // Fix 0: Validate that departureTime is not BEFORE arrivalTime (bug fix)
+        // Step 1: Basic fixes (swap invalid times)
+        val basicFixed = sorted.map { entry ->
             if (entry.departureTime != null && entry.departureTime.isBefore(entry.arrivalTime)) {
-                android.util.Log.w("LocationRepository", 
-                    "BUG: Entry ${entry.locationName} has departureTime (${entry.departureTime}) before arrivalTime (${entry.arrivalTime})! Swapping values.")
-                // Swap arrival and departure times
-                processedEntry = entry.copy(
+                android.util.Log.w("LocationRepository", "Swapping invalid times for ${entry.locationName}")
+                entry.copy(
                     arrivalTime = entry.departureTime,
                     departureTime = entry.arrivalTime,
                     durationMinutes = java.time.Duration.between(entry.departureTime, entry.arrivalTime).toMinutes().toInt().coerceAtLeast(0)
                 )
+            } else {
+                entry
             }
-            
-            // Fix 1: Only the FIRST entry (most recent) can have departureTime = null
-            // All other entries must have a departure time
-            if (processedEntry.departureTime == null) {
-                if (!foundCurrentLocation && entryDate == today) {
-                    // This is the current location (most recent, today, no departure)
-                    foundCurrentLocation = true
-                    
-                    // ★ CRITICAL: Calculate REAL-TIME duration from arrivalTime to NOW
-                    // This ensures UI shows accurate duration immediately, not stale data from Firebase
-                    val now = LocalDateTime.now()
-                    val realTimeDuration = java.time.Duration.between(processedEntry.arrivalTime, now).toMinutes().toInt().coerceAtLeast(0)
-                    if (realTimeDuration != processedEntry.durationMinutes) {
-                        android.util.Log.d("LocationRepository", 
-                            "★ Real-time duration update: ${processedEntry.locationName} - ${processedEntry.durationMinutes}min → ${realTimeDuration}min")
-                        processedEntry = processedEntry.copy(durationMinutes = realTimeDuration)
-                    }
-                } else {
-                    // This entry is NOT the current location, but has no departure time
-                    // Set departure time to end of that day or to the arrival time of the next (earlier in time) entry
-                    val nextEntry = sorted.getOrNull(index + 1)
-                    val departureTime = if (nextEntry != null && nextEntry.arrivalTime.toLocalDate() == entryDate) {
-                        // Use the next entry's arrival time (they left this place to go to next)
-                        nextEntry.arrivalTime
-                    } else {
-                        // Use end of day (23:59:59)
-                        entryDate.atTime(23, 59, 59)
-                    }
-                    
-                    val durationMinutes = java.time.Duration.between(processedEntry.arrivalTime, departureTime).toMinutes().toInt().coerceAtLeast(0)
-                    processedEntry = processedEntry.copy(
-                        departureTime = departureTime,
-                        durationMinutes = maxOf(durationMinutes, processedEntry.durationMinutes)
-                    )
-                    android.util.Log.d("LocationRepository", "Fixed entry without departure: ${entry.locationName} -> departure=$departureTime")
-                }
-            }
-            
-            // Fix 2: Merge with previous entry if same location (within 300m)
-            if (result.isNotEmpty()) {
-                val lastEntry = result.last()
-                val distance = calculateDistance(processedEntry.coordinate, lastEntry.coordinate)
-                
-                // Same location if within 300m and same day
-                if (distance <= COLOCATION_RADIUS_METERS && 
-                    processedEntry.arrivalTime.toLocalDate() == lastEntry.arrivalTime.toLocalDate()) {
-                    
-                    // Merge: extend the last entry's time range
-                    val mergedEntry = lastEntry.copy(
-                        arrivalTime = processedEntry.arrivalTime, // Earlier arrival
-                        departureTime = lastEntry.departureTime ?: processedEntry.departureTime,
-                        durationMinutes = if (lastEntry.departureTime != null || processedEntry.departureTime != null) {
-                            val endTime = lastEntry.departureTime ?: processedEntry.departureTime ?: LocalDateTime.now()
-                            java.time.Duration.between(processedEntry.arrivalTime, endTime).toMinutes().toInt().coerceAtLeast(0)
-                        } else {
-                            java.time.Duration.between(processedEntry.arrivalTime, LocalDateTime.now()).toMinutes().toInt().coerceAtLeast(0)
-                        }
-                    )
-                    result[result.lastIndex] = mergedEntry
-                    android.util.Log.d("LocationRepository", "Merged entries for: ${lastEntry.locationName}")
-                    continue
-                }
-            }
-            
-            result.add(processedEntry)
         }
         
-        return result.take(20) // Limit to 20 entries
+        // Step 2: Fix time issues for each entry
+        var foundCurrentLocation = false
+        val result = basicFixed.mapIndexed { index, entry ->
+            val entryDate = entry.arrivalTime.toLocalDate()
+            
+            when {
+                // Case 1: Entry has departureTime - cap at now if in the future
+                entry.departureTime != null -> {
+                    if (entryDate == today && entry.departureTime.isAfter(now)) {
+                        entry.copy(
+                            departureTime = now,
+                            durationMinutes = java.time.Duration.between(entry.arrivalTime, now).toMinutes().toInt().coerceAtLeast(0)
+                        )
+                    } else {
+                        entry
+                    }
+                }
+                
+                // Case 2: Today's entry without departure - "currently here"
+                !foundCurrentLocation && entryDate == today -> {
+                    foundCurrentLocation = true
+                    val realTimeDuration = java.time.Duration.between(entry.arrivalTime, now).toMinutes().toInt().coerceAtLeast(0)
+                    entry.copy(durationMinutes = realTimeDuration)
+                }
+                
+                // Case 3: Old entry without departure - infer from next entry or use end of day
+                else -> {
+                    val prevEntry = basicFixed.getOrNull(index + 1)
+                    val inferredDeparture = when {
+                        prevEntry != null && prevEntry.arrivalTime.toLocalDate() == entryDate -> prevEntry.arrivalTime
+                        entry.durationMinutes > 0 -> entry.arrivalTime.plusMinutes(entry.durationMinutes.toLong())
+                        else -> entryDate.atTime(23, 59)
+                    }
+                    val duration = java.time.Duration.between(entry.arrivalTime, inferredDeparture).toMinutes().toInt().coerceAtLeast(0)
+                    entry.copy(departureTime = inferredDeparture, durationMinutes = duration)
+                }
+            }
+        }
+        
+        android.util.Log.d("LocationRepository", "Processed ${rawHistory.size} entries")
+        return result.take(20)
     }
     
     /**

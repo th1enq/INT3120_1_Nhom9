@@ -967,41 +967,136 @@ class SleepFirebaseRepository(
             val existingRecord = getSleepRecordForDate(userId, recordDate).getOrNull()
             
             if (existingRecord != null) {
+                // Define tracking method priority (higher = more reliable)
+                // Priority: MANUAL > GOOGLE_API_CLASSIFY > GOOGLE_API > GOOGLE_API_PARTIAL
+                val methodPriority = mapOf(
+                    "MANUAL" to 100,
+                    "GOOGLE_API_CLASSIFY" to 80,
+                    "GOOGLE_API" to 60,
+                    "GOOGLE_API_PARTIAL" to 40
+                )
+                
+                val existingPriority = methodPriority[existingRecord.trackingMethod] ?: 0
+                val newPriority = methodPriority[trackingMethod] ?: 0
+                
+                Log.d(TAG, "saveSleepSegmentFromGoogleApi: Existing record found")
+                Log.d(TAG, "  Existing: method=${existingRecord.trackingMethod}, priority=$existingPriority, duration=${existingRecord.actualSleepDurationMinutes}min")
+                Log.d(TAG, "  New: method=$trackingMethod, priority=$newPriority, duration=${durationMinutes}min")
+                
                 when {
                     // Don't overwrite manual tracking
                     existingRecord.trackingMethod == "MANUAL" -> {
                         Log.d(TAG, "saveSleepSegmentFromGoogleApi: Skipping - manual record exists")
                         return Result.success(existingRecord.id)
                     }
-                    // GOOGLE_API_CLASSIFY is more accurate than GOOGLE_API for timing
-                    // But GOOGLE_API has official Google validation
-                    // Priority: MANUAL > GOOGLE_API_CLASSIFY > GOOGLE_API > GOOGLE_API_PARTIAL
-                    existingRecord.trackingMethod == "GOOGLE_API_CLASSIFY" && trackingMethod == "GOOGLE_API" -> {
-                        // Official segment arrived, but we already have classify-based data
-                        // Compare durations - if significantly different, Google's segment might be more accurate
-                        val existingDuration = existingRecord.actualSleepDurationMinutes
-                        val durationDiff = kotlin.math.abs(durationMinutes - existingDuration)
+                    
+                    // Check if this is a separate sleep segment (e.g., nap after main sleep, or split sleep)
+                    // If bedtimes differ by more than 2 hours, this might be a separate segment to MERGE
+                    kotlin.math.abs(existingRecord.bedTimeHour * 60 + existingRecord.bedTimeMinute - 
+                                   (startDateTime.hour * 60 + startDateTime.minute)) > 120 -> {
+                        // Different sleep segments in the same day - MERGE them
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Detected multiple sleep segments, MERGING")
                         
-                        if (durationDiff > 60) {
-                            // Significant difference (>1 hour), log but keep classify-based (more accurate timing)
-                            Log.w(TAG, "saveSleepSegmentFromGoogleApi: Duration mismatch - classify=$existingDuration min, official=$durationMinutes min")
-                            // Still keep the classify-based one as it has better timing
-                            Log.d(TAG, "saveSleepSegmentFromGoogleApi: Keeping classify-based record (better timing)")
+                        // Calculate merged values
+                        // Use earliest bed time and latest wake time
+                        val existingBedTimeMinutes = existingRecord.bedTimeHour * 60 + existingRecord.bedTimeMinute
+                        val newBedTimeMinutes = startDateTime.hour * 60 + startDateTime.minute
+                        val existingWakeTimeMinutes = existingRecord.wakeUpTimeHour * 60 + existingRecord.wakeUpTimeMinute
+                        val newWakeTimeMinutes = endDateTime.hour * 60 + endDateTime.minute
+                        
+                        // Handle overnight bedtime comparison (e.g., 23:00 vs 02:00)
+                        // Determine which bedtime is "earlier" in a sleep context
+                        val earliestBedHour: Int
+                        val earliestBedMinute: Int
+                        
+                        if (existingBedTimeMinutes > 12 * 60 && newBedTimeMinutes < 12 * 60) {
+                            // Existing is PM (like 23:00), new is AM (like 02:00) - existing is earlier
+                            earliestBedHour = existingRecord.bedTimeHour
+                            earliestBedMinute = existingRecord.bedTimeMinute
+                        } else if (newBedTimeMinutes > 12 * 60 && existingBedTimeMinutes < 12 * 60) {
+                            // New is PM, existing is AM - new is earlier
+                            earliestBedHour = startDateTime.hour
+                            earliestBedMinute = startDateTime.minute
+                        } else {
+                            // Both same period - use simple comparison
+                            if (existingBedTimeMinutes <= newBedTimeMinutes) {
+                                earliestBedHour = existingRecord.bedTimeHour
+                                earliestBedMinute = existingRecord.bedTimeMinute
+                            } else {
+                                earliestBedHour = startDateTime.hour
+                                earliestBedMinute = startDateTime.minute
+                            }
                         }
+                        
+                        // Determine latest wake time
+                        val latestWakeHour: Int
+                        val latestWakeMinute: Int
+                        
+                        if (newWakeTimeMinutes >= existingWakeTimeMinutes) {
+                            latestWakeHour = endDateTime.hour
+                            latestWakeMinute = endDateTime.minute
+                        } else {
+                            latestWakeHour = existingRecord.wakeUpTimeHour
+                            latestWakeMinute = existingRecord.wakeUpTimeMinute
+                        }
+                        
+                        // Total sleep = sum of both durations (not the time span, to account for awake time between)
+                        val mergedDuration = existingRecord.actualSleepDurationMinutes + durationMinutes
+                        
+                        // Recalculate quality with merged duration
+                        val (mergedQuality, mergedAchievement) = calculateSleepQuality(mergedDuration, targetDuration)
+                        
+                        // Use higher priority tracking method
+                        val mergedTrackingMethod = if (existingPriority >= newPriority) {
+                            existingRecord.trackingMethod
+                        } else {
+                            trackingMethod
+                        }
+                        
+                        val mergedRecord = existingRecord.copy(
+                            bedTimeHour = earliestBedHour,
+                            bedTimeMinute = earliestBedMinute,
+                            wakeUpTimeHour = latestWakeHour,
+                            wakeUpTimeMinute = latestWakeMinute,
+                            actualSleepDurationMinutes = mergedDuration,
+                            sleepDurationMinutes = mergedDuration,
+                            quality = mergedQuality.name,
+                            achievementPercentage = mergedAchievement,
+                            trackingMethod = mergedTrackingMethod
+                        )
+                        
+                        saveSleepRecord(mergedRecord).getOrThrow()
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Merged records - total duration=${mergedDuration}min")
                         return Result.success(existingRecord.id)
                     }
-                    trackingMethod == "GOOGLE_API_CLASSIFY" && existingRecord.trackingMethod.startsWith("GOOGLE_API") -> {
-                        // Classify-based is better, update the record
-                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Updating to classify-based (more accurate)")
+                    
+                    // Same sleep segment - apply priority rules
+                    newPriority > existingPriority -> {
+                        // New record has higher priority - update
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Updating with higher priority method ($trackingMethod > ${existingRecord.trackingMethod})")
                         val updatedRecord = record.copy(id = existingRecord.id)
                         saveSleepRecord(updatedRecord).getOrThrow()
+                        return Result.success(existingRecord.id)
+                    }
+                    
+                    newPriority == existingPriority && durationMinutes > existingRecord.actualSleepDurationMinutes -> {
+                        // Same priority but longer duration - update (captures more sleep data)
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Updating with longer duration ($durationMinutes > ${existingRecord.actualSleepDurationMinutes})")
+                        val updatedRecord = record.copy(id = existingRecord.id)
+                        saveSleepRecord(updatedRecord).getOrThrow()
+                        return Result.success(existingRecord.id)
+                    }
+                    
+                    else -> {
+                        // Keep existing record (higher or equal priority with equal/more duration)
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Keeping existing record")
                         return Result.success(existingRecord.id)
                     }
                 }
             }
             
             val recordId = saveSleepRecord(record).getOrThrow()
-            Log.d(TAG, "saveSleepSegmentFromGoogleApi: Saved record $recordId")
+            Log.d(TAG, "saveSleepSegmentFromGoogleApi: Saved NEW record $recordId")
             
             Result.success(recordId)
         } catch (e: Exception) {

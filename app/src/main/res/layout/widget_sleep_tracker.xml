@@ -66,7 +66,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Tốt"
+                android:text="@string/widget_sleep_quality_good"
                 android:textColor="#4CAF50"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -108,7 +108,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="VS"
+                android:text="@string/widget_vs"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="#9C27B0"
@@ -170,7 +170,7 @@
                 android:ellipsize="end"
                 android:gravity="center"
                 android:maxLines="2"
-                android:text="Có lẽ vẫn đang ngáy khò khò"
+                android:text="@string/widget_maybe_snoring"
                 android:textColor="#FF9800"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -221,7 +221,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Time to sleep!"
+            android:text="@string/widget_time_to_sleep"
             android:textSize="14sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF" />

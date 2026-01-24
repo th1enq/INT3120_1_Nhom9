@@ -20,6 +20,7 @@ import java.time.LocalTime
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Date
+import java.util.Calendar
 
 /**
  * Sleep Tracker ViewModel with Firebase integration and local caching.
@@ -61,6 +62,51 @@ class SleepTrackerViewModelFirebase(
         checkAndAutoSync()
         checkActiveSleepSession()
         checkGoogleSleepApiStatus()
+    }
+    
+    /**
+     * Determine the sleep data status based on current time and available data.
+     * 
+     * Google Sleep API typically sends data 1-3 hours after waking up.
+     * - Before 12 PM: Data might still be arriving (WAITING_TODAY)
+     * - After 12 PM: If no data, it's likely delayed (DATA_DELAYED)
+     * - If history exists but no today data: User tracked before, waiting for today
+     * - If no history at all: User never tracked (NO_DATA_EVER)
+     */
+    private fun determineSleepDataStatus(
+        sleepRecord: SleepRecord?,
+        sleepHistory: List<SleepRecord>,
+        isViewingPartner: Boolean = false
+    ): SleepDataStatus {
+        // Has data for today
+        if (sleepRecord != null) {
+            return SleepDataStatus.HAS_DATA
+        }
+        
+        val now = Calendar.getInstance()
+        val currentHour = now.get(Calendar.HOUR_OF_DAY)
+        
+        // Check if history exists (user has tracked before)
+        val hasHistory = sleepHistory.isNotEmpty()
+        
+        return when {
+            // Morning (before 12 PM) - data is expected to arrive later
+            currentHour < 12 -> {
+                if (hasHistory || isViewingPartner) {
+                    SleepDataStatus.WAITING_TODAY
+                } else {
+                    SleepDataStatus.NO_DATA_EVER
+                }
+            }
+            // Afternoon/Evening - data should have arrived by now
+            else -> {
+                if (hasHistory) {
+                    SleepDataStatus.DATA_DELAYED
+                } else {
+                    SleepDataStatus.NO_DATA_EVER
+                }
+            }
+        }
     }
 
     /**
@@ -165,6 +211,7 @@ class SleepTrackerViewModelFirebase(
                 }
                 
                 // ========== INSTANT UI UPDATE (No network wait!) ==========
+                val dataStatus = determineSleepDataStatus(sleepRecord, sleepHistory, isViewingPartner = false)
                 _uiState.update { currentState ->
                     currentState.copy(
                         currentUser = currentUserProfile,
@@ -173,7 +220,8 @@ class SleepTrackerViewModelFirebase(
                         sleepRecord = sleepRecord,
                         sleepHistory = sleepHistory.take(3),
                         settings = settings,
-                        isLoading = false
+                        isLoading = false,
+                        sleepDataStatus = dataStatus
                     )
                 }
                 
@@ -331,12 +379,15 @@ class SleepTrackerViewModelFirebase(
                     sleepRecord = sleepHistory.first()
                 }
                 
+                val isViewingPartner = !_uiState.value.isCurrentUser
+                val dataStatus = determineSleepDataStatus(sleepRecord, sleepHistory, isViewingPartner)
                 _uiState.update { currentState ->
                     currentState.copy(
                         sleepRecord = sleepRecord,
                         sleepHistory = sleepHistory.take(3),
                         settings = settings,
-                        isLoading = false
+                        isLoading = false,
+                        sleepDataStatus = dataStatus
                     )
                 }
                 
@@ -439,12 +490,15 @@ class SleepTrackerViewModelFirebase(
                     Log.d(TAG, "loadUserData: Using most recent record from history: ${sleepRecord.id}")
                 }
 
+                val isViewingPartner = !_uiState.value.isCurrentUser
+                val dataStatus = determineSleepDataStatus(sleepRecord, sleepHistory, isViewingPartner)
                 _uiState.update { currentState ->
                     currentState.copy(
                         sleepRecord = sleepRecord,
                         sleepHistory = sleepHistory.take(3),
                         settings = settings,
-                        isLoading = false
+                        isLoading = false,
+                        sleepDataStatus = dataStatus
                     )
                 }
 
@@ -896,6 +950,12 @@ class SleepTrackerViewModelFirebase(
     private fun checkAndAutoSync() {
         viewModelScope.launch {
             val currentUser = auth.currentUser ?: return@launch
+            
+            // Trigger Google Sleep API sync immediately (like Widgetable)
+            context?.let { ctx ->
+                com.example.coupleapp.worker.GoogleSleepSyncWorker.triggerImmediateSync(ctx)
+            }
+            
             tryAutoSync(currentUser.uid)
         }
     }
@@ -1263,10 +1323,22 @@ data class SleepTrackerUiState(
     val healthConnectSyncStatus: String? = null,
     val activeSleepSession: FirebaseActiveSleepSession? = null,
     val isGoogleSleepApiEnabled: Boolean = false,
-    val needsActivityRecognitionPermission: Boolean = false
+    val needsActivityRecognitionPermission: Boolean = false,
+    val sleepDataStatus: SleepDataStatus = SleepDataStatus.UNKNOWN
 ) {
     val isContentReady: Boolean
         get() = !isLoading && sleepRecord != null
+}
+
+/**
+ * Status indicating the availability of sleep data
+ */
+enum class SleepDataStatus {
+    UNKNOWN,           // Initial state
+    HAS_DATA,          // Data is available
+    NO_DATA_EVER,      // User has never tracked sleep
+    WAITING_TODAY,     // Waiting for today's data (early morning)
+    DATA_DELAYED       // Data should have arrived but is late (past noon)
 }
 
 fun SleepTrackerUiState.getActiveUserProfile(): UserProfile {

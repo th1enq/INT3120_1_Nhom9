@@ -214,33 +214,50 @@ object SyncTriggerHelper {
     }
     
     /**
-     * Clean up old processed triggers (older than 24 hours)
+     * Clean up old triggers (older than 24 hours)
      * Call this periodically to prevent Firestore bloat
+     * 
+     * Note: Triggers are only useful for REAL-TIME updates when partner's app is open.
+     * When partner opens app later, the app fetches fresh data directly from Firebase,
+     * so old triggers are not needed. We keep them for 24h just in case.
      */
     suspend fun cleanupOldTriggers(): Int = withContext(Dispatchers.IO) {
         try {
             val currentUser = auth.currentUser ?: return@withContext 0
             
-            // Get triggers sent by current user that are processed
-            val oldTime = com.google.firebase.Timestamp(
+            // Delete triggers older than 24 hours
+            val oneDayAgo = com.google.firebase.Timestamp(
                 java.util.Date(System.currentTimeMillis() - 24 * 60 * 60 * 1000) // 24 hours ago
             )
             
-            val oldTriggers = firestore.collection(COLLECTION_SYNC_TRIGGERS)
+            var deleted = 0
+            
+            // Clean triggers sent by current user
+            val sentTriggers = firestore.collection(COLLECTION_SYNC_TRIGGERS)
                 .whereEqualTo("senderId", currentUser.uid)
-                .whereEqualTo("processed", true)
-                .whereLessThan("timestamp", oldTime)
+                .whereLessThan("timestamp", oneDayAgo)
                 .get()
                 .await()
             
-            var deleted = 0
-            for (doc in oldTriggers.documents) {
+            for (doc in sentTriggers.documents) {
+                doc.reference.delete().await()
+                deleted++
+            }
+            
+            // Also clean triggers targeting current user (already processed or stale)
+            val receivedTriggers = firestore.collection(COLLECTION_SYNC_TRIGGERS)
+                .whereEqualTo("targetUserId", currentUser.uid)
+                .whereLessThan("timestamp", oneDayAgo)
+                .get()
+                .await()
+            
+            for (doc in receivedTriggers.documents) {
                 doc.reference.delete().await()
                 deleted++
             }
             
             if (deleted > 0) {
-                Log.d(TAG, "Cleaned up $deleted old sync triggers")
+                Log.d(TAG, "🧹 Cleaned up $deleted old sync triggers")
             }
             
             deleted

@@ -39,6 +39,7 @@ fun LocketTextContent(
     textContent: String,
     onTextChange: (String) -> Unit,
     onSendText: () -> Unit,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -166,7 +167,8 @@ fun LocketTextContent(
                     onSendText()
                 }
             },
-            color = if (textContent.isNotBlank()) Color(0xFF4CAF50) else Color(0xFFE0E0E0)
+            color = if (textContent.isNotBlank()) Color(0xFF4CAF50) else Color(0xFFE0E0E0),
+            enabled = textContent.isNotBlank() && !isSending
         )
     }
 }

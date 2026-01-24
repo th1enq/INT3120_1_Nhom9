@@ -63,9 +63,9 @@ fun ChatScreen(
         if (activity != null && BiometricHelper.isBiometricAvailable(context)) {
             BiometricHelper.authenticate(
                 activity = activity,
-                title = "Xác thực để xem tin nhắn",
-                subtitle = "Sử dụng vân tay, Face ID hoặc mã PIN để mở khóa",
-                negativeButtonText = "Hủy"
+                title = context.getString(R.string.authenticate_to_view_messages),
+                subtitle = context.getString(R.string.authenticate_biometric_desc),
+                negativeButtonText = context.getString(R.string.cancel)
             ) { result ->
                 when (result) {
                     is BiometricHelper.AuthenticationResult.Success -> {
@@ -234,7 +234,7 @@ private fun ChatHeader(
             IconButton(onClick = onBackClick) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Quay lại",
+                    contentDescription = stringResource(R.string.go_back),
                     tint = TextPrimary
                 )
             }
@@ -289,7 +289,7 @@ private fun ChatHeader(
             IconButton(onClick = { /* More options */ }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
-                    contentDescription = "Tùy chọn",
+                    contentDescription = stringResource(R.string.options),
                     tint = TextSecondary
                 )
             }
@@ -444,7 +444,7 @@ private fun ChatInputArea(
                 ) {
                     Icon(
                         imageVector = if (showEmojiPicker) Icons.Default.Keyboard else Icons.Outlined.EmojiEmotions,
-                        contentDescription = "Emoji",
+                        contentDescription = stringResource(R.string.emoji),
                         tint = if (showEmojiPicker) AccentPink else TextSecondary
                     )
                 }
@@ -495,7 +495,7 @@ private fun ChatInputArea(
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send",
+                            contentDescription = stringResource(R.string.send),
                         )
                     }
                 }

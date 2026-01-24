@@ -162,7 +162,7 @@ fun RegisterScreen(
                     CustomTextField(
                         value = uiState.fullName,
                         onValueChange = { viewModel.updateFullName(it) },
-                        placeholder = "Full name",
+                        placeholder = stringResource(R.string.full_name),
                         keyboardType = KeyboardType.Text,
                         modifier = Modifier.fillMaxWidth(),
                         errorMessage = uiState.fullNameError
@@ -205,7 +205,7 @@ fun RegisterScreen(
                         DateTextField(
                             value = uiState.dateOfBirth,
                             onValueChange = { viewModel.updateDateOfBirth(it) },
-                            placeholder = "Ngày sinh (DD/MM/YYYY)",
+                            placeholder = stringResource(R.string.date_of_birth),
                             modifier = Modifier.weight(1f),
                             errorMessage = uiState.dateOfBirthError
                         )
@@ -229,7 +229,7 @@ fun RegisterScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = "Chọn ngày sinh",
+                                contentDescription = stringResource(R.string.date_of_birth),
                                 tint = Color.White,
                                 modifier = Modifier.size(24.dp)
                             )
@@ -242,7 +242,7 @@ fun RegisterScreen(
                     CustomTextField(
                         value = uiState.phoneNumber,
                         onValueChange = { viewModel.updatePhone(it) },
-                        placeholder = "Phone number",
+                        placeholder = stringResource(R.string.phone_number),
                         keyboardType = KeyboardType.Phone,
                         modifier = Modifier.fillMaxWidth(),
                         errorMessage = uiState.phoneError
@@ -254,7 +254,7 @@ fun RegisterScreen(
                     CustomTextField(
                         value = uiState.password,
                         onValueChange = { viewModel.updatePassword(it) },
-                        placeholder = "Password",
+                        placeholder = stringResource(R.string.password),
                         isPassword = true,
                         keyboardType = KeyboardType.Password,
                         modifier = Modifier.fillMaxWidth(),
@@ -267,7 +267,7 @@ fun RegisterScreen(
                     CustomTextField(
                         value = uiState.confirmPassword,
                         onValueChange = { viewModel.updateConfirmPassword(it) },
-                        placeholder = "Confirm password",
+                        placeholder = stringResource(R.string.confirm_password),
                         isPassword = true,
                         keyboardType = KeyboardType.Password,
                         modifier = Modifier.fillMaxWidth(),
@@ -278,7 +278,7 @@ fun RegisterScreen(
                     if (uiState.confirmPassword.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (uiState.password == uiState.confirmPassword) "✓ Passwords match" else "✗ Passwords do not match",
+                            text = if (uiState.password == uiState.confirmPassword) stringResource(R.string.passwords_match) else stringResource(R.string.passwords_not_match),
                             style = MaterialTheme.typography.bodySmall,
                             color = if (uiState.password == uiState.confirmPassword) Color(0xFF4CAF50) else Color(0xFFFF6B6B),
                             modifier = Modifier.fillMaxWidth()

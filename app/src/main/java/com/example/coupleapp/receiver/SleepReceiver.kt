@@ -38,10 +38,25 @@ class SleepReceiver : BroadcastReceiver() {
         const val ACTION_SLEEP_SEGMENT = "com.google.android.gms.location.activity.SLEEP_SEGMENT"
         const val ACTION_SLEEP_CLASSIFY = "com.google.android.gms.location.activity.SLEEP_CLASSIFY"
         
-        // Sleep detection thresholds (calibrated similar to Widgetable)
+        // Sleep detection thresholds - STRICTER to reduce false positives
+        // Problem: User watching TV/football without phone = false sleep detection
+        // Solution: Higher thresholds + more consecutive readings + time-based rules
         // confidence: 0-100, higher = more likely sleeping
-        private const val SLEEP_CONFIDENCE_THRESHOLD = 70 // User likely sleeping if >= 70%
-        private const val AWAKE_CONFIDENCE_THRESHOLD = 30 // User likely awake if <= 30%
+        private const val SLEEP_CONFIDENCE_THRESHOLD = 80 // Increased from 70 - need high confidence
+        private const val AWAKE_CONFIDENCE_THRESHOLD = 25 // Lowered from 30 - be more sensitive to wake
+        
+        // Sleep score thresholds (combined from confidence + motion + light)
+        private const val SLEEP_SCORE_THRESHOLD = 75 // Need high combined score to detect sleep
+        private const val AWAKE_SCORE_THRESHOLD = 35 // Low score = likely awake
+        
+        // Time-based rules to reduce false positives
+        // Don't start sleep tracking before this hour (to avoid TV watching detection)
+        private const val EARLIEST_SLEEP_HOUR = 21 // 9 PM - earliest reasonable sleep time
+        // Don't continue sleep tracking after this hour (assume day activities)
+        private const val LATEST_WAKE_HOUR = 12 // 12 PM - latest reasonable wake time
+        
+        // Motion threshold - if motion is too high, not sleeping (even if other factors suggest sleep)
+        private const val MAX_MOTION_FOR_SLEEP = 3 // motion 1-6, <=3 means relatively still
         
         // SharedPreferences keys for tracking sleep state
         private const val PREFS_NAME = "sleep_classify_prefs"
@@ -53,17 +68,18 @@ class SleepReceiver : BroadcastReceiver() {
         private const val KEY_CONSECUTIVE_AWAKE_COUNT = "consecutive_awake_count"
         private const val KEY_SLEEP_DATE = "sleep_date" // YYYYMMDD format to track which night
         private const val KEY_ALREADY_SYNCED_TODAY = "already_synced_today"
+        private const val KEY_AVERAGE_SLEEP_SCORE = "average_sleep_score" // Track average score during sleep
         
-        // Require N consecutive readings before changing state (to avoid false triggers)
-        // 3 readings = ~30 minutes - handles bathroom breaks better
-        private const val CONSECUTIVE_READINGS_TO_SLEEP = 2  // ~20 min to detect sleep
+        // Require MORE consecutive readings before changing state (to avoid false triggers)
+        // More readings = more confident about state change
+        private const val CONSECUTIVE_READINGS_TO_SLEEP = 4  // ~40 min to detect sleep (was 2)
         private const val CONSECUTIVE_READINGS_TO_WAKE = 3   // ~30 min to confirm wake (handles bathroom breaks)
         
         // Timeout: if no event for 2 hours while "sleeping", assume phone was off
         private const val SLEEP_STATE_TIMEOUT_MS = 2 * 60 * 60 * 1000L // 2 hours
         
         // Minimum sleep duration to save (avoid false positives)
-        private const val MIN_SLEEP_DURATION_MS = 30 * 60 * 1000L // 30 minutes
+        private const val MIN_SLEEP_DURATION_MS = 60 * 60 * 1000L // Increased to 60 minutes (was 30)
         
         // Maximum gap in events before considering it a new sleep session
         private const val MAX_EVENT_GAP_MS = 3 * 60 * 60 * 1000L // 3 hours
@@ -191,6 +207,40 @@ class SleepReceiver : BroadcastReceiver() {
                 SleepSegmentEvent.STATUS_MISSING_DATA -> {
                     // Validate data before saving
                     if (startTimeMillis > 0 && endTimeMillis > startTimeMillis && durationMillis > 0) {
+                        
+                        // IMPROVED: Additional validation for MISSING_DATA segments
+                        // These are often unreliable (e.g., phone on table while watching TV)
+                        val durationMinutes = durationMillis / 1000 / 60
+                        val minDurationMinutes = MIN_SLEEP_DURATION_MS / 1000 / 60
+                        
+                        // Check if duration meets minimum threshold
+                        if (durationMinutes < minDurationMinutes) {
+                            Log.w(TAG, "Sleep segment too short ($durationMinutes min < $minDurationMinutes min), skipping")
+                            return@forEach
+                        }
+                        
+                        // For MISSING_DATA, be extra cautious - require longer duration
+                        // Google reports MISSING_DATA when it's not confident about the sleep
+                        if (status == SleepSegmentEvent.STATUS_MISSING_DATA && durationMinutes < 90) {
+                            Log.w(TAG, "MISSING_DATA segment too short ($durationMinutes min < 90 min), likely false positive, skipping")
+                            return@forEach
+                        }
+                        
+                        // Check if start time is within reasonable sleep hours
+                        val startCalendar = Calendar.getInstance().apply { timeInMillis = startTimeMillis }
+                        val startHour = startCalendar.get(Calendar.HOUR_OF_DAY)
+                        
+                        // If "sleep" started during typical awake hours (12 PM - 9 PM), be suspicious
+                        if (startHour in LATEST_WAKE_HOUR until EARLIEST_SLEEP_HOUR) {
+                            if (status == SleepSegmentEvent.STATUS_MISSING_DATA) {
+                                Log.w(TAG, "MISSING_DATA segment started at unusual hour ($startHour:00), likely false positive (e.g., watching TV), skipping")
+                                return@forEach
+                            } else {
+                                // For SUCCESSFUL segments during unusual hours, still save but log warning
+                                Log.w(TAG, "Sleep segment started at unusual hour ($startHour:00), might be a nap or false positive")
+                            }
+                        }
+                        
                         // Only save if we haven't already synced from classify events
                         // This prevents duplicate records
                         if (!alreadySynced) {
@@ -317,11 +367,16 @@ class SleepReceiver : BroadcastReceiver() {
         // Determine if current reading indicates sleep or awake
         // Use combined heuristic for better accuracy
         val sleepScore = calculateSleepScore(confidence, motion, light)
-        val isLikelySleeping = sleepScore >= 70
-        val isLikelyAwake = sleepScore <= 30
+        
+        // IMPROVED: Use stricter thresholds and add time-based check
+        val withinSleepHours = isWithinSleepHours()
+        val isLikelySleeping = sleepScore >= SLEEP_SCORE_THRESHOLD && withinSleepHours && motion <= MAX_MOTION_FOR_SLEEP
+        val isLikelyAwake = sleepScore <= AWAKE_SCORE_THRESHOLD || motion > MAX_MOTION_FOR_SLEEP + 1
         val isUncertain = !isLikelySleeping && !isLikelyAwake
         
-        Log.d(TAG, "  Sleep score: $sleepScore (sleeping=$isLikelySleeping, awake=$isLikelyAwake, uncertain=$isUncertain)")
+        Log.d(TAG, "  Sleep score: $sleepScore (threshold=$SLEEP_SCORE_THRESHOLD)")
+        Log.d(TAG, "  Within sleep hours: $withinSleepHours, Motion: $motion (max=$MAX_MOTION_FOR_SLEEP)")
+        Log.d(TAG, "  Verdict: sleeping=$isLikelySleeping, awake=$isLikelyAwake, uncertain=$isUncertain")
         
         if (!isSleeping) {
             // Currently awake, check if user fell asleep
@@ -462,11 +517,21 @@ class SleepReceiver : BroadcastReceiver() {
     /**
      * Calculate a combined sleep score from confidence, motion, and light
      * Returns 0-100, higher = more likely sleeping
+     * 
+     * IMPROVED: Add stricter motion check to avoid false positives
+     * when user is just resting (watching TV, reading) without using phone
      */
     private fun calculateSleepScore(confidence: Int, motion: Int, light: Int): Int {
         // Confidence is already 0-100
         // Motion: 1-6, lower = more still (sleeping)
         // Light: 1-6, lower = darker (sleeping)
+        
+        // CRITICAL: If motion is too high, definitely not sleeping
+        // This catches cases like: watching TV while phone is on table
+        if (motion > MAX_MOTION_FOR_SLEEP + 1) {
+            Log.d(TAG, "  High motion ($motion) detected - reducing sleep score")
+            return kotlin.math.min(confidence / 2, 40) // Cap at 40 if moving
+        }
         
         // Convert motion to 0-100 scale (inverted)
         val motionScore = ((6 - motion) / 5.0 * 100).toInt().coerceIn(0, 100)
@@ -474,9 +539,28 @@ class SleepReceiver : BroadcastReceiver() {
         // Convert light to 0-100 scale (inverted)  
         val lightScore = ((6 - light) / 5.0 * 100).toInt().coerceIn(0, 100)
         
-        // Weighted average: confidence is most important, then motion, then light
-        // Weights: confidence 60%, motion 25%, light 15%
-        return ((confidence * 0.60) + (motionScore * 0.25) + (lightScore * 0.15)).toInt()
+        // IMPROVED weights: Give MORE weight to motion (key differentiator)
+        // Weights: confidence 50%, motion 35%, light 15%
+        // Motion is crucial: sleeping people don't move, TV watchers might shift
+        val baseScore = ((confidence * 0.50) + (motionScore * 0.35) + (lightScore * 0.15)).toInt()
+        
+        // Penalty if light is bright (light >= 4) - probably not sleeping
+        val lightPenalty = if (light >= 4) 15 else 0
+        
+        return (baseScore - lightPenalty).coerceIn(0, 100)
+    }
+    
+    /**
+     * Check if current time is within reasonable sleep hours
+     * Returns false if it's daytime (likely not sleeping, just resting)
+     */
+    private fun isWithinSleepHours(): Boolean {
+        val calendar = Calendar.getInstance()
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        
+        // Sleep hours: 9 PM (21) to 12 PM (12) next day
+        // Covers: 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+        return hour >= EARLIEST_SLEEP_HOUR || hour < LATEST_WAKE_HOUR
     }
     
     /**
@@ -522,6 +606,14 @@ class SleepReceiver : BroadcastReceiver() {
         )
         
         Log.d(TAG, "Sleep segment saved to Firebase successfully (method=$trackingMethod)")
+        
+        // Immediately update widgets so data appears fresh like Widgetable
+        try {
+            com.example.coupleapp.widget.WidgetManager.onSleepDataUpdated(context)
+            Log.d(TAG, "Widget update triggered after sleep data sync")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update widgets: ${e.message}")
+        }
     }
     
     // NOTE: saveSleepClassificationToFirebase has been removed for battery optimization

@@ -139,6 +139,10 @@ class WidgetBroadcastReceiver : BroadcastReceiver() {
                 // ========== Re-schedule Background Location Worker ==========
                 BackgroundLocationWorker.schedule(context)
                 
+                // ========== Re-schedule Location Alarm (MOST RELIABLE) ==========
+                // AlarmManager survives clear RAM better than WorkManager
+                com.example.coupleapp.receiver.LocationAlarmManager.scheduleLocationAlarm(context)
+                
                 // ========== Re-register Smart Geofences ==========
                 // Geofences are also cleared on reboot!
                 Log.d(TAG, "Re-registering smart geofences")

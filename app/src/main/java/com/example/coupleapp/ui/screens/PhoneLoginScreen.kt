@@ -72,7 +72,7 @@ fun PhoneLoginScreen(
                 horizontalArrangement = Arrangement.Start
             ) {
                 Text(
-                    text = "← Back",
+                    text = stringResource(R.string.back_arrow),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFF757575),
                     modifier = Modifier.clickable { onBackClick() }
@@ -127,7 +127,7 @@ fun PhoneLoginScreen(
                     CustomTextField(
                         value = uiState.phoneNumber,
                         onValueChange = { viewModel.updatePhone(it) },
-                        placeholder = "Phone number",
+                        placeholder = stringResource(R.string.phone_number),
                         keyboardType = KeyboardType.Phone,
                         modifier = Modifier.fillMaxWidth(),
                         errorMessage = uiState.phoneError
@@ -139,7 +139,7 @@ fun PhoneLoginScreen(
                     CustomTextField(
                         value = uiState.password,
                         onValueChange = { viewModel.updatePassword(it) },
-                        placeholder = "Password",
+                        placeholder = stringResource(R.string.password),
                         isPassword = true,
                         keyboardType = KeyboardType.Password,
                         modifier = Modifier.fillMaxWidth(),

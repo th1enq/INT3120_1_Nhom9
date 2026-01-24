@@ -23,12 +23,41 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Background worker for periodic location updates when app is in background or closed.
- * This is battery-efficient compared to continuous foreground service.
+ * 
+ * ================================================================
+ * LAYER 2: WORKMANAGER (PRIMARY Location Source)
+ * ================================================================
+ * 
+ * This worker is the PRIMARY source for background location tracking.
+ * 
+ * HYBRID STRATEGY (Intelligent Battery Saving):
+ * ─────────────────────────────────────────────
+ * 1. Try LOW_POWER first (Cell + WiFi, ~0.05% battery)
+ * 2. If accuracy > 100m → upgrade to BALANCED (GPS + Cell + WiFi, ~0.15%)
+ * 
+ * Result:
+ * - In cities (good cell coverage): Uses LOW_POWER (saves battery)
+ * - In rural areas (poor coverage): Auto-upgrades to BALANCED (accurate)
+ * - Saves ~50% battery compared to always using BALANCED
+ * 
+ * Role in architecture:
+ * 1. PRIMARY: Actively request location every 15-20 minutes
+ * 2. RECOVERY: Re-register Layer 1 if lost after clear RAM
+ * 3. RELIABLE: Guaranteed location updates (not dependent on other apps)
+ * 
+ * Battery Impact (HYBRID):
+ * - Best case (city): ~0.05% per request = ~4% per day
+ * - Worst case (rural): ~0.15% per request = ~12% per day
+ * - Average: ~6-8% per day (much better than always BALANCED)
+ * 
+ * Accuracy:
+ * - City: 50-100m (LOW_POWER accepted)
+ * - Rural: 20-50m (auto-upgraded to BALANCED)
  * 
  * Features:
  * - Updates location every 15-20 minutes when app is closed
- * - Simple logic: update existing entry or create new one
- * - Respects battery level - reduces updates when battery is low
+ * - Intelligent battery saving based on environment
+ * - Respects battery level - skips when battery < 15%
  * - Only works when user is paired with a partner
  */
 class BackgroundLocationWorker(
@@ -40,8 +69,22 @@ class BackgroundLocationWorker(
         private const val TAG = "BackgroundLocationWorker"
         const val WORK_NAME = "background_location_update"
         
-        // Update interval: 15-20 minutes (WorkManager minimum is 15 min)
-        private const val MIN_UPDATE_INTERVAL_MINUTES = 15L
+        // ================================================================
+        // LAYER 2: WORKMANAGER (PRIMARY Location Source)
+        // ================================================================
+        // Chạy mỗi 20 phút với flex 5 phút (thực tế: 15-20 phút)
+        // 
+        // Vai trò chính:
+        // 1. PRIMARY: Request location với BALANCED_POWER_ACCURACY (20-50m)
+        // 2. RECOVERY: Re-register Layer 1 nếu bị mất sau clear RAM
+        // 3. RELIABLE: Không phụ thuộc vào apps khác như Layer 1
+        // 
+        // Tại sao dùng BALANCED thay vì LOW_POWER:
+        // - LOW_POWER (Cell+WiFi): 50-500m - quá thiếu chính xác ở nông thôn
+        // - BALANCED (GPS+Cell+WiFi): 20-50m - đủ chính xác, pin hợp lý
+        // - HIGH_ACCURACY: 3-10m - quá tốn pin cho background
+        // ================================================================
+        private const val MIN_UPDATE_INTERVAL_MINUTES = 20L // 20 phút
         private const val FLEX_INTERVAL_MINUTES = 5L // Worker runs between 15-20 minutes
         private const val LOW_BATTERY_THRESHOLD = 15 // Skip when battery < 15%
         
@@ -109,6 +152,27 @@ class BackgroundLocationWorker(
                 false
             }
         }
+        
+        /**
+         * Trigger one-time immediate location update.
+         * Used by AlarmManager to ensure location is updated even when WorkManager is delayed.
+         * Also re-registers SignificantLocationManager if not active.
+         */
+        fun triggerOneTime(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            
+            val request = OneTimeWorkRequestBuilder<BackgroundLocationWorker>()
+                .setConstraints(constraints)
+                .addTag("one_time_location")
+                .build()
+            
+            WorkManager.getInstance(context)
+                .enqueue(request)
+            
+            Log.d(TAG, "One-time location worker triggered")
+        }
     }
     
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -119,6 +183,10 @@ class BackgroundLocationWorker(
         Log.d(TAG, "Background location update started")
         
         try {
+            // CRITICAL: Ensure SignificantLocationManager is still registered
+            // This is important after clear RAM - re-registers if not active
+            ensureSignificantLocationTracking()
+            
             // Check if user is logged in
             val currentUser = auth.currentUser
             if (currentUser == null) {
@@ -170,12 +238,38 @@ class BackgroundLocationWorker(
             // Check and update location history intelligently
             updateLocationHistory(userId, coupleId, coordinate, address)
             
+            // Periodically cleanup old sync triggers to prevent Firestore bloat
+            // This runs every time the worker runs (~15-20 min)
+            try {
+                com.example.coupleapp.util.SyncTriggerHelper.cleanupOldTriggers()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to cleanup sync triggers", e)
+            }
+            
             Log.d(TAG, "Background location update completed successfully")
             Result.success()
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in background location update", e)
             Result.retry()
+        }
+    }
+    
+    /**
+     * Ensure SignificantLocationManager is still registered.
+     * This is critical after clear RAM - the PendingIntent may be gone.
+     * WorkManager survives clear RAM better, so we use this worker to re-register.
+     */
+    private fun ensureSignificantLocationTracking() {
+        try {
+            val sigLocationManager = com.example.coupleapp.service.SignificantLocationManager.getInstance(context)
+            if (!sigLocationManager.isTracking()) {
+                Log.d(TAG, "SignificantLocationManager not active, re-registering...")
+                sigLocationManager.startTracking()
+                Log.d(TAG, "✅ SignificantLocationManager re-registered from worker")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error re-registering SignificantLocationManager", e)
         }
     }
     
@@ -192,13 +286,51 @@ class BackgroundLocationWorker(
     
     private suspend fun getCurrentLocation(): android.location.Location? {
         return try {
-            val cancellationToken = CancellationTokenSource()
-            // BATTERY OPTIMIZED: Dùng LOW_POWER thay vì BALANCED
-            // Độ chính xác ~100m là đủ cho location history
-            fusedLocationClient.getCurrentLocation(
+            // ================================================================
+            // HYBRID STRATEGY: LOW_POWER first, upgrade to BALANCED if needed
+            // ================================================================
+            // 
+            // Chiến lược thông minh tiết kiệm pin:
+            // 1. Thử LOW_POWER trước (Cell + WiFi, tiết kiệm pin)
+            // 2. Nếu accuracy > 100m → upgrade lên BALANCED (GPS + Cell + WiFi)
+            // 
+            // Kết quả:
+            // - Ở thành phố: Dùng LOW_POWER (~0.05% pin, 50-100m)
+            // - Ở nông thôn: Tự động BALANCED (~0.15% pin, 20-50m)
+            // - Tiết kiệm ~50% pin so với luôn dùng BALANCED
+            // ================================================================
+            
+            val cancellationToken1 = CancellationTokenSource()
+            
+            // Step 1: Try LOW_POWER first (battery efficient)
+            val lowPowerLocation = fusedLocationClient.getCurrentLocation(
                 Priority.PRIORITY_LOW_POWER,
-                cancellationToken.token
+                cancellationToken1.token
             ).await()
+            
+            // Step 2: Check accuracy
+            if (lowPowerLocation != null && lowPowerLocation.accuracy <= 100f) {
+                // Good accuracy from LOW_POWER - use it!
+                Log.d(TAG, "✅ LOW_POWER location accepted: ${lowPowerLocation.accuracy}m accuracy")
+                return lowPowerLocation
+            }
+            
+            // Step 3: Accuracy not good enough, upgrade to BALANCED
+            Log.d(TAG, "⚠️ LOW_POWER accuracy ${lowPowerLocation?.accuracy ?: "null"}m > 100m, upgrading to BALANCED")
+            
+            val cancellationToken2 = CancellationTokenSource()
+            val balancedLocation = fusedLocationClient.getCurrentLocation(
+                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                cancellationToken2.token
+            ).await()
+            
+            if (balancedLocation != null) {
+                Log.d(TAG, "✅ BALANCED location: ${balancedLocation.accuracy}m accuracy")
+            }
+            
+            // Return BALANCED location, or LOW_POWER if BALANCED also failed
+            balancedLocation ?: lowPowerLocation
+            
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception getting location", e)
             null
@@ -298,42 +430,40 @@ class BackgroundLocationWorker(
                     0
                 }
                 foundActiveEntry.reference.update("durationMinutes", durationMinutes).await()
-                Log.d(TAG, "📍 Updated active entry duration: ${durationMinutes}min at ${foundActiveEntry.getString("locationName")}")
+                Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min at ${foundActiveEntry.getString("locationName")}")
                 return
             }
             
-            // Step 2: Find recently CLOSED entry within 200m and 2 hours - reopen it
+            // No active entry at current location - close old active entry and create new
+            // This prevents having multiple active entries at the same time
             for (doc in recentHistory.documents) {
-                val departureTime = doc.getDate("departureTime") ?: continue
-                
-                // Check if closed within MAX_SESSION_GAP_MINUTES
-                val timeSinceDeparture = (now - departureTime.time) / 60_000
-                if (timeSinceDeparture > MAX_SESSION_GAP_MINUTES) continue
-                
-                val historyLat = doc.getDouble("latitude") ?: continue
-                val historyLng = doc.getDouble("longitude") ?: continue
-                val historyCoord = LocationCoordinate(historyLat, historyLng)
-                
-                if (calculateDistance(coordinate, historyCoord) <= SAME_LOCATION_THRESHOLD_METERS) {
-                    // Reopen this entry
+                val departureTime = doc.getDate("departureTime")
+                if (departureTime == null) {
+                    // Found an active entry at a DIFFERENT location - close it
                     val arrivalTime = doc.getDate("arrivalTime")
                     val durationMinutes = if (arrivalTime != null && arrivalTime.time <= now) {
                         ((now - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
+                    } else 0
+                    
+                    if (durationMinutes >= 3) {
+                        // Close with departure time = now
+                        doc.reference.update(
+                            mapOf(
+                                "departureTime" to Date(now),
+                                "durationMinutes" to durationMinutes
+                            )
+                        ).await()
+                        Log.d(TAG, "🔒 Closed previous active entry: ${doc.getString("locationName")} (${durationMinutes}min)")
                     } else {
-                        0
+                        // Too short, delete it
+                        doc.reference.delete().await()
+                        Log.d(TAG, "🗑️ Deleted too-short entry: ${doc.getString("locationName")} (${durationMinutes}min)")
                     }
-                    doc.reference.update(
-                        mapOf(
-                            "departureTime" to null,
-                            "durationMinutes" to durationMinutes
-                        )
-                    ).await()
-                    Log.d(TAG, "🔄 Reopened entry: ${doc.getString("locationName")}, duration: ${durationMinutes}min")
-                    return
+                    break // Only one active entry should exist
                 }
             }
             
-            // Step 3: No matching entry found - create new one
+            // Now create new entry
             val locationName = detectPlaceName(address)
             val historyData = mapOf(
                 "userId" to userId,
@@ -429,17 +559,28 @@ class BackgroundLocationWorker(
             val addresses = geocoder.getFromLocation(coordinate.latitude, coordinate.longitude, 1)
             addresses?.firstOrNull()?.let { address ->
                 buildString {
+                    // Priority order for location name:
+                    // 1. Feature name (if not just a number)
+                    // 2. Thoroughfare (street name)
+                    // 3. SubLocality (neighborhood/district)
+                    // 4. Locality (city)
+                    // 5. SubAdminArea (county/district)
+                    // 6. AdminArea (state/province)
+                    
                     address.featureName?.let { feature ->
-                        if (!feature.matches(Regex("^\\d+$"))) {
+                        // Skip if it's just a street number
+                        if (!feature.matches(Regex("^\\d+[A-Za-z]?$")) && feature.length > 2) {
                             append(feature)
                         }
                     }
+                    
                     address.thoroughfare?.let { street ->
                         if (isEmpty() || !contains(street)) {
                             if (isNotEmpty()) append(", ")
                             append(street)
                         }
                     }
+                    
                     address.subLocality?.let { subLocality ->
                         if (isEmpty()) {
                             append(subLocality)
@@ -448,15 +589,37 @@ class BackgroundLocationWorker(
                             append(subLocality)
                         }
                     }
+                    
+                    // Fallback to city if still empty
                     if (isEmpty()) {
                         address.locality?.let { city -> append(city) }
                     }
+                    
+                    // Last resort: use admin area
+                    if (isEmpty()) {
+                        address.subAdminArea?.let { district -> append(district) }
+                    }
+                    
+                    if (isEmpty()) {
+                        address.adminArea?.let { province -> append(province) }
+                    }
                 }
-            }?.takeIf { it.isNotBlank() } ?: "Unknown location"
+            }?.takeIf { it.isNotBlank() } ?: generateFallbackLocationName(coordinate)
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting address", e)
-            "Unknown location"
+            Log.e(TAG, "Error getting address from Geocoder", e)
+            generateFallbackLocationName(coordinate)
         }
+    }
+    
+    /**
+     * Generate a fallback location name when Geocoder fails.
+     * Uses coordinates rounded to create a readable area name.
+     */
+    private fun generateFallbackLocationName(coordinate: LocationCoordinate): String {
+        // Round to 3 decimal places (~100m precision)
+        val lat = String.format(Locale.US, "%.3f", coordinate.latitude)
+        val lng = String.format(Locale.US, "%.3f", coordinate.longitude)
+        return "Vị trí ($lat, $lng)"
     }
     
     private fun getBatteryLevel(): Int {

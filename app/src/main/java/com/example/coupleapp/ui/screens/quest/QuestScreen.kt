@@ -202,8 +202,8 @@ fun QuestScreen(
                                     ) {
                                         Column {
                                             QuestSectionHeader(
-                                                title = "⭐ Special Quest",
-                                                subtitle = "Big reward for new users"
+                                                title = "⭐ " + stringResource(R.string.feature_quest),
+                                                subtitle = stringResource(R.string.big_reward_new_users)
                                             )
                                             Spacer(modifier = Modifier.height(8.dp))
                                             SpecialQuestCard(
@@ -247,8 +247,8 @@ fun QuestScreen(
                                         modifier = Modifier.padding(horizontal = 16.dp)
                                     ) {
                                         QuestSectionHeader(
-                                            title = "🎬 Watch Ads",
-                                            subtitle = "Get coins quickly by watching ads"
+                                            title = "🎬 " + stringResource(R.string.watch_ad_for_coins),
+                                            subtitle = stringResource(R.string.get_coins_watching_ads)
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         WatchAdButton(
@@ -267,8 +267,8 @@ fun QuestScreen(
                                     enter = fadeIn(animationSpec = tween(400, delayMillis = 300))
                                 ) {
                                     QuestSectionHeader(
-                                        title = "📋 Daily Quests",
-                                        subtitle = "Complete to earn coins every day"
+                                        title = "📋 " + stringResource(R.string.daily_quests),
+                                        subtitle = stringResource(R.string.complete_earn_daily)
                                     )
                                 }
                             }

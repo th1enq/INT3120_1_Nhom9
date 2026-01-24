@@ -31,6 +31,7 @@ fun LocketDrawingContent(
     hasDrawing: Boolean,
     onOpenDrawing: () -> Unit,
     onSendDrawing: () -> Unit,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -111,7 +112,8 @@ fun LocketDrawingContent(
                 // Send button
                 CaptureButton(
                     onClick = onSendDrawing,
-                    color = Color(0xFF4CAF50)
+                    color = Color(0xFF4CAF50),
+                    enabled = !isSending
                 )
             }
         }

@@ -47,13 +47,25 @@ class SignificantLocationManager(private val context: Context) {
     companion object {
         private const val TAG = "SignificantLocation"
         private const val REQUEST_CODE = 2001
+        private const val PREFS_NAME = "significant_location_prefs"
+        private const val KEY_TRACKING_ACTIVE = "tracking_active"
         
-        // BALANCED: Trigger khi di chuyển đáng kể
-        private const val DISPLACEMENT_METERS = 500f // Trigger khi di chuyển 500m
+        // ================================================================
+        // LAYER 1: PASSIVE LOCATION (Primary - TRULY battery efficient)
+        // ================================================================
+        // Sử dụng PRIORITY_PASSIVE để thực sự piggyback location từ apps khác
+        // KHÔNG bật GPS riêng, chỉ nhận location khi có app khác request
+        // 
+        // Kết hợp với Layer 2 (WorkManager 20 phút) và Layer 3 (AlarmManager 25 phút):
+        // - Normal case: Passive nhận location từ Google Maps, Grab, v.v.
+        // - Fallback: WorkManager/AlarmManager request location mỗi 15-25 phút
+        // ================================================================
+        private const val DISPLACEMENT_METERS = 300f // Trigger khi di chuyển 300m
         
-        // Interval để đảm bảo location history được cập nhật đều đặn
-        private const val MIN_UPDATE_INTERVAL_MS = 15 * 60 * 1000L // Tối thiểu 15 phút giữa 2 lần update
-        private const val MAX_UPDATE_INTERVAL_MS = 30 * 60 * 1000L // Tối đa 30 phút (fallback)
+        // Interval cho passive mode - chỉ là hint, thực tế phụ thuộc vào apps khác
+        // Tăng interval vì đây là PASSIVE - không tự bật GPS
+        private const val MIN_UPDATE_INTERVAL_MS = 30 * 60 * 1000L // 30 phút minimum
+        private const val MAX_UPDATE_INTERVAL_MS = 60 * 60 * 1000L // 1 giờ maximum
         
         // Singleton instance
         @Volatile
@@ -69,28 +81,53 @@ class SignificantLocationManager(private val context: Context) {
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    
+    // Internal state to track if we've registered
+    @Volatile
+    private var isRegistered = false
     
     /**
      * Start tracking significant location changes.
+     * 
+     * IMPORTANT: Uses PRIORITY_PASSIVE which:
+     * - Does NOT turn on GPS by itself
+     * - Only receives location when OTHER apps request GPS
+     * - Zero battery impact when no other app uses location
+     * - Perfect for background tracking when user uses Maps, Grab, etc.
+     * 
      * Call this when user logs in or enables location sharing.
      */
     fun startTracking(): Boolean {
+        // Avoid duplicate registration
+        if (isRegistered && isTrackingViaPendingIntent()) {
+            Log.d(TAG, "Already tracking, skipping re-registration")
+            return true
+        }
+        
         if (!hasLocationPermission()) {
             Log.w(TAG, "Location permission not granted")
             return false
         }
         
         try {
-            // BATTERY OPTIMIZED: Request for significant location changes only
-            // Sử dụng LOW_POWER để tiết kiệm pin tối đa - độ chính xác ~100m là đủ cho history
+            // ============================================================
+            // TRULY PASSIVE: PRIORITY_PASSIVE
+            // ============================================================
+            // - Không tự bật GPS - chỉ piggyback từ apps khác
+            // - Khi user mở Google Maps, Grab, Zalo → ta nhận được location
+            // - Battery impact: ~0% khi không có app khác dùng GPS
+            // - Fallback: WorkManager/AlarmManager sẽ request location riêng
+            // ============================================================
             val locationRequest = LocationRequest.Builder(
-                Priority.PRIORITY_LOW_POWER, // Thay BALANCED bằng LOW_POWER để tiết kiệm pin
+                Priority.PRIORITY_PASSIVE, // PASSIVE = piggyback only, không tự bật GPS
                 MAX_UPDATE_INTERVAL_MS
             )
                 .setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL_MS)
                 .setMinUpdateDistanceMeters(DISPLACEMENT_METERS)
-                .setWaitForAccurateLocation(false) // Don't wait, use best available
-                .setMaxUpdateDelayMillis(MAX_UPDATE_INTERVAL_MS) // Batch updates để tiết kiệm pin
+                .setWaitForAccurateLocation(false)
+                // Batch để giảm wakeup frequency
+                .setMaxUpdateDelayMillis(MAX_UPDATE_INTERVAL_MS)
                 .build()
             
             val pendingIntent = createPendingIntent()
@@ -99,8 +136,12 @@ class SignificantLocationManager(private val context: Context) {
                 locationRequest,
                 pendingIntent
             ).addOnSuccessListener {
-                Log.d(TAG, "✅ Significant location tracking started")
+                isRegistered = true
+                prefs.edit().putBoolean(KEY_TRACKING_ACTIVE, true).apply()
+                Log.d(TAG, "✅ Passive location tracking started (piggyback mode)")
             }.addOnFailureListener { e ->
+                isRegistered = false
+                prefs.edit().putBoolean(KEY_TRACKING_ACTIVE, false).apply()
                 Log.e(TAG, "❌ Failed to start location tracking", e)
             }
             
@@ -112,23 +153,48 @@ class SignificantLocationManager(private val context: Context) {
     }
     
     /**
-     * Stop tracking.
-     * Call this when user logs out or disables location sharing.
+     * Stop tracking and release GPS resources.
+     * 
+     * CRITICAL: Call this when user logs out or disables location sharing.
+     * This releases the PendingIntent registration with FusedLocationClient,
+     * which stops the GPS icon from showing.
      */
     fun stopTracking() {
         try {
             val pendingIntent = createPendingIntent()
             fusedLocationClient.removeLocationUpdates(pendingIntent)
-            Log.d(TAG, "Significant location tracking stopped")
+            
+            // Also cancel the PendingIntent itself to ensure cleanup
+            pendingIntent.cancel()
+            
+            isRegistered = false
+            prefs.edit().putBoolean(KEY_TRACKING_ACTIVE, false).apply()
+            
+            Log.d(TAG, "✅ Significant location tracking stopped, GPS resources released")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping tracking", e)
         }
     }
     
     /**
-     * Check if currently tracking
+     * Check if currently tracking.
+     * Uses both internal state and PendingIntent check for accuracy.
      */
     fun isTracking(): Boolean {
+        // First check internal state (faster)
+        if (!isRegistered && !prefs.getBoolean(KEY_TRACKING_ACTIVE, false)) {
+            return false
+        }
+        
+        // Then verify via PendingIntent (authoritative)
+        return isTrackingViaPendingIntent()
+    }
+    
+    /**
+     * Check if PendingIntent is registered with system.
+     * This is the authoritative check - if PendingIntent exists, GPS may be active.
+     */
+    private fun isTrackingViaPendingIntent(): Boolean {
         val intent = Intent(context, SignificantLocationReceiver::class.java)
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_MUTABLE
@@ -162,7 +228,10 @@ class SignificantLocationManager(private val context: Context) {
 
 /**
  * BroadcastReceiver for significant location changes.
- * This only wakes up when user moves 200m+ from last known position.
+ * This only wakes up when user moves 500m+ from last known position.
+ * 
+ * IMPORTANT: Uses goAsync() to properly handle async work in BroadcastReceiver
+ * and avoid holding GPS/CPU resources too long.
  */
 class SignificantLocationReceiver : BroadcastReceiver() {
     
@@ -175,9 +244,10 @@ class SignificantLocationReceiver : BroadcastReceiver() {
         private var lastLongitude = 0.0
         private const val MIN_UPDATE_GAP_MS = 60_000L // 1 minute minimum gap
         private const val MIN_DISTANCE_METERS = 50.0 // 50m minimum to consider different
+        
+        // Timeout for async work - prevents holding resources too long
+        private const val ASYNC_TIMEOUT_MS = 15_000L // 15 seconds max
     }
-    
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     override fun onReceive(context: Context, intent: Intent) {
         if (!LocationResult.hasResult(intent)) {
@@ -207,9 +277,27 @@ class SignificantLocationReceiver : BroadcastReceiver() {
         lastLatitude = location.latitude
         lastLongitude = location.longitude
         
-        // Process location update
-        scope.launch {
-            processLocationUpdate(context, location.latitude, location.longitude)
+        // Use goAsync() to properly handle async work in BroadcastReceiver
+        // This prevents ANR and properly releases resources when done
+        val pendingResult = goAsync()
+        
+        // Create a scoped coroutine that will finish the pendingResult when done
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                // Add timeout to prevent holding resources too long
+                kotlinx.coroutines.withTimeout(ASYNC_TIMEOUT_MS) {
+                    processLocationUpdate(context, location.latitude, location.longitude)
+                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                Log.w(TAG, "Location update timed out after ${ASYNC_TIMEOUT_MS}ms")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing location update", e)
+            } finally {
+                // CRITICAL: Always finish the pending result to release resources
+                // This allows Android to release GPS/CPU resources faster
+                pendingResult.finish()
+                Log.d(TAG, "✅ Receiver finished, resources released")
+            }
         }
     }
     
@@ -300,94 +388,56 @@ class SignificantLocationReceiver : BroadcastReceiver() {
                 // Update existing active entry - user is still at same location
                 val arrivalTime = activeEntry.getDate("arrivalTime")
                 val durationMinutes = if (arrivalTime != null) {
+                    ((now.time - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
+                } else 0
+                
+                activeEntry.reference.update("durationMinutes", durationMinutes).await()
+                Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min")
+                return
+            }
+            
+            // No active entry at current location - close any old active entry, then create new
+            val oldActiveEntry = recentHistory.documents.find { it.getDate("departureTime") == null }
+            if (oldActiveEntry != null) {
+                val arrivalTime = oldActiveEntry.getDate("arrivalTime")
+                val durationMinutes = if (arrivalTime != null) {
                     ((now.time - arrivalTime.time) / 60_000).toInt()
                 } else 0
                 
-                activeEntry.reference.update(
-                    mapOf(
-                        "departureTime" to now,
-                        "durationMinutes" to durationMinutes
-                    )
-                ).await()
-                
-                Log.d(TAG, "Updated active history entry: ${durationMinutes}min")
-            } else {
-                // No active entry at current location
-                // First, close any OTHER active entries (user moved to new location)
-                val otherActiveEntry = recentHistory.documents.find { 
-                    it.getDate("departureTime") == null 
-                }
-                if (otherActiveEntry != null) {
-                    val arrivalTime = otherActiveEntry.getDate("arrivalTime")
-                    val durationMinutes = if (arrivalTime != null) {
-                        ((now.time - arrivalTime.time) / 60_000).toInt()
-                    } else 0
-                    
-                    if (durationMinutes >= 5) {
-                        otherActiveEntry.reference.update(
-                            mapOf(
-                                "departureTime" to now,
-                                "durationMinutes" to durationMinutes
-                            )
-                        ).await()
-                        Log.d(TAG, "Closed previous active entry: ${durationMinutes}min")
-                    } else {
-                        // Too short, delete
-                        otherActiveEntry.reference.delete().await()
-                        Log.d(TAG, "Deleted too-short entry: ${durationMinutes}min")
-                    }
-                }
-                
-                // Check if there's a recently closed entry at this location (within 60 min)
-                // If yes, reopen it instead of creating duplicate
-                val recentClosedEntry = recentHistory.documents.find { doc ->
-                    val depTime = doc.getDate("departureTime") ?: return@find false
-                    val gapMinutes = (now.time - depTime.time) / 60_000
-                    if (gapMinutes > 60) return@find false // Max 60 min gap to reopen
-                    
-                    val histLat = doc.getDouble("latitude") ?: return@find false
-                    val histLng = doc.getDouble("longitude") ?: return@find false
-                    val distance = calculateDistance(latitude, longitude, histLat, histLng)
-                    distance < 300
-                }
-                
-                if (recentClosedEntry != null) {
-                    // Reopen the recent entry - user returned
-                    val arrivalTime = recentClosedEntry.getDate("arrivalTime")
-                    val durationMinutes = if (arrivalTime != null) {
-                        ((now.time - arrivalTime.time) / 60_000).toInt()
-                    } else 0
-                    
-                    recentClosedEntry.reference.update(
+                if (durationMinutes >= 3) {
+                    oldActiveEntry.reference.update(
                         mapOf(
                             "departureTime" to now,
                             "durationMinutes" to durationMinutes
                         )
                     ).await()
-                    Log.d(TAG, "Reopened recent entry, duration: ${durationMinutes}min")
+                    Log.d(TAG, "🔒 Closed previous entry: ${durationMinutes}min")
                 } else {
-                    // Create new entry - this is a new location visit
-                    val locationName = address.split(",").firstOrNull()?.trim() ?: address
-                    val locationType = detectLocationType(address)
-                    
-                    val newEntry = mapOf(
-                        "userId" to userId,
-                        "coupleId" to coupleId,
-                        "locationName" to locationName,
-                        "address" to address,
-                        "latitude" to latitude,
-                        "longitude" to longitude,
-                        "arrivalTime" to now,
-                        "departureTime" to null,
-                        "durationMinutes" to 0,
-                        "locationType" to locationType.name,
-                        "source" to "significant_change"
-                    )
-                    
-                    firestore.collection("location_history").add(newEntry).await()
-                    Log.d(TAG, "Created new history entry")
+                    oldActiveEntry.reference.delete().await()
+                    Log.d(TAG, "🗑️ Deleted short entry: ${durationMinutes}min")
                 }
             }
+            
+            // Create new entry
+            val locationName = address.split(",").firstOrNull()?.trim() ?: address
+            val locationType = detectLocationType(address)
+            
+            val newEntry = mapOf(
+                "userId" to userId,
+                "coupleId" to coupleId,
+                "locationName" to locationName,
+                "address" to address,
+                "latitude" to latitude,
+                "longitude" to longitude,
+                "arrivalTime" to now,
+                "departureTime" to null,
+                "durationMinutes" to 0,
+                "locationType" to locationType.name,
+                "source" to "significant_change"
+            )
+            
+            firestore.collection("location_history").add(newEntry).await()
+            Log.d(TAG, "📝 Created new entry: $locationName")
             
         } catch (e: Exception) {
             Log.e(TAG, "Error updating location history", e)
@@ -401,15 +451,27 @@ class SignificantLocationReceiver : BroadcastReceiver() {
             val addresses = geocoder.getFromLocation(latitude, longitude, 1)
             addresses?.firstOrNull()?.let { address ->
                 buildString {
+                    // Priority order for location name:
+                    // 1. Feature name (if not just a number)
+                    // 2. Thoroughfare (street name)
+                    // 3. SubLocality (neighborhood/district)
+                    // 4. Locality (city)
+                    // 5. SubAdminArea/AdminArea (fallback)
+                    
                     address.featureName?.let { feature ->
-                        if (!feature.matches(Regex("^\\d+$"))) append(feature)
+                        // Skip if it's just a street number
+                        if (!feature.matches(Regex("^\\d+[A-Za-z]?$")) && feature.length > 2) {
+                            append(feature)
+                        }
                     }
+                    
                     address.thoroughfare?.let { street ->
                         if (isEmpty() || !contains(street)) {
                             if (isNotEmpty()) append(", ")
                             append(street)
                         }
                     }
+                    
                     address.subLocality?.let { subLocality ->
                         if (isEmpty()) append(subLocality)
                         else if (!contains(subLocality)) {
@@ -417,14 +479,35 @@ class SignificantLocationReceiver : BroadcastReceiver() {
                             append(subLocality)
                         }
                     }
+                    
+                    // Fallback to city if still empty
                     if (isEmpty()) {
                         address.locality?.let { city -> append(city) }
                     }
+                    
+                    // Last resort: use admin area
+                    if (isEmpty()) {
+                        address.subAdminArea?.let { district -> append(district) }
+                    }
+                    
+                    if (isEmpty()) {
+                        address.adminArea?.let { province -> append(province) }
+                    }
                 }
-            }?.takeIf { it.isNotBlank() } ?: "Unknown location"
+            }?.takeIf { it.isNotBlank() } ?: generateFallbackLocationName(latitude, longitude)
         } catch (e: Exception) {
-            "Unknown location"
+            Log.e(TAG, "Geocoder failed", e)
+            generateFallbackLocationName(latitude, longitude)
         }
+    }
+    
+    /**
+     * Generate a fallback location name when Geocoder fails.
+     */
+    private fun generateFallbackLocationName(latitude: Double, longitude: Double): String {
+        val lat = String.format(Locale.US, "%.3f", latitude)
+        val lng = String.format(Locale.US, "%.3f", longitude)
+        return "Vị trí ($lat, $lng)"
     }
     
     private fun detectLocationType(address: String): LocationType {

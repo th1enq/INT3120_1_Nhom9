@@ -74,7 +74,7 @@ fun NotificationSettingsScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = stringResource(R.string.back),
                             tint = Color(0xFF2D3748)
                         )
                     }
@@ -130,8 +130,8 @@ fun NotificationSettingsScreen(
                             Column {
                                 NotificationToggleItem(
                                     icon = Icons.Filled.Notifications,
-                                    title = "Push Notifications",
-                                    subtitle = "Receive notifications on your device",
+                                    title = stringResource(R.string.push_notifications),
+                                    subtitle = stringResource(R.string.push_notifications_desc),
                                     checked = pushEnabled,
                                     onCheckedChange = { 
                                         pushEnabled = it
@@ -141,8 +141,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.VolumeUp,
-                                    title = "Sound",
-                                    subtitle = "Play sound for notifications",
+                                    title = stringResource(R.string.sound),
+                                    subtitle = stringResource(R.string.sound_desc),
                                     checked = soundEnabled,
                                     onCheckedChange = { 
                                         soundEnabled = it
@@ -153,8 +153,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.Vibration,
-                                    title = "Vibration",
-                                    subtitle = "Vibrate for notifications",
+                                    title = stringResource(R.string.vibration),
+                                    subtitle = stringResource(R.string.vibration_desc),
                                     checked = vibrationEnabled,
                                     onCheckedChange = { 
                                         vibrationEnabled = it
@@ -190,8 +190,8 @@ fun NotificationSettingsScreen(
                             Column {
                                 NotificationToggleItem(
                                     icon = Icons.Filled.Favorite,
-                                    title = "Locket",
-                                    subtitle = "When partner sends a locket",
+                                    title = stringResource(R.string.feature_locket),
+                                    subtitle = stringResource(R.string.locket_notification_desc),
                                     checked = locketNotifications,
                                     onCheckedChange = { 
                                         locketNotifications = it
@@ -202,8 +202,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.FavoriteBorder,
-                                    title = "Missing",
-                                    subtitle = "When partner sends a miss",
+                                    title = stringResource(R.string.feature_missing),
+                                    subtitle = stringResource(R.string.missing_notification_desc),
                                     checked = missingNotifications,
                                     onCheckedChange = { 
                                         missingNotifications = it
@@ -214,8 +214,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.Grass,
-                                    title = "Garden",
-                                    subtitle = "When partner cares for plant",
+                                    title = stringResource(R.string.feature_garden),
+                                    subtitle = stringResource(R.string.garden_notification_desc),
                                     checked = gardenNotifications,
                                     onCheckedChange = { 
                                         gardenNotifications = it
@@ -226,8 +226,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.EmojiEvents,
-                                    title = "Quests",
-                                    subtitle = "Daily quest reminders",
+                                    title = stringResource(R.string.quests),
+                                    subtitle = stringResource(R.string.quests_notification_desc),
                                     checked = questNotifications,
                                     onCheckedChange = { 
                                         questNotifications = it
@@ -238,8 +238,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.CalendarMonth,
-                                    title = "Calendar",
-                                    subtitle = "Anniversary and event reminders",
+                                    title = stringResource(R.string.feature_calendar),
+                                    subtitle = stringResource(R.string.calendar_notification_desc),
                                     checked = calendarReminders,
                                     onCheckedChange = { 
                                         calendarReminders = it
@@ -250,8 +250,8 @@ fun NotificationSettingsScreen(
                                 HorizontalDivider(color = Color(0xFFF0F0F0))
                                 NotificationToggleItem(
                                     icon = Icons.Filled.Nightlight,
-                                    title = "Sleep Reminders",
-                                    subtitle = "Bedtime and wake-up reminders",
+                                    title = stringResource(R.string.sleep_reminders),
+                                    subtitle = stringResource(R.string.sleep_reminders_desc),
                                     checked = sleepReminders,
                                     onCheckedChange = { 
                                         sleepReminders = it

@@ -180,7 +180,8 @@ fun LocketScreen(
                 partnerName = uiState.partnerUser.name,
                 onSend = { viewModel.sendLocket() },
                 onCancel = { viewModel.clearCapturedPhoto() },
-                onSaveToGallery = { /* TODO: Save to gallery */ }
+                onSaveToGallery = { /* TODO: Save to gallery */ },
+                isSending = uiState.isSending
             )
         }
         
@@ -313,7 +314,8 @@ fun LocketScreen(
                                                 LocketEmojiContent(
                                                     selectedEmoji = uiState.selectedEmoji,
                                                     onSelectEmoji = { viewModel.showEmojiPicker(true) },
-                                                    onSendEmoji = { viewModel.sendLocket() }
+                                                    onSendEmoji = { viewModel.sendLocket() },
+                                                    isSending = uiState.isSending
                                                 )
                                             }
                                             
@@ -321,7 +323,8 @@ fun LocketScreen(
                                                 LocketDrawingContent(
                                                     hasDrawing = uiState.drawingBitmap != null,
                                                     onOpenDrawing = onNavigateToDrawing,
-                                                    onSendDrawing = { viewModel.sendLocket() }
+                                                    onSendDrawing = { viewModel.sendLocket() },
+                                                    isSending = uiState.isSending
                                                 )
                                             }
                                             
@@ -329,7 +332,8 @@ fun LocketScreen(
                                                 LocketTextContent(
                                                     textContent = uiState.textContent,
                                                     onTextChange = { viewModel.updateTextContent(it) },
-                                                    onSendText = { viewModel.sendLocket() }
+                                                    onSendText = { viewModel.sendLocket() },
+                                                    isSending = uiState.isSending
                                                 )
                                             }
                                         }

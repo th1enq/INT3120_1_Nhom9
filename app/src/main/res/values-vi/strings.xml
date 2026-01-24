@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CoupleApp</string>
+    <string name="app_name">Loveable</string>
     
     <!-- Common -->
     <string name="back">Quay lại</string>
@@ -210,6 +210,12 @@
     <string name="loading_sleep_data">Đang tải dữ liệu giấc ngủ…</string>
     <string name="sleep_no_data">Chưa có dữ liệu giấc ngủ</string>
     <string name="sleep_no_data_subtitle">Nhấn menu để thêm dữ liệu mẫu hoặc đồng bộ từ Health Connect</string>
+    <string name="sleep_waiting_partner_data">Có lẽ đang ngáy khò khò 😴</string>
+    <string name="sleep_waiting_partner_data_subtitle">Dữ liệu giấc ngủ thường đến sau 1-3 giờ kể từ khi thức dậy</string>
+    <string name="sleep_waiting_today_data">Đang chờ dữ liệu giấc ngủ hôm nay</string>
+    <string name="sleep_waiting_today_data_subtitle">Dữ liệu sẽ đồng bộ sau khi bạn thức dậy</string>
+    <string name="sleep_data_delayed">Dữ liệu có thể bị chậm</string>
+    <string name="sleep_data_delayed_subtitle">Google Sleep API gửi dữ liệu 1-3 giờ sau khi thức</string>
     <string name="recent_sleep">Giấc ngủ gần đây</string>
     <string name="view_all">Xem tất cả →</string>
     <string name="health_connect_unavailable">Health Connect không khả dụng trên thiết bị này</string>
@@ -575,4 +581,248 @@
     <string name="waiting_for_user">Đang chờ %s chấp nhận</string>
     <string name="event_on_date">Sự kiện ngày %s</string>
     <string name="user">người dùng</string>
+    
+    <!-- Notification Settings -->
+    <string name="push_notifications">Thông báo đẩy</string>
+    <string name="push_notifications_desc">Nhận thông báo trên thiết bị của bạn</string>
+    <string name="sound">Âm thanh</string>
+    <string name="sound_desc">Phát âm thanh cho thông báo</string>
+    <string name="vibration">Rung</string>
+    <string name="vibration_desc">Rung cho thông báo</string>
+    <string name="locket_notification_desc">Khi người yêu gửi locket</string>
+    <string name="missing_notification_desc">Khi người yêu gửi nhớ nhung</string>
+    <string name="garden_notification_desc">Khi người yêu chăm sóc cây</string>
+    <string name="quests_notification_desc">Nhắc nhở nhiệm vụ hàng ngày</string>
+    <string name="calendar_notification_desc">Nhắc nhở kỷ niệm và sự kiện</string>
+    <string name="sleep_reminders">Nhắc nhở giấc ngủ</string>
+    <string name="sleep_reminders_desc">Nhắc nhở giờ đi ngủ và thức dậy</string>
+    
+    <!-- Help Screen -->
+    <string name="email_support">Hỗ trợ qua Email</string>
+    <string name="support_email">support@coupleapp.com</string>
+    <string name="live_chat">Trò chuyện trực tiếp</string>
+    <string name="live_chat_desc">Trò chuyện với đội hỗ trợ</string>
+    <string name="report_bug">Báo lỗi</string>
+    <string name="report_bug_desc">Giúp chúng tôi cải thiện ứng dụng</string>
+    <string name="rate_us">Đánh giá</string>
+    <string name="rate_us_desc">Thích ứng dụng? Cho chúng tôi 5 sao!</string>
+    <string name="send_feedback">Gửi phản hồi</string>
+    <string name="send_feedback_desc">Chia sẻ suy nghĩ của bạn với chúng tôi</string>
+    <string name="faq_link_partner">Làm thế nào để kết nối với người yêu?</string>
+    <string name="faq_link_partner_answer">Vào Hồ sơ > Quản lý liên kết và chia sẻ mã liên kết với người yêu. Họ có thể nhập mã của bạn trong ứng dụng để kết nối.</string>
+    <string name="faq_send_locket">Làm thế nào để gửi Locket?</string>
+    <string name="faq_send_locket_answer">Nhấn vào tính năng Locket từ màn hình chính hoặc hồ sơ. Chọn emoji, văn bản, ảnh hoặc hình vẽ để gửi cho người yêu.</string>
+    <string name="faq_quests">Nhiệm vụ là gì?</string>
+    <string name="faq_quests_answer">Nhiệm vụ là những thử thách hàng ngày mà bạn và người yêu có thể hoàn thành cùng nhau để kiếm xu và gắn kết hơn.</string>
+    <string name="faq_sleep_tracking">Theo dõi giấc ngủ hoạt động như thế nào?</string>
+    <string name="faq_sleep_tracking_answer">Bật theo dõi giấc ngủ để theo dõi mô hình giấc ngủ của bạn. Chia sẻ dữ liệu giấc ngủ với người yêu để đồng bộ lịch nghỉ ngơi.</string>
+    <string name="faq_change_code">Tôi có thể thay đổi mã liên kết không?</string>
+    <string name="faq_change_code_answer">Mã liên kết là vĩnh viễn và không thể thay đổi. Chúng là duy nhất cho tài khoản của bạn và giúp người yêu tìm thấy bạn.</string>
+    <string name="faq_unlink">Làm thế nào để hủy liên kết với người yêu?</string>
+    <string name="faq_unlink_answer">Vào Hồ sơ > Quản lý liên kết > Hủy liên kết. Lưu ý rằng điều này sẽ xóa tất cả dữ liệu chia sẻ giữa bạn và người yêu.</string>
+    
+    <!-- Distance Settings -->
+    <string name="share_my_location">Chia sẻ vị trí của tôi</string>
+    <string name="share_location_desc">Cho phép người yêu thấy vị trí của bạn</string>
+    <string name="show_battery_level">Hiển thị mức pin</string>
+    <string name="show_battery_desc">Hiển thị phần trăm pin của bạn</string>
+    <string name="location_alerts">Cảnh báo vị trí</string>
+    <string name="location_alerts_desc">Nhận thông báo khi đến/rời khỏi địa điểm</string>
+    <string name="high_accuracy_mode">Chế độ độ chính xác cao</string>
+    <string name="high_accuracy_desc">Độ chính xác tốt hơn, tiêu thụ pin nhiều hơn</string>
+    
+    <!-- Quest Screen -->
+    <string name="big_reward_new_users">Phần thưởng lớn cho người dùng mới</string>
+    <string name="get_coins_watching_ads">Nhận xu nhanh chóng bằng cách xem quảng cáo</string>
+    <string name="complete_earn_daily">Hoàn thành để kiếm xu mỗi ngày</string>
+    
+    <!-- Permissions Settings -->
+    <string name="app_permissions">Quyền ứng dụng</string>
+    <string name="required_permissions">QUYỀN CẦN THIẾT</string>
+    <string name="location_all_time">Vị trí (Mọi lúc)</string>
+    <string name="physical_activity">Hoạt động thể chất</string>
+    <string name="disable_battery_saver">Tắt tiết kiệm pin</string>
+    <string name="required">Bắt buộc</string>
+    <string name="detailed_instructions">HƯỚNG DẪN CHI TIẾT</string>
+    
+    <!-- Manage Link Screen -->
+    <string name="unlink">Hủy liên kết</string>
+    <string name="unlink_confirmation">Bạn có chắc muốn hủy liên kết với %s?\n\nĐiều này sẽ xóa tất cả dữ liệu chia sẻ giữa hai bạn.</string>
+    
+    <!-- Chat Screen -->
+    <string name="authenticate_to_view_messages">Xác thực để xem tin nhắn</string>
+    <string name="authenticate_biometric_desc">Sử dụng vân tay, Face ID hoặc mã PIN để mở khóa</string>
+    <string name="options">Tùy chọn</string>
+    <string name="emoji">Emoji</string>
+    <string name="biometric_required">Yêu cầu xác thực</string>
+    
+    <!-- Link Partner Screen -->
+    <string name="search">Tìm kiếm</string>
+    <string name="send_link_request">Gửi yêu cầu liên kết</string>
+    
+    <!-- Locket History Screen -->
+    <string name="locket_deleted_success">Đã xóa Locket thành công</string>
+    <string name="confirm_delete">Xác nhận xóa</string>
+    <string name="confirm_delete_lockets">Bạn có chắc muốn xóa các locket đã chọn?</string>
+    <string name="confirm_delete_locket_single">Bạn có chắc muốn xóa Locket này?</string>
+    <string name="select_to_delete">Chọn để xóa</string>
+    
+    <!-- Partner Hub Screen -->
+    <string name="connection_invites">Lời mời kết nối</string>
+    <string name="partner">Người yêu</string>
+    
+    <!-- Onboarding Permissions -->
+    <string name="share_location">Chia sẻ vị trí</string>
+    <string name="track_sleep">Theo dõi giấc ngủ</string>
+    <string name="receive_notifications">Nhận thông báo</string>
+    <string name="skip_setup_later">Bỏ qua và cài đặt sau</string>
+    <string name="welcome_to_couple_app">Chào mừng đến với\nCouple App! 💕</string>
+    <string name="share_realtime_location">Chia sẻ vị trí thời gian thực</string>
+    <string name="auto_sleep_tracking">Theo dõi giấc ngủ tự động</string>
+    <string name="receive_partner_notifications">Nhận thông báo từ người yêu</string>
+    <string name="optional">Tùy chọn</string>
+    <string name="allow_permission">Cho phép quyền</string>
+    <string name="open_battery_settings">Mở cài đặt pin</string>
+    
+    <!-- Calendar Settings -->
+    <string name="personal_info">Thông tin cá nhân</string>
+    <string name="appearance">Giao diện</string>
+    <string name="default_background">Hình nền mặc định</string>
+    <string name="heartbeat_effect">Hiệu ứng trái tim đập</string>
+    <string name="event_reminders">Nhắc nhở sự kiện</string>
+    <string name="reminder_hours_before">Nhận thông báo trước %d giờ</string>
+    <string name="information">Thông tin</string>
+    <string name="about_feature">Về tính năng</string>
+    <string name="calendar_love_counter">Lịch - Đếm ngày yêu</string>
+    <string name="love_start_date">Ngày bắt đầu yêu nhau</string>
+    <string name="select_reminder_time">Chọn thời gian nhắc nhở</string>
+    <string name="receive_notification_before_event">Nhận thông báo trước sự kiện:</string>
+    
+    <!-- Shared Places -->
+    <string name="photos_count">%d ảnh</string>
+    <string name="duration_hours_minutes">%dh %dm</string>
+    <string name="take_photo_capture_desc">Dùng camera để chụp</string>
+    <string name="from_gallery">Từ thư viện</string>
+    <string name="from_gallery_desc">Chọn từ album</string>
+    
+    <!-- Content Descriptions -->
+    <string name="back_desc">Quay lại</string>
+    <string name="menu_desc">Menu</string>
+    <string name="create_question_desc">Tạo câu hỏi</string>
+    <string name="sleep_quality_desc">Chất lượng giấc ngủ</string>
+    <string name="increase_hours_desc">Tăng giờ</string>
+    <string name="decrease_hours_desc">Giảm giờ</string>
+    <string name="increase_minutes_desc">Tăng phút</string>
+    <string name="decrease_minutes_desc">Giảm phút</string>
+    <string name="hour">Giờ</string>
+    <string name="minute">Phút</string>
+    <string name="minutes_short">phút</string>
+    <string name="increase_desc">Tăng</string>
+    <string name="decrease_desc">Giảm</string>
+    <string name="flash_desc">Đèn flash</string>
+    <string name="gallery_desc">Thư viện</string>
+    <string name="flip_camera_desc">Đổi camera</string>
+    <string name="captured_photo_desc">Ảnh đã chụp</string>
+    <string name="cancel_desc">Hủy</string>
+    <string name="save_to_gallery_desc">Lưu vào thư viện</string>
+    <string name="send_desc">Gửi</string>
+    <string name="your_profile_picture_desc">Ảnh đại diện của bạn</string>
+    <string name="default_profile_desc">Ảnh mặc định</string>
+    <string name="partner_profile_picture_desc">Ảnh đại diện người yêu</string>
+    <string name="copy_desc">Sao chép</string>
+    <string name="toggle_visibility_desc">Chuyển đổi hiển thị</string>
+    <string name="change_photo_desc">Đổi ảnh</string>
+    <string name="watering_desc">Tưới nước</string>
+    <string name="sunlight_desc">Ánh nắng</string>
+    <string name="pesticide_desc">Thuốc trừ sâu</string>
+    <string name="scissors_desc">Kéo</string>
+    <string name="fertilizer_desc">Phân bón</string>
+    <string name="notifications_desc">Thông báo</string>
+    <string name="partner_avatar_desc">Ảnh đại diện người yêu</string>
+    <string name="chat_desc">Trò chuyện</string>
+    <string name="go_back_desc">Quay lại</string>
+    
+    <!-- Calendar Events -->
+    <string name="love_anniversary">Ngày yêu nhau</string>
+    <string name="first_meeting">Lần đầu gặp mặt</string>
+    <string name="her_birthday">Sinh nhật em yêu</string>
+    <string name="his_birthday">Sinh nhật anh yêu</string>
+    <string name="one_year_anniversary">Kỷ niệm 1 năm yêu</string>
+    <string name="valentines_day">Ngày lễ tình nhân</string>
+    
+    <!-- Upcoming Events -->
+    <string name="upcoming_anniversaries">Kỷ niệm sắp tới</string>
+    <string name="all_anniversaries">Tất cả kỷ niệm</string>
+    <string name="repeat">Lặp lại</string>
+    <string name="repeat_yearly">Lặp lại hàng năm</string>
+    <string name="enable_reminder">Bật nhắc nhở</string>
+    <string name="q_and_a">Hỏi &amp; Đáp</string>
+    
+    <!-- Sleep Worker -->
+    <string name="sleep_session_too_long">Phiên ngủ đang quá dài! 😴</string>
+    <string name="sleep_reminder_message">Bạn đã bấm \'Đi ngủ\' %d giờ trước. Bạn vẫn đang ngủ?</string>
+    <string name="wake_up_message">Bạn đã ngủ %d giờ. Chúc một ngày tốt lành!</string>
+    <string name="sleep_reminder_channel_desc">Nhắc nhở ghi nhận giấc ngủ</string>
+    
+    <!-- Widget Worker -->
+    <string name="syncing_partner_data">Đang đồng bộ dữ liệu người yêu</string>
+    <string name="updating_widget_info">Đang cập nhật thông tin widget...</string>
+    <string name="updating_widget">Đang cập nhật widget...</string>
+    
+    <!-- Missing Widget -->
+    <string name="miss_sent">💕 Đã gửi nhớ!</string>
+    <string name="cannot_send_login_again">❌ Không thể gửi, hãy đăng nhập lại</string>
+    
+    <!-- Calendar Screen -->
+    <string name="background_updated">Đã cập nhật hình nền</string>
+    
+    <!-- Error Messages -->
+    <string name="not_authenticated">Chưa xác thực</string>
+    <string name="unable_load_store">Không thể tải dữ liệu cửa hàng: %s</string>
+    <string name="not_enough_coins">Không đủ xu</string>
+    <string name="free_gift_cooldown">Quà miễn phí có sẵn sau %d ngày</string>
+    <string name="purchase_type_not_supported">Loại mua hàng không được hỗ trợ</string>
+    <string name="purchase_failed">Mua hàng thất bại: %s</string>
+    <string name="not_enough_coins_need">Không đủ xu. Cần %d xu</string>
+    <string name="real_money_not_implemented">Mua bằng tiền thật chưa được triển khai</string>
+    <string name="unable_load_history">Không thể tải lịch sử. Vui lòng thử lại.</string>
+    <string name="unable_refresh_data">Không thể làm mới dữ liệu.</string>
+    <string name="error_try_again">Đã xảy ra lỗi. Vui lòng thử lại.</string>
+    <string name="please_login">Vui lòng đăng nhập</string>
+    <string name="unable_load_quests">Không thể tải dữ liệu nhiệm vụ: %s</string>
+    <string name="login_to_add_sample_data">Bạn cần đăng nhập để thêm dữ liệu mẫu</string>
+    <string name="sample_quests_added_success">Đã thêm dữ liệu mẫu nhiệm vụ thành công!</string>
+    <string name="sample_data_error">Lỗi khi thêm dữ liệu mẫu: %s</string>
+    <string name="not_logged_in">Bạn chưa đăng nhập</string>
+    <string name="plant_died_plant_new">Cây của bạn đã chết! Hãy trồng cây mới.</string>
+    <string name="you_dont_have_this_item">Bạn không có vật phẩm này!</string>
+    <string name="plant_not_ready_harvest">Cây chưa sẵn sàng để thu hoạch!</string>
+    <string name="you_dont_have_this_seed">Bạn không có hạt giống này!</string>
+    <string name="you_have_new_message">Bạn có tin nhắn mới</string>
+    
+    <!-- Widget Layout -->
+    <string name="widget_sleep_quality_good">Tốt</string>
+    <string name="widget_time_to_sleep">Đến giờ đi ngủ!</string>
+    <string name="widget_sleep_goal_format">Mục tiêu ngủ: %s</string>
+    <string name="widget_maybe_snoring">Có lẽ vẫn đang ngáy khò khò</string>
+    <string name="widget_vs">VS</string>
+    <string name="widget_days">ngày</string>
+    <string name="widget_miss_partner">Nhớ người yêu</string>
+    <string name="widget_you_count">Bạn: %d</string>
+    <string name="widget_partner_count">NY: %d</string>
+    <string name="widget_record_days">Kỷ lục: %d ngày</string>
+    <string name="widget_i_love_you">Anh yêu em!</string>
+    <string name="widget_locket_image_desc">Ảnh Locket</string>
+    <string name="widget_no_locket_desc">Không có Locket</string>
+    <string name="widget_no_locket_yet">Chưa có Locket</string>
+    <string name="widget_tap_to_send">Nhấn để gửi</string>
+    <string name="widget_my_location_desc">Vị trí của tôi</string>
+    <string name="widget_you">Bạn</string>
+    <string name="widget_partner_location_desc">Vị trí người yêu</string>
+    <string name="widget_lover">Người yêu</string>
+    <string name="widget_sharing">📍 Đang chia sẻ</string>
+    <string name="widget_minutes_ago">%d phút trước</string>
+    <string name="widget_no_location_desc">Không có vị trí</string>
+    <string name="widget_share_location_start">Chia sẻ vị trí để bắt đầu</string>
+    <string name="widget_tap_to_open_map">Nhấn để mở bản đồ</string>
 </resources>

@@ -39,6 +39,7 @@ import com.example.coupleapp.ui.components.sleep.*
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.viewmodel.SleepTrackerViewModelFirebase
 import com.example.coupleapp.viewmodel.TimeEditorType
+import com.example.coupleapp.viewmodel.SleepDataStatus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalTime
@@ -244,24 +245,64 @@ fun SleepTrackerScreen(
                                                 quality = record.quality
                                             )
                                         } ?: run {
-                                            // Empty state
+                                            // Empty state - show different messages based on status
+                                            val isViewingPartner = !uiState.isCurrentUser
+                                            val (emoji, title, subtitle) = when (uiState.sleepDataStatus) {
+                                                SleepDataStatus.WAITING_TODAY -> {
+                                                    if (isViewingPartner) {
+                                                        Triple(
+                                                            "💤",
+                                                            stringResource(R.string.sleep_waiting_partner_data),
+                                                            stringResource(R.string.sleep_waiting_partner_data_subtitle)
+                                                        )
+                                                    } else {
+                                                        Triple(
+                                                            "🌅",
+                                                            stringResource(R.string.sleep_waiting_today_data),
+                                                            stringResource(R.string.sleep_waiting_today_data_subtitle)
+                                                        )
+                                                    }
+                                                }
+                                                SleepDataStatus.DATA_DELAYED -> {
+                                                    if (isViewingPartner) {
+                                                        Triple(
+                                                            "🤔",
+                                                            stringResource(R.string.sleep_waiting_partner_data),
+                                                            stringResource(R.string.sleep_data_delayed_subtitle)
+                                                        )
+                                                    } else {
+                                                        Triple(
+                                                            "⏳",
+                                                            stringResource(R.string.sleep_data_delayed),
+                                                            stringResource(R.string.sleep_data_delayed_subtitle)
+                                                        )
+                                                    }
+                                                }
+                                                else -> Triple(
+                                                    "😴",
+                                                    stringResource(R.string.sleep_no_data),
+                                                    stringResource(R.string.sleep_no_data_subtitle)
+                                                )
+                                            }
+                                            
                                             Column(
                                                 horizontalAlignment = Alignment.CenterHorizontally,
                                                 modifier = Modifier.padding(vertical = 48.dp)
                                             ) {
                                                 Text(
-                                                    text = "😴",
+                                                    text = emoji,
                                                     fontSize = 64.sp
                                                 )
                                                 Spacer(modifier = Modifier.height(16.dp))
                                                 Text(
-                                                    text = stringResource(R.string.sleep_no_data),
+                                                    text = title,
                                                     style = MaterialTheme.typography.titleMedium,
-                                                    color = Color(0xFF757575)
+                                                    color = Color(0xFF757575),
+                                                    textAlign = TextAlign.Center
                                                 )
                                                 Spacer(modifier = Modifier.height(8.dp))
                                                 Text(
-                                                    text = stringResource(R.string.sleep_no_data_subtitle),
+                                                    text = subtitle,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = Color(0xFFB0B0B0),
                                                     textAlign = TextAlign.Center,

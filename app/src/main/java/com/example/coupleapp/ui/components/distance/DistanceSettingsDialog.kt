@@ -90,7 +90,7 @@ fun DistanceSettingsDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = stringResource(R.string.close),
                             tint = TextSecondary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -102,8 +102,8 @@ fun DistanceSettingsDialog(
                 // Settings items
                 SettingsSwitchItem(
                     icon = Icons.Outlined.LocationOn,
-                    title = "Share My Location",
-                    subtitle = "Let your partner see your location",
+                    title = stringResource(R.string.share_my_location),
+                    subtitle = stringResource(R.string.share_location_desc),
                     checked = locationSharingEnabled,
                     onCheckedChange = { locationSharingEnabled = it },
                     accentColor = SoftPink
@@ -113,8 +113,8 @@ fun DistanceSettingsDialog(
                 
                 SettingsSwitchItem(
                     icon = Icons.Outlined.BatteryStd,
-                    title = "Show Battery Level",
-                    subtitle = "Display your battery percentage",
+                    title = stringResource(R.string.show_battery_level),
+                    subtitle = stringResource(R.string.show_battery_desc),
                     checked = showBatteryLevel,
                     onCheckedChange = { showBatteryLevel = it },
                     accentColor = Color(0xFF4CAF50)
@@ -124,8 +124,8 @@ fun DistanceSettingsDialog(
                 
                 SettingsSwitchItem(
                     icon = Icons.Outlined.Notifications,
-                    title = "Location Alerts",
-                    subtitle = "Get notified when arriving/leaving places",
+                    title = stringResource(R.string.location_alerts),
+                    subtitle = stringResource(R.string.location_alerts_desc),
                     checked = notificationsEnabled,
                     onCheckedChange = { notificationsEnabled = it },
                     accentColor = Color(0xFFFFB74D)
@@ -135,8 +135,8 @@ fun DistanceSettingsDialog(
                 
                 SettingsSwitchItem(
                     icon = Icons.Outlined.GpsFixed,
-                    title = "High Accuracy Mode",
-                    subtitle = "Better precision, more battery usage",
+                    title = stringResource(R.string.high_accuracy_mode),
+                    subtitle = stringResource(R.string.high_accuracy_desc),
                     checked = highAccuracyMode,
                     onCheckedChange = { highAccuracyMode = it },
                     accentColor = SoftBlue
