@@ -281,21 +281,23 @@ class QuestViewModelFirebase : ViewModel() {
                 
                 // Cache the loaded data
                 try {
-                    questCache.cacheQuestData(
-                        userId = userId,
+                    val todayString = dateFormat.format(Date())
+                    val cachedQuestData = CachedQuestData(
+                        cacheDate = todayString,
                         quests = dailyQuests.map { it.toCachedQuest() },
                         specialQuest = specialQuest?.toCachedQuest(),
                         dailySummary = summary.toCachedDailySummary(),
                         isLinkedWithPartner = isLinked
                     )
+                    questCache.cacheQuestData(userId, cachedQuestData)
                     questCache.cacheCoins(userId, userCoins)
-                    questCache.cacheStreakInfo(
-                        userId = userId,
+                    val cachedStreakInfo = CachedStreakInfo(
                         currentStreak = streakInfo.currentStreak,
                         longestStreak = streakInfo.longestStreak,
                         missedDays = streakInfo.missedDays,
                         lastClaimDate = streakInfo.lastClaimDate
                     )
+                    questCache.cacheStreakInfo(userId, cachedStreakInfo)
                     Log.d(TAG, "💾 Quest data cached successfully")
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to cache quest data", e)
@@ -892,13 +894,23 @@ class QuestViewModelFirebase : ViewModel() {
      */
     fun claimReward(quest: Quest) {
         if (quest.status != QuestStatus.COMPLETED) return
+        // Prevent multiple clicks - check if already claiming
+        if (_uiState.value.isClaimingReward) {
+            Log.d(TAG, "Already claiming reward, ignoring duplicate click")
+            return
+        }
 
         viewModelScope.launch {
-            val userId = authRepository.currentUser?.uid
-            if (userId == null) {
-                Log.e(TAG, "Cannot claim reward: no authenticated user")
-                return@launch
-            }
+            // Set claiming state immediately to prevent duplicate clicks
+            _uiState.update { it.copy(isClaimingReward = true) }
+            
+            try {
+                val userId = authRepository.currentUser?.uid
+                if (userId == null) {
+                    Log.e(TAG, "Cannot claim reward: no authenticated user")
+                    _uiState.update { it.copy(isClaimingReward = false) }
+                    return@launch
+                }
 
             Log.d(TAG, "Claiming reward for quest: ${quest.id}, reward: ${quest.reward.coins} coins")
 
@@ -916,10 +928,13 @@ class QuestViewModelFirebase : ViewModel() {
                             specialQuest = null,
                             userCoins = newCoins,
                             showRewardDialog = true,
-                            claimedReward = quest.reward
+                            claimedReward = quest.reward,
+                            isClaimingReward = false
                         )
                     }
                     Log.d(TAG, "Special quest reward claimed successfully, new balance: $newCoins, quest hidden")
+                } else {
+                    _uiState.update { it.copy(isClaimingReward = false) }
                 }
                 return@launch
             }
@@ -982,11 +997,21 @@ class QuestViewModelFirebase : ViewModel() {
                             )
                         } else {
                             quest.reward.copy(coins = finalReward)
-                        }
+                        },
+                        isClaimingReward = false
                     )
                 }
 
                 Log.d(TAG, "Quest reward claimed successfully, new balance: $newCoins, streak: $newStreak, longest: $newLongestStreak")
+                
+                // Invalidate cache to ensure fresh data on next load
+                questCache.invalidateCache(userId)
+            } else {
+                _uiState.update { it.copy(isClaimingReward = false) }
+            }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception claiming reward", e)
+                _uiState.update { it.copy(isClaimingReward = false) }
             }
         }
     }
@@ -1052,18 +1077,30 @@ class QuestViewModelFirebase : ViewModel() {
      * Applies streak multiplier to total rewards
      */
     fun claimAllRewards() {
-        viewModelScope.launch {
-            val userId = authRepository.currentUser?.uid
-            if (userId == null) {
-                Log.e(TAG, "Cannot claim rewards: no authenticated user")
-                return@launch
-            }
+        // Prevent multiple clicks - check if already claiming
+        if (_uiState.value.isClaimingReward) {
+            Log.d(TAG, "Already claiming rewards, ignoring duplicate click")
+            return
+        }
 
-            val completedQuests = _uiState.value.quests.filter { it.status == QuestStatus.COMPLETED }
-            if (completedQuests.isEmpty()) {
-                Log.d(TAG, "No completed quests to claim")
-                return@launch
-            }
+        viewModelScope.launch {
+            // Set claiming state immediately to prevent duplicate clicks
+            _uiState.update { it.copy(isClaimingReward = true) }
+            
+            try {
+                val userId = authRepository.currentUser?.uid
+                if (userId == null) {
+                    Log.e(TAG, "Cannot claim rewards: no authenticated user")
+                    _uiState.update { it.copy(isClaimingReward = false) }
+                    return@launch
+                }
+
+                val completedQuests = _uiState.value.quests.filter { it.status == QuestStatus.COMPLETED }
+                if (completedQuests.isEmpty()) {
+                    Log.d(TAG, "No completed quests to claim")
+                    _uiState.update { it.copy(isClaimingReward = false) }
+                    return@launch
+                }
 
             // Check if any quest is login quest to update streak
             val hasLoginQuest = completedQuests.any { it.type == QuestType.DAILY_LOGIN }
@@ -1126,11 +1163,21 @@ class QuestViewModelFirebase : ViewModel() {
                             )
                         } else {
                             QuestReward(coins = totalCoins)
-                        }
+                        },
+                        isClaimingReward = false
                     )
                 }
 
                 Log.d(TAG, "All rewards claimed successfully, new balance: $newCoins, streak: $newStreak, longest: $newLongestStreak")
+                
+                // Invalidate cache to ensure fresh data on next load
+                questCache.invalidateCache(userId)
+            } else {
+                _uiState.update { it.copy(isClaimingReward = false) }
+            }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception claiming all rewards", e)
+                _uiState.update { it.copy(isClaimingReward = false) }
             }
         }
     }
@@ -1165,13 +1212,23 @@ class QuestViewModelFirebase : ViewModel() {
      */
     fun showBonusReward() {
         if (!_uiState.value.dailySummary.bonusRewardUnlocked) return
+        // Prevent multiple clicks - check if already claiming
+        if (_uiState.value.isClaimingReward) {
+            Log.d(TAG, "Already claiming bonus, ignoring duplicate click")
+            return
+        }
 
         viewModelScope.launch {
-            val userId = authRepository.currentUser?.uid
-            if (userId == null) {
-                Log.e(TAG, "Cannot show bonus: no authenticated user")
-                return@launch
-            }
+            // Set claiming state immediately to prevent duplicate clicks
+            _uiState.update { it.copy(isClaimingReward = true) }
+            
+            try {
+                val userId = authRepository.currentUser?.uid
+                if (userId == null) {
+                    Log.e(TAG, "Cannot show bonus: no authenticated user")
+                    _uiState.update { it.copy(isClaimingReward = false) }
+                    return@launch
+                }
 
             // Calculate bonus based on streak with multiplier
             val currentStreak = _uiState.value.currentStreak
@@ -1218,11 +1275,21 @@ class QuestViewModelFirebase : ViewModel() {
                                 "Thưởng hoàn thành tất cả!"
                             }
                         ),
-                        dailySummary = it.dailySummary.copy(bonusRewardUnlocked = false)
+                        dailySummary = it.dailySummary.copy(bonusRewardUnlocked = false),
+                        isClaimingReward = false
                     )
                 }
 
                 Log.d(TAG, "Bonus reward claimed successfully, new balance: $newCoins")
+                
+                // Invalidate cache to ensure fresh data on next load
+                questCache.invalidateCache(userId)
+            } else {
+                _uiState.update { it.copy(isClaimingReward = false) }
+            }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception claiming bonus reward", e)
+                _uiState.update { it.copy(isClaimingReward = false) }
             }
         }
     }
@@ -1235,11 +1302,18 @@ class QuestViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Refresh quest data
+     * Refresh quest data (force refresh from Firebase)
      */
     fun refreshQuests() {
-        Log.d(TAG, "Refreshing quest data")
-        loadQuestData()
+        viewModelScope.launch {
+            val userId = authRepository.currentUser?.uid
+            if (userId != null) {
+                // Invalidate cache first to force fresh data from Firebase
+                questCache.invalidateCache(userId)
+                Log.d(TAG, "🗑️ Quest cache invalidated, refreshing from Firebase...")
+            }
+            loadQuestData()
+        }
     }
 
     /**
@@ -1362,16 +1436,18 @@ data class SavedQuestProgress(
 private fun CachedQuest.toQuest(): Quest {
     return Quest(
         id = this.id,
+        type = try { QuestType.valueOf(this.type) } catch (e: Exception) { QuestType.DAILY_LOGIN },
         title = this.title,
+        vietnameseTitle = this.vietnameseTitle,
         description = this.description,
-        iconName = this.iconName,
-        type = try { QuestType.valueOf(this.type) } catch (e: Exception) { QuestType.OTHER },
-        targetProgress = this.targetProgress,
+        vietnameseDescription = this.vietnameseDescription,
+        iconRes = this.iconRes,
+        reward = QuestReward(coins = this.rewardCoins),
         currentProgress = this.currentProgress,
-        coinReward = this.coinReward,
+        targetProgress = this.targetProgress,
         status = try { QuestStatus.valueOf(this.status) } catch (e: Exception) { QuestStatus.NOT_STARTED },
-        difficulty = try { QuestDifficulty.valueOf(this.difficulty) } catch (e: Exception) { QuestDifficulty.EASY },
-        timeLimit = this.timeLimit
+        isSpecial = this.isSpecial,
+        navigationRoute = this.navigationRoute
     )
 }
 
@@ -1382,38 +1458,44 @@ private fun Quest.toCachedQuest(): CachedQuest {
     return CachedQuest(
         id = this.id,
         title = this.title,
+        vietnameseTitle = this.vietnameseTitle,
         description = this.description,
-        iconName = this.iconName,
-        type = this.type.name,
+        vietnameseDescription = this.vietnameseDescription,
+        iconRes = this.iconRes,
+        rewardCoins = this.reward.coins,
         targetProgress = this.targetProgress,
         currentProgress = this.currentProgress,
-        coinReward = this.coinReward,
         status = this.status.name,
-        difficulty = this.difficulty.name,
-        timeLimit = this.timeLimit
+        type = this.type.name,
+        isSpecial = this.isSpecial,
+        navigationRoute = this.navigationRoute
     )
 }
 
 /**
- * Convert CachedDailySummary to domain DailySummary
+ * Convert CachedDailySummary to domain DailyQuestSummary
  */
-private fun CachedDailySummary.toDailySummary(): DailySummary {
-    return DailySummary(
+private fun CachedDailySummary.toDailySummary(): DailyQuestSummary {
+    return DailyQuestSummary(
         totalQuests = this.totalQuests,
         completedQuests = this.completedQuests,
+        claimedQuests = this.claimedQuests,
         totalCoinsEarned = this.totalCoinsEarned,
+        totalCoinsAvailable = this.totalCoinsAvailable,
         bonusRewardUnlocked = this.bonusRewardUnlocked
     )
 }
 
 /**
- * Convert domain DailySummary to CachedDailySummary
+ * Convert domain DailyQuestSummary to CachedDailySummary
  */
-private fun DailySummary.toCachedDailySummary(): CachedDailySummary {
+private fun DailyQuestSummary.toCachedDailySummary(): CachedDailySummary {
     return CachedDailySummary(
         totalQuests = this.totalQuests,
         completedQuests = this.completedQuests,
+        claimedQuests = this.claimedQuests,
         totalCoinsEarned = this.totalCoinsEarned,
+        totalCoinsAvailable = this.totalCoinsAvailable,
         bonusRewardUnlocked = this.bonusRewardUnlocked
     )
 }

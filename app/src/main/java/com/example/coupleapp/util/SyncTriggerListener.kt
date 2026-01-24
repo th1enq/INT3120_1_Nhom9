@@ -193,6 +193,10 @@ object SyncTriggerListener {
                     senderName = senderName,
                     missCount = missCount
                 )
+                
+                // Update Missing widget immediately when partner sends missing
+                com.example.coupleapp.widget.data.WidgetDataRepository.invalidateMissingCache(context)
+                com.example.coupleapp.widget.MissingWidgetProvider.forceUpdateWidgets(context)
             }
             
             SyncTriggerHelper.DataType.PHOTOS -> {

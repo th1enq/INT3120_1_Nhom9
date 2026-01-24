@@ -2,6 +2,7 @@ package com.example.coupleapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.data.preload.DataPreloader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +13,7 @@ import kotlinx.coroutines.delay
 /**
  * ViewModel for Home Screen
  * Manages home screen state and data
+ * Also triggers background preloading for other screens (Missing, etc.)
  */
 class HomeViewModel : ViewModel() {
     
@@ -20,6 +22,16 @@ class HomeViewModel : ViewModel() {
     
     init {
         loadHomeData()
+        // Start preloading data for other screens in background
+        preloadOtherScreensData()
+    }
+    
+    /**
+     * Preload data for other screens (Missing, etc.) in background.
+     * This ensures when user navigates to those screens, data is already cached.
+     */
+    private fun preloadOtherScreensData() {
+        DataPreloader.preloadInBackground(viewModelScope)
     }
     
     /**

@@ -443,16 +443,29 @@ class StoreViewModelFirebase(
      * Purchase an item
      */
     fun purchaseItem(item: StoreItem) {
+        // Prevent multiple clicks - check if already purchasing
+        if (_uiState.value.isPurchasing) {
+            Log.d(TAG, "Already processing purchase, ignoring duplicate click")
+            return
+        }
+
         viewModelScope.launch {
+            // Set purchasing state immediately to prevent duplicate clicks
+            _uiState.update { it.copy(isPurchasing = true) }
+            
             try {
-                val currentUserId = authRepository.currentUser?.uid ?: return@launch
+                val currentUserId = authRepository.currentUser?.uid
+                if (currentUserId == null) {
+                    _uiState.update { it.copy(isPurchasing = false) }
+                    return@launch
+                }
                 val wallet = _uiState.value.userWallet
                 
                 when (item.purchaseType) {
                     PurchaseType.COIN -> {
                         if (wallet.coins < item.coinPrice) {
                             _uiState.update { 
-                                it.copy(errorMessage = "Not enough coins") 
+                                it.copy(errorMessage = "Not enough coins", isPurchasing = false) 
                             }
                             return@launch
                         }
@@ -479,7 +492,8 @@ class StoreViewModelFirebase(
                             it.copy(
                                 userWallet = wallet.copy(coins = newCoins),
                                 purchaseResult = PurchaseResult.Success(item, newCoins),
-                                errorMessage = null
+                                errorMessage = null,
+                                isPurchasing = false
                             ) 
                         }
                     }
@@ -488,7 +502,8 @@ class StoreViewModelFirebase(
                         if (!_uiState.value.canClaimFreeGift) {
                             _uiState.update { 
                                 it.copy(
-                                    errorMessage = "Free gift available in ${_uiState.value.freeGiftCooldownDays} days"
+                                    errorMessage = "Free gift available in ${_uiState.value.freeGiftCooldownDays} days",
+                                    isPurchasing = false
                                 ) 
                             }
                             return@launch
@@ -518,7 +533,8 @@ class StoreViewModelFirebase(
                                 canClaimFreeGift = false,
                                 freeGiftCooldownDays = 3,
                                 purchaseResult = PurchaseResult.Success(item, wallet.coins),
-                                errorMessage = null
+                                errorMessage = null,
+                                isPurchasing = false
                             ) 
                         }
                     }
@@ -535,14 +551,15 @@ class StoreViewModelFirebase(
                         _uiState.update { 
                             it.copy(
                                 purchaseResult = PurchaseResult.Success(item, wallet.coins),
-                                errorMessage = null
+                                errorMessage = null,
+                                isPurchasing = false
                             ) 
                         }
                     }
                     
                     else -> {
                         _uiState.update { 
-                            it.copy(errorMessage = "Purchase type not supported") 
+                            it.copy(errorMessage = "Purchase type not supported", isPurchasing = false) 
                         }
                     }
                 }
@@ -550,7 +567,7 @@ class StoreViewModelFirebase(
             } catch (e: Exception) {
                 Log.e(TAG, "Error purchasing item", e)
                 _uiState.update { 
-                    it.copy(errorMessage = "Purchase failed: ${e.message}") 
+                    it.copy(errorMessage = "Purchase failed: ${e.message}", isPurchasing = false) 
                 }
             }
         }

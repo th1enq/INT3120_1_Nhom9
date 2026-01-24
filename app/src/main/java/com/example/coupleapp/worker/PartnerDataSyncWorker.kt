@@ -70,6 +70,7 @@ class PartnerDataSyncWorker(
         private const val ACTION_UPDATE_SLEEP_WIDGET = "com.example.coupleapp.widget.UPDATE_SLEEP"
         private const val ACTION_UPDATE_LOCKET_WIDGET = "com.example.coupleapp.widget.UPDATE_LOCKET"
         private const val ACTION_UPDATE_LOCATION_WIDGET = "com.example.coupleapp.widget.UPDATE_LOCATION"
+        private const val ACTION_UPDATE_MISSING_WIDGET = "com.example.coupleapp.UPDATE_MISSING_WIDGET"
         
         // Notification ID for foreground service
         private const val SYNC_NOTIFICATION_ID = 10001
@@ -356,6 +357,22 @@ class PartnerDataSyncWorker(
                         )
                         if (locketWidgetIds.isNotEmpty()) {
                             LocketWidgetProvider.forceUpdateWidgets(context)
+                        }
+                    }
+                    
+                    // Handle Missing widget updates
+                    "missing" -> {
+                        Log.d(TAG, "Triggering Missing widget update")
+                        context.sendBroadcast(Intent(ACTION_UPDATE_MISSING_WIDGET).apply {
+                            setPackage(context.packageName)
+                        })
+                        val missingWidgetIds = appWidgetManager.getAppWidgetIds(
+                            ComponentName(context, MissingWidgetProvider::class.java)
+                        )
+                        if (missingWidgetIds.isNotEmpty()) {
+                            // Invalidate cache first to force fresh data
+                            com.example.coupleapp.widget.data.WidgetDataRepository.invalidateMissingCache(context)
+                            MissingWidgetProvider.forceUpdateWidgets(context)
                         }
                     }
                 }

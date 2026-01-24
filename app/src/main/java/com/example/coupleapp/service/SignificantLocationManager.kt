@@ -48,10 +48,12 @@ class SignificantLocationManager(private val context: Context) {
         private const val TAG = "SignificantLocation"
         private const val REQUEST_CODE = 2001
         
-        // Significant change threshold - similar to Widgetable
-        private const val DISPLACEMENT_METERS = 500f // Trigger when moved 500m
-        private const val MIN_UPDATE_INTERVAL_MS = 5 * 60 * 1000L // Minimum 5 minutes between updates
-        private const val MAX_UPDATE_INTERVAL_MS = 30 * 60 * 1000L // Maximum 30 minutes (fallback)
+        // BALANCED: Trigger khi di chuyển đáng kể
+        private const val DISPLACEMENT_METERS = 500f // Trigger khi di chuyển 500m
+        
+        // Interval để đảm bảo location history được cập nhật đều đặn
+        private const val MIN_UPDATE_INTERVAL_MS = 15 * 60 * 1000L // Tối thiểu 15 phút giữa 2 lần update
+        private const val MAX_UPDATE_INTERVAL_MS = 30 * 60 * 1000L // Tối đa 30 phút (fallback)
         
         // Singleton instance
         @Volatile
@@ -79,14 +81,16 @@ class SignificantLocationManager(private val context: Context) {
         }
         
         try {
-            // Request for significant location changes only
+            // BATTERY OPTIMIZED: Request for significant location changes only
+            // Sử dụng LOW_POWER để tiết kiệm pin tối đa - độ chính xác ~100m là đủ cho history
             val locationRequest = LocationRequest.Builder(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                Priority.PRIORITY_LOW_POWER, // Thay BALANCED bằng LOW_POWER để tiết kiệm pin
                 MAX_UPDATE_INTERVAL_MS
             )
                 .setMinUpdateIntervalMillis(MIN_UPDATE_INTERVAL_MS)
                 .setMinUpdateDistanceMeters(DISPLACEMENT_METERS)
                 .setWaitForAccurateLocation(false) // Don't wait, use best available
+                .setMaxUpdateDelayMillis(MAX_UPDATE_INTERVAL_MS) // Batch updates để tiết kiệm pin
                 .build()
             
             val pendingIntent = createPendingIntent()
@@ -270,16 +274,17 @@ class SignificantLocationReceiver : BroadcastReceiver() {
     ) {
         try {
             val now = Date()
+            val currentCoord = LocationCoordinate(latitude, longitude)
             
             // Check recent history for nearby locations
             val recentHistory = firestore.collection("location_history")
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("coupleId", coupleId)
-                .limit(5)
+                .limit(10)
                 .get()
                 .await()
             
-            // Find active entry (no departure time) that's nearby
+            // Find ACTIVE entry (no departure time) that's nearby
             val activeEntry = recentHistory.documents.find { doc ->
                 val depTime = doc.getDate("departureTime")
                 if (depTime != null) return@find false
@@ -292,7 +297,7 @@ class SignificantLocationReceiver : BroadcastReceiver() {
             }
             
             if (activeEntry != null) {
-                // Update existing entry
+                // Update existing active entry - user is still at same location
                 val arrivalTime = activeEntry.getDate("arrivalTime")
                 val durationMinutes = if (arrivalTime != null) {
                     ((now.time - arrivalTime.time) / 60_000).toInt()
@@ -305,50 +310,83 @@ class SignificantLocationReceiver : BroadcastReceiver() {
                     )
                 ).await()
                 
-                Log.d(TAG, "Updated history entry: ${durationMinutes}min")
+                Log.d(TAG, "Updated active history entry: ${durationMinutes}min")
             } else {
-                // Close any open entry
-                val openEntry = recentHistory.documents.find { 
+                // No active entry at current location
+                // First, close any OTHER active entries (user moved to new location)
+                val otherActiveEntry = recentHistory.documents.find { 
                     it.getDate("departureTime") == null 
                 }
-                if (openEntry != null) {
-                    val arrivalTime = openEntry.getDate("arrivalTime")
+                if (otherActiveEntry != null) {
+                    val arrivalTime = otherActiveEntry.getDate("arrivalTime")
                     val durationMinutes = if (arrivalTime != null) {
                         ((now.time - arrivalTime.time) / 60_000).toInt()
                     } else 0
                     
                     if (durationMinutes >= 5) {
-                        openEntry.reference.update(
+                        otherActiveEntry.reference.update(
                             mapOf(
                                 "departureTime" to now,
                                 "durationMinutes" to durationMinutes
                             )
                         ).await()
+                        Log.d(TAG, "Closed previous active entry: ${durationMinutes}min")
                     } else {
                         // Too short, delete
-                        openEntry.reference.delete().await()
+                        otherActiveEntry.reference.delete().await()
+                        Log.d(TAG, "Deleted too-short entry: ${durationMinutes}min")
                     }
                 }
                 
-                // Create new entry
-                val locationName = address.split(",").firstOrNull()?.trim() ?: address
-                val locationType = detectLocationType(address)
+                // Check if there's a recently closed entry at this location (within 60 min)
+                // If yes, reopen it instead of creating duplicate
+                val recentClosedEntry = recentHistory.documents.find { doc ->
+                    val depTime = doc.getDate("departureTime") ?: return@find false
+                    val gapMinutes = (now.time - depTime.time) / 60_000
+                    if (gapMinutes > 60) return@find false // Max 60 min gap to reopen
+                    
+                    val histLat = doc.getDouble("latitude") ?: return@find false
+                    val histLng = doc.getDouble("longitude") ?: return@find false
+                    val distance = calculateDistance(latitude, longitude, histLat, histLng)
+                    distance < 300
+                }
                 
-                val newEntry = mapOf(
-                    "userId" to userId,
-                    "coupleId" to coupleId,
-                    "locationName" to locationName,
-                    "address" to address,
-                    "latitude" to latitude,
-                    "longitude" to longitude,
-                    "arrivalTime" to now,
-                    "departureTime" to null,
-                    "durationMinutes" to 0,
-                    "locationType" to locationType.name
-                )
-                
-                firestore.collection("location_history").add(newEntry).await()
-                Log.d(TAG, "Created new history entry")
+                if (recentClosedEntry != null) {
+                    // Reopen the recent entry - user returned
+                    val arrivalTime = recentClosedEntry.getDate("arrivalTime")
+                    val durationMinutes = if (arrivalTime != null) {
+                        ((now.time - arrivalTime.time) / 60_000).toInt()
+                    } else 0
+                    
+                    recentClosedEntry.reference.update(
+                        mapOf(
+                            "departureTime" to now,
+                            "durationMinutes" to durationMinutes
+                        )
+                    ).await()
+                    Log.d(TAG, "Reopened recent entry, duration: ${durationMinutes}min")
+                } else {
+                    // Create new entry - this is a new location visit
+                    val locationName = address.split(",").firstOrNull()?.trim() ?: address
+                    val locationType = detectLocationType(address)
+                    
+                    val newEntry = mapOf(
+                        "userId" to userId,
+                        "coupleId" to coupleId,
+                        "locationName" to locationName,
+                        "address" to address,
+                        "latitude" to latitude,
+                        "longitude" to longitude,
+                        "arrivalTime" to now,
+                        "departureTime" to null,
+                        "durationMinutes" to 0,
+                        "locationType" to locationType.name,
+                        "source" to "significant_change"
+                    )
+                    
+                    firestore.collection("location_history").add(newEntry).await()
+                    Log.d(TAG, "Created new history entry")
+                }
             }
             
         } catch (e: Exception) {

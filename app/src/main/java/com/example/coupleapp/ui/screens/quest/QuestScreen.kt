@@ -210,7 +210,8 @@ fun QuestScreen(
                                                 quest = uiState.specialQuest!!,
                                                 onClaimClick = { viewModel.claimReward(uiState.specialQuest!!) },
                                                 onGoClick = { navigateToQuest(uiState.specialQuest!!.navigationRoute) },
-                                                modifier = Modifier.padding(horizontal = 16.dp)
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                isClaimingReward = uiState.isClaimingReward
                                             )
                                             Spacer(modifier = Modifier.height(16.dp))
                                         }
@@ -228,7 +229,8 @@ fun QuestScreen(
                                     BonusRewardBanner(
                                         isUnlocked = uiState.dailySummary.bonusRewardUnlocked,
                                         currentStreak = uiState.currentStreak,
-                                        onClaimBonus = { viewModel.showBonusReward() }
+                                        onClaimBonus = { viewModel.showBonusReward() },
+                                        isClaimingReward = uiState.isClaimingReward
                                     )
                                 }
                             }
@@ -285,7 +287,8 @@ fun QuestScreen(
                                         quest = quest,
                                         onClaimClick = { viewModel.claimReward(quest) },
                                         onGoClick = { navigateToQuest(quest.navigationRoute) },
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                        isClaimingReward = uiState.isClaimingReward
                                     )
                                 }
                             }

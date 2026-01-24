@@ -66,21 +66,27 @@ class LocationTrackingService : Service() {
         const val TRACKING_MODE_BACKGROUND = "background"  // App is in background
         
         // Location tracking constants - adaptive based on mode
-        // PHƯƠNG ÁN B: Trong app = 30s-1min, Kill app = dựa vào WorkManager 15-30 phút
-        // Foreground Service CHỈ hoạt động khi app đang mở
+        // Foreground Service hoạt động khi app đang mở
         const val LOCATION_UPDATE_INTERVAL_ACTIVE_MS = 10_000L   // 10 seconds when actively viewing location screen
         const val LOCATION_UPDATE_INTERVAL_FOREGROUND_MS = 30_000L // 30 seconds when app in foreground
-        const val LOCATION_UPDATE_INTERVAL_BACKGROUND_MS = 60_000L // 1 minute - nhưng service sẽ dừng khi kill app
+        const val LOCATION_UPDATE_INTERVAL_BACKGROUND_MS = 60_000L // 1 minute when app in background
         
         const val LOCATION_FASTEST_INTERVAL_ACTIVE_MS = 5_000L    // 5 seconds fastest for active mode  
         const val LOCATION_FASTEST_INTERVAL_FOREGROUND_MS = 15_000L // 15 seconds fastest for foreground
         const val LOCATION_FASTEST_INTERVAL_BACKGROUND_MS = 30_000L // 30 seconds fastest for background
-        const val LOCATION_HISTORY_MIN_DURATION_MS = 300_000L // 5 minutes to record in history (changed from 10)
-        const val LOCATION_HISTORY_MIN_DISTANCE_METERS = 500.0 // 500m minimum distance from last history entry
-        const val LOCATION_SIGNIFICANT_CHANGE_METERS = 100.0 // 100 meters to consider a location change
-        const val COLOCATION_DISTANCE_METERS = 300.0 // 300 meters to be considered same location
-        const val COLOCATION_TIME_MINUTES = 5L // 5 minutes to create shared place (reduced for easier testing)
-        const val DUPLICATE_PLACE_DISTANCE_METERS = 500.0 // Don't create new place if one exists within 500m
+        
+        // === SIMPLIFIED DISTANCE THRESHOLDS ===
+        // Chỉ sử dụng 1 ngưỡng duy nhất: 200m
+        const val SAME_LOCATION_THRESHOLD_METERS = 200.0 // 200m = coi là cùng địa điểm
+        const val LOCATION_HISTORY_MIN_DISTANCE_METERS = 200.0 // Minimum distance between saved history entries
+        const val DUPLICATE_PLACE_DISTANCE_METERS = 200.0 // Distance to check for duplicate shared places
+        
+        // History recording
+        const val LOCATION_HISTORY_MIN_DURATION_MS = 180_000L // 3 minutes minimum to record (giảm từ 5 để bắt được nhiều địa điểm hơn)
+        
+        // Colocation (2 người gặp nhau)
+        const val COLOCATION_DISTANCE_METERS = 200.0 // 200m to be considered together
+        const val COLOCATION_TIME_MINUTES = 5L // 5 minutes to create shared place
         
         // State for external observation (Pub/Sub)
         private val _isTracking = MutableStateFlow(false)
@@ -289,7 +295,7 @@ class LocationTrackingService : Service() {
                 
                 if (isAlreadyRunning) {
                     android.util.Log.d("LocationTrackingService", "Service already running for same user, skipping restart")
-                    return START_STICKY
+                    return START_NOT_STICKY
                 }
                 
                 userId = newUserId
@@ -343,17 +349,19 @@ class LocationTrackingService : Service() {
             }
             else -> {
                 // Handle case where service is restarted by system without intent
-                // Must call startForeground to prevent crash
-                startForeground(NOTIFICATION_ID, createNotification())
-                if (userId.isEmpty() || coupleId.isEmpty()) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                    return START_NOT_STICKY
-                }
+                // With START_NOT_STICKY, this case should rarely happen
+                // But if it does, just stop the service
+                android.util.Log.d("LocationTrackingService", "Service restarted by system without intent, stopping...")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
             }
         }
         
-        return START_STICKY
+        // Changed from START_STICKY to START_NOT_STICKY
+        // This prevents service from auto-restarting after user clears RAM
+        // WorkManager will handle background location updates instead (every 15-25 min)
+        return START_NOT_STICKY
     }
     
     override fun onDestroy() {
@@ -469,16 +477,17 @@ class LocationTrackingService : Service() {
     }
     
     private suspend fun processLocationUpdate(coordinate: LocationCoordinate) {
-        // Upload current location to Firebase
+        // Upload current location to Firebase (real-time, no cache)
         uploadCurrentLocation(coordinate)
         
-        // Check if this is a significant location change
+        // Check if this is a significant location change (moved more than 200m)
         val lastLocation = lastSignificantLocation
-        if (lastLocation == null || calculateDistance(lastLocation, coordinate) > LOCATION_SIGNIFICANT_CHANGE_METERS) {
-            // Significant change - save previous location to history if applicable
+        if (lastLocation == null || calculateDistance(lastLocation, coordinate) > SAME_LOCATION_THRESHOLD_METERS) {
+            // User moved to a new location - close previous entry if exists
             currentLocationEntry?.let { entry ->
                 val duration = System.currentTimeMillis() - entry.arrivalTimeMs
                 if (duration >= LOCATION_HISTORY_MIN_DURATION_MS) {
+                    // Close the old entry with departure time
                     saveLocationHistoryEntry(entry, System.currentTimeMillis())
                 }
             }
@@ -490,6 +499,19 @@ class LocationTrackingService : Service() {
                 arrivalTimeMs = System.currentTimeMillis()
             )
             lastSignificantLocation = coordinate
+            
+            android.util.Log.d("LocationTrackingService", 
+                "📍 New location detected, started tracking: ${getAddressFromCoordinate(coordinate)}")
+        } else {
+            // User is still at the same location (within 200m)
+            // Update the active history entry to extend duration
+            currentLocationEntry?.let { entry ->
+                val duration = System.currentTimeMillis() - entry.arrivalTimeMs
+                // Create/update history entry after 3 minutes at location
+                if (duration >= LOCATION_HISTORY_MIN_DURATION_MS) {
+                    updateOrCreateActiveHistoryEntry(entry)
+                }
+            }
         }
         
         // Check colocation with partner
@@ -532,7 +554,17 @@ class LocationTrackingService : Service() {
     }
     
     private fun saveLocationHistoryEntry(entry: LocationHistoryEntry, departureTimeMs: Long) {
-        val durationMinutes = ((departureTimeMs - entry.arrivalTimeMs) / 60_000).toInt()
+        // IMPORTANT: Validate that departure time is after arrival time (prevents startTime > endTime bug)
+        val validDepartureTimeMs = if (departureTimeMs < entry.arrivalTimeMs) {
+            android.util.Log.w("LocationTrackingService", 
+                "BUG DETECTED: departureTimeMs ($departureTimeMs) < arrivalTimeMs (${entry.arrivalTimeMs})! Swapping values.")
+            // If departure is before arrival, we have a bug. Use current time as departure.
+            System.currentTimeMillis()
+        } else {
+            departureTimeMs
+        }
+        
+        val durationMinutes = ((validDepartureTimeMs - entry.arrivalTimeMs) / 60_000).toInt().coerceAtLeast(0)
         
         // Skip if duration is too short (less than 5 minutes)
         if (durationMinutes < 5) {
@@ -553,7 +585,7 @@ class LocationTrackingService : Service() {
                     .await()
                 
                 var mergedWithExisting = false
-                val now = Date(departureTimeMs)
+                val now = Date(validDepartureTimeMs)
                 
                 for (doc in recentHistoryQuery.documents) {
                     val historyLat = doc.getDouble("latitude") ?: continue
@@ -595,15 +627,167 @@ class LocationTrackingService : Service() {
                 
                 // Only create new entry if not merged
                 if (!mergedWithExisting) {
-                    createNewHistoryEntry(entry, departureTimeMs, durationMinutes)
+                    createNewHistoryEntry(entry, validDepartureTimeMs, durationMinutes)
                 }
                 
             } catch (e: Exception) {
                 android.util.Log.e("LocationTrackingService", "Error checking for merge", e)
                 // Fallback: create new entry
-                createNewHistoryEntry(entry, departureTimeMs, durationMinutes)
+                createNewHistoryEntry(entry, validDepartureTimeMs, durationMinutes)
             }
         }
+    }
+    
+    /**
+     * Updates an active (departureTime = null) history entry at this location,
+     * or creates a new one if it doesn't exist.
+     * This keeps the history continuously updated when user stays at one place.
+     */
+    private fun updateOrCreateActiveHistoryEntry(entry: LocationHistoryEntry) {
+        serviceScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+                val durationMinutes = ((now - entry.arrivalTimeMs) / 60_000).toInt()
+                
+                // Find an active entry (no departure time) at this location
+                val activeEntries = db.collection("location_history")
+                    .whereEqualTo("userId", userId)
+                    .whereEqualTo("coupleId", coupleId)
+                    .limit(20)
+                    .get()
+                    .await()
+                
+                var foundActiveEntry = false
+                for (doc in activeEntries.documents) {
+                    // Check if this is an active entry (no departureTime)
+                    val departureTime = doc.getDate("departureTime")
+                    if (departureTime != null) continue
+                    
+                    val historyLat = doc.getDouble("latitude") ?: continue
+                    val historyLng = doc.getDouble("longitude") ?: continue
+                    val historyCoord = LocationCoordinate(historyLat, historyLng)
+                    
+                    val distance = calculateDistance(entry.coordinate, historyCoord)
+                    
+                    // Use unified threshold: 200m
+                    if (distance <= SAME_LOCATION_THRESHOLD_METERS) {
+                        // Found active entry at this location - update duration and keep departureTime null
+                        val arrivalTime = doc.getDate("arrivalTime")
+                        val actualDuration = if (arrivalTime != null && arrivalTime.time <= now) {
+                            ((now - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
+                        } else {
+                            durationMinutes
+                        }
+                        
+                        doc.reference.update("durationMinutes", actualDuration).await()
+                        android.util.Log.d("LocationTrackingService", 
+                            "Updated active history entry duration: ${actualDuration}min")
+                        foundActiveEntry = true
+                        break
+                    }
+                }
+                
+                // If no active entry found at this location, create one
+                if (!foundActiveEntry) {
+                    // Check if there's a recent closed entry at same location to merge with
+                    var merged = false
+                    for (doc in activeEntries.documents) {
+                        val departureTime = doc.getDate("departureTime") ?: continue
+                        
+                        // Check if closed within last 2 hours (increased from 1h for better merging)
+                        val timeSinceDeparture = now - departureTime.time
+                        if (timeSinceDeparture > 2 * 60 * 60 * 1000) continue // More than 2 hours
+                        
+                        val historyLat = doc.getDouble("latitude") ?: continue
+                        val historyLng = doc.getDouble("longitude") ?: continue
+                        val historyCoord = LocationCoordinate(historyLat, historyLng)
+                        
+                        val distance = calculateDistance(entry.coordinate, historyCoord)
+                        
+                        // Use unified threshold: 200m
+                        if (distance <= SAME_LOCATION_THRESHOLD_METERS) {
+                            // Reopen this entry - set departureTime back to null
+                            val arrivalTime = doc.getDate("arrivalTime")
+                            val actualDuration = if (arrivalTime != null && arrivalTime.time <= now) {
+                                ((now - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
+                            } else {
+                                durationMinutes
+                            }
+                            
+                            doc.reference.update(
+                                mapOf(
+                                    "departureTime" to null,
+                                    "durationMinutes" to actualDuration
+                                )
+                            ).await()
+                            android.util.Log.d("LocationTrackingService", 
+                                "Reopened recent history entry for continuous tracking")
+                            merged = true
+                            break
+                        }
+                    }
+                    
+                    // Create new entry only if we couldn't merge
+                    if (!merged) {
+                        createActiveHistoryEntry(entry)
+                    }
+                }
+                
+            } catch (e: Exception) {
+                android.util.Log.e("LocationTrackingService", "Error updating active history entry", e)
+            }
+        }
+    }
+    
+    /**
+     * Create a new history entry with departureTime = null (still here)
+     */
+    private fun createActiveHistoryEntry(entry: LocationHistoryEntry) {
+        // Check if this location is at least 200m from the last saved history entry
+        val lastSaved = lastSavedHistoryLocation
+        if (lastSaved != null) {
+            val distanceFromLast = calculateDistance(lastSaved, entry.coordinate)
+            if (distanceFromLast < SAME_LOCATION_THRESHOLD_METERS) {
+                android.util.Log.d("LocationTrackingService", 
+                    "Skipping active entry - only ${distanceFromLast.toInt()}m from last saved (need ${SAME_LOCATION_THRESHOLD_METERS.toInt()}m)")
+                return
+            }
+        }
+        
+        val now = System.currentTimeMillis()
+        val durationMinutes = ((now - entry.arrivalTimeMs) / 60_000).toInt().coerceAtLeast(0)
+        
+        val locationName = if (entry.address.isNotBlank() && 
+            !entry.address.startsWith("Location (") && 
+            entry.address != "Unknown location") {
+            detectPlaceName(entry.address)
+        } else {
+            "Current Location"
+        }
+        
+        val historyData = mapOf(
+            "userId" to userId,
+            "coupleId" to coupleId,
+            "locationName" to locationName,
+            "address" to entry.address,
+            "latitude" to entry.coordinate.latitude,
+            "longitude" to entry.coordinate.longitude,
+            "arrivalTime" to Date(entry.arrivalTimeMs),
+            "departureTime" to null, // Still here - no departure time
+            "durationMinutes" to durationMinutes,
+            "locationType" to detectLocationType(entry.address).name,
+            "source" to "foreground_service"
+        )
+        
+        db.collection("location_history").add(historyData)
+            .addOnSuccessListener {
+                lastSavedHistoryLocation = entry.coordinate
+                android.util.Log.d("LocationTrackingService", 
+                    "Created active history entry: $locationName")
+            }
+            .addOnFailureListener { e ->
+                android.util.Log.e("LocationTrackingService", "Failed to create active history entry", e)
+            }
     }
     
     private fun createNewHistoryEntry(entry: LocationHistoryEntry, departureTimeMs: Long, durationMinutes: Int) {
@@ -730,9 +914,12 @@ class LocationTrackingService : Service() {
         
         // First check session status without transaction
         sessionRef.get().addOnSuccessListener { snapshot ->
-            if (!snapshot.exists()) {
+            val isActive = snapshot.getBoolean("isActive") ?: false
+            
+            if (!snapshot.exists() || !isActive) {
                 // Create new colocation session - users just came together
-                android.util.Log.d("LocationTrackingService", "Creating new colocation session at ${centerCoordinate}")
+                // Also creates new session if previous one was marked inactive
+                android.util.Log.d("LocationTrackingService", "Creating new colocation session at ${centerCoordinate} (exists: ${snapshot.exists()}, wasActive: $isActive)")
                 _colocationStartTime.value = Date().time
                 
                 val sessionData = mapOf(
@@ -743,7 +930,7 @@ class LocationTrackingService : Service() {
                     "startTime" to Date(),
                     "isActive" to true,
                     "convertedToSharedPlace" to false,
-                    "sharedPlaceId" to null,
+                    "sharedPlaceId" to "",
                     "photosCollected" to emptyList<String>()
                 )
                 sessionRef.set(sessionData)

@@ -122,5 +122,10 @@ data class LocketUiState(
     val isLoading: Boolean = true,
     val isSending: Boolean = false,
     val sendSuccess: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // Deletion states
+    val isDeleting: Boolean = false,
+    val deleteSuccess: Boolean = false,
+    val isSelectionMode: Boolean = false,
+    val selectedForDeletion: Set<String> = emptySet()
 )

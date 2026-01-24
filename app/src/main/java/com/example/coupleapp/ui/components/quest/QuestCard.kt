@@ -33,7 +33,8 @@ fun QuestCard(
     quest: Quest,
     onClaimClick: () -> Unit,
     onGoClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isClaimingReward: Boolean = false
 ) {
     val accentColor = Color(0xFFFF9ECE)
     val isCompleted = quest.status == QuestStatus.COMPLETED
@@ -200,19 +201,29 @@ fun QuestCard(
                 QuestStatus.COMPLETED -> {
                     Button(
                         onClick = onClaimClick,
+                        enabled = !isClaimingReward,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF4CAF50)
+                            containerColor = Color(0xFF4CAF50),
+                            disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.5f)
                         ),
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Text(
-                            text = stringResource(R.string.claim),
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White
-                        )
+                        if (isClaimingReward) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.claim),
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color.White
+                            )
+                        }
                     }
                 }
                 else -> {

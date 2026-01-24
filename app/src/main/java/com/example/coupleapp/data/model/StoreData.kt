@@ -110,5 +110,6 @@ data class StoreUiState(
     val purchaseResult: PurchaseResult? = null,
     val canClaimFreeGift: Boolean = false,
     val canWatchAd: Boolean = true,
-    val freeGiftCooldownDays: Int = 0
+    val freeGiftCooldownDays: Int = 0,
+    val isPurchasing: Boolean = false // Prevent multiple purchase clicks
 )

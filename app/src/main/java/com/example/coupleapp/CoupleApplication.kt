@@ -110,19 +110,21 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
     /**
      * Schedule background workers if user is logged in and paired.
      * 
-     * BATTERY OPTIMIZATION STRATEGY:
-     * ============================
+     * BATTERY OPTIMIZATION STRATEGY (ULTRA LOW POWER):
+     * ================================================
      * We use a layered approach for location tracking:
      * 
      * 1. SignificantLocationManager (ALWAYS RUNNING when logged in)
-     *    - Most battery efficient (~1-2% per hour)
-     *    - Triggers only when user moves 200m+
+     *    - Battery efficient - sử dụng LOW_POWER priority
+     *    - Triggers when user moves 500m+
+     *    - Min interval: 15 phút, Max interval: 30 phút
      *    - Handles background location updates efficiently
      *    
-     * 2. BackgroundLocationWorker (PERIODIC FALLBACK - every 30 min)
+     * 2. BackgroundLocationWorker (PERIODIC FALLBACK - every ~20 min)
      *    - Ensures location doesn't go stale if SignificantLocationManager misses updates
-     *    - Skips when battery < 30%
-     *    - Very low battery impact
+     *    - Skips when battery < 20%
+     *    - Uses LOW_POWER priority (~100m accuracy - đủ cho history)
+     *    - Có thể chạy từ 15-25 phút (20 ± 5 phút flexibility)
      *    
      * 3. LocationTrackingService (ONLY WHEN APP IS ACTIVE)
      *    - Started only when user enters DistanceScreen
@@ -132,20 +134,21 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
      *    
      * This 3-layer approach provides:
      * - Accurate real-time tracking when viewing location
-     * - Battery-efficient background updates when app is closed
+     * - ULTRA battery-efficient background updates when app is closed
      * - Reliable fallback to prevent stale location data
+     * - Location history không cần quá chính xác, ưu tiên tiết kiệm pin
      */
     private fun scheduleBackgroundWorkersIfNeeded() {
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
             Log.d("CoupleApplication", "User logged in, scheduling background workers")
             
-            // Layer 1: Battery-efficient location tracking (like Widgetable)
-            // Uses Significant Location Changes instead of continuous GPS
-            // Only triggers when user moves 200m+
+            // Layer 1: Ultra battery-efficient location tracking
+            // Uses LOW_POWER priority + Significant Location Changes
+            // Only triggers when user moves 800m+ (every 20-60 min)
             SignificantLocationManager.getInstance(this).startTracking()
             
-            // Layer 2: Fallback periodic worker (runs every 30 min)
+            // Layer 2: Fallback periodic worker (runs every ~30 min)
             // Ensures location doesn't go stale even if significant changes are missed
             BackgroundLocationWorker.schedule(this)
             

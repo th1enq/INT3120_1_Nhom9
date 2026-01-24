@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
+import com.example.coupleapp.data.repository.ProfileCacheRepository
 import com.example.coupleapp.data.repository.SleepCacheRepository
 import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.example.coupleapp.data.sleep.GoogleSleepApiManager
@@ -24,7 +25,7 @@ import java.util.Date
  * Sleep Tracker ViewModel with Firebase integration and local caching.
  * 
  * Cache-First Strategy:
- * 1. On init: Load cached data immediately for instant UI
+ * 1. On init: Load cached data immediately for instant UI (including user profiles from ProfileCacheRepository)
  * 2. Background sync: Refresh from Firebase in background
  * 3. Result: User sees data instantly, no waiting for network
  */
@@ -33,6 +34,7 @@ class SleepTrackerViewModelFirebase(
 ) : ViewModel() {
     private val sleepRepository = SleepFirebaseRepository(context)
     private val sleepCache = context?.let { SleepCacheRepository.getInstance(it) }
+    private val profileCache = context?.let { ProfileCacheRepository.getInstance(it) }
     private val googleSleepApiManager = context?.let { GoogleSleepApiManager(it) }
     private val auth = FirebaseAuth.getInstance()
     private val prefs = context?.getSharedPreferences("sleep_prefs", Context.MODE_PRIVATE)
@@ -102,6 +104,7 @@ class SleepTrackerViewModelFirebase(
     
     /**
      * Load data from cache immediately, then sync in background
+     * Uses ProfileCacheRepository to avoid network calls for user profiles
      */
     private suspend fun loadFromCacheAndSyncBackground(userId: String) {
         try {
@@ -130,22 +133,38 @@ class SleepTrackerViewModelFirebase(
                     sleepRecord = sleepHistory.first()
                 }
                 
-                // Load user profiles from cache or Firebase
-                val currentUserResult = sleepRepository.getUserProfile(userId)
-                val currentUserProfile = currentUserResult.getOrElse {
+                // ========== INSTANT PROFILE LOAD FROM CACHE (No network!) ==========
+                // Try ProfileCacheRepository first for instant UI
+                val cachedCurrentUser = profileCache?.getCachedCurrentUser()
+                val cachedPartner = profileCache?.getCachedPartner()
+                
+                val currentUserProfile = if (cachedCurrentUser != null && cachedCurrentUser.id == userId) {
+                    Log.d(TAG, "📦 Using cached current user profile: ${cachedCurrentUser.displayName}")
+                    UserProfile(
+                        id = cachedCurrentUser.id,
+                        name = cachedCurrentUser.displayName,
+                        avatarUrl = cachedCurrentUser.profileImageUrl.takeIf { it.isNotEmpty() }
+                    )
+                } else {
+                    // Fallback to default - will be refreshed in background
+                    Log.d(TAG, "⚠️ No cached current user, using default")
                     UserProfile(userId, "User", null)
                 }
                 
-                val partnerIdResult = sleepRepository.getPartnerId()
-                val partnerId = partnerIdResult.getOrNull()
-                var partnerProfile = UserProfile("", "Partner", null)
-                if (partnerId != null) {
-                    val partnerResult = sleepRepository.getUserProfile(partnerId)
-                    partnerProfile = partnerResult.getOrElse {
-                        UserProfile(partnerId, "Partner", null)
-                    }
+                val partnerProfile = if (cachedPartner != null) {
+                    Log.d(TAG, "📦 Using cached partner profile: ${cachedPartner.displayName}")
+                    UserProfile(
+                        id = cachedPartner.id,
+                        name = cachedPartner.displayName,
+                        avatarUrl = cachedPartner.profileImageUrl.takeIf { it.isNotEmpty() }
+                    )
+                } else {
+                    // Fallback to default - will be refreshed in background
+                    Log.d(TAG, "⚠️ No cached partner, using default")
+                    UserProfile("", "Partner", null)
                 }
                 
+                // ========== INSTANT UI UPDATE (No network wait!) ==========
                 _uiState.update { currentState ->
                     currentState.copy(
                         currentUser = currentUserProfile,
@@ -158,7 +177,7 @@ class SleepTrackerViewModelFirebase(
                     )
                 }
                 
-                Log.d(TAG, "✅ UI updated from cache, starting background sync...")
+                Log.d(TAG, "✅ UI updated INSTANTLY from cache, starting background sync...")
                 
                 // Check bedtime reminder
                 val hasActiveSession = _uiState.value.activeSleepSession != null
@@ -197,17 +216,47 @@ class SleepTrackerViewModelFirebase(
                 val userId = currentUser.uid
                 Log.d(TAG, "Loading data for user: $userId")
                 
+                // ========== TRY PROFILE CACHE FIRST FOR INSTANT USER DISPLAY ==========
+                val cachedCurrentUser = profileCache?.getCachedCurrentUser()
+                val cachedPartner = profileCache?.getCachedPartner()
+                
+                // Show cached profiles immediately while loading sleep data
+                if (cachedCurrentUser != null && cachedCurrentUser.id == userId) {
+                    val cachedCurrentProfile = UserProfile(
+                        id = cachedCurrentUser.id,
+                        name = cachedCurrentUser.displayName,
+                        avatarUrl = cachedCurrentUser.profileImageUrl.takeIf { it.isNotEmpty() }
+                    )
+                    val cachedPartnerProfile = cachedPartner?.let {
+                        UserProfile(
+                            id = it.id,
+                            name = it.displayName,
+                            avatarUrl = it.profileImageUrl.takeIf { url -> url.isNotEmpty() }
+                        )
+                    } ?: UserProfile("", "Partner", null)
+                    
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            currentUser = cachedCurrentProfile,
+                            partnerUser = cachedPartnerProfile,
+                            isCurrentUser = true
+                            // NOTE: Keep isLoading = true until sleep data is loaded
+                        )
+                    }
+                    Log.d(TAG, "📦 Showed cached user profiles while loading sleep data")
+                }
+                
                 // Check and perform auto-sync if needed
                 tryAutoSync(userId)
 
-                // Load current user profile
+                // Load current user profile from Firebase (for refresh)
                 val currentUserResult = sleepRepository.getUserProfile(userId)
                 val currentUserProfile = currentUserResult.getOrElse {
                     UserProfile(userId, "User", null)
                 }
                 Log.d(TAG, "Loaded current user profile: name=${currentUserProfile.name}, avatarUrl=${currentUserProfile.avatarUrl?.take(50)}")
 
-                // Load partner profile
+                // Load partner profile from Firebase
                 val partnerIdResult = sleepRepository.getPartnerId()
                 val partnerId = partnerIdResult.getOrNull()
                 
@@ -614,7 +663,14 @@ class SleepTrackerViewModelFirebase(
                 val result = sleepRepository.saveSleepRecord(firebaseRecord)
                 if (result.isSuccess) {
                     Log.d(TAG, "Sleep tracking started")
+                    // Invalidate cache to ensure fresh data
+                    sleepCache?.invalidateCache(userId)
                     loadUserData(userId, false)
+                    
+                    // Update widget
+                    context?.let { 
+                        com.example.coupleapp.widget.WidgetManager.onSleepDataUpdated(it)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting sleep tracking", e)
@@ -662,7 +718,14 @@ class SleepTrackerViewModelFirebase(
                 val result = sleepRepository.saveSleepRecord(updatedRecord)
                 if (result.isSuccess) {
                     Log.d(TAG, "Sleep tracking ended")
+                    // Invalidate cache to ensure fresh data
+                    sleepCache?.invalidateCache(userId)
                     loadUserData(userId, false)
+                    
+                    // Update widget
+                    context?.let { 
+                        com.example.coupleapp.widget.WidgetManager.onSleepDataUpdated(it)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error ending sleep tracking", e)

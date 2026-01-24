@@ -331,58 +331,7 @@ private fun CurrentLocationCard(user: UserLocation) {
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 20.sp
                 )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Quick actions
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    QuickActionChip(
-                        icon = Icons.Outlined.Navigation,
-                        label = "Directions",
-                        onClick = { /* TODO: Open maps */ }
-                    )
-                    QuickActionChip(
-                        icon = Icons.Outlined.Share,
-                        label = "Share",
-                        onClick = { /* TODO: Share location */ }
-                    )
-                }
             }
-        }
-    }
-}
-
-@Composable
-private fun QuickActionChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color.White,
-        shadowElevation = 1.dp,
-        modifier = Modifier.clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = SoftPink,
-                modifier = Modifier.size(14.dp)
-            )
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
-            )
         }
     }
 }

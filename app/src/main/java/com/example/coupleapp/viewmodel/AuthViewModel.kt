@@ -3,10 +3,12 @@ package com.example.coupleapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupleapp.CoupleApplication
+import com.example.coupleapp.data.cache.CacheManager
 import com.example.coupleapp.data.model.FirebaseUser
-import com.example.coupleapp.data.repository.FirebaseAuthRepository
-import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.*
 import com.example.coupleapp.utils.FCMHelper
+import com.example.coupleapp.widget.WidgetManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -206,6 +208,31 @@ class AuthViewModel : ViewModel() {
                 FCMHelper.unregisterFCMToken()
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Failed to unregister FCM token", e)
+            }
+            
+            // Clear all cached data on logout
+            try {
+                val context = CoupleApplication.instance
+                
+                // Clear central cache manager
+                CacheManager.invalidateAllCache(context)
+                Log.d("AuthViewModel", "🗑️ Central cache invalidated")
+                
+                // Clear all repository caches
+                ProfileCacheRepository.getInstance().clearOnLogout()
+                QuestCacheRepository.getInstance().clearOnLogout()
+                GardenCacheRepository.getInstance().clearOnLogout()
+                SleepCacheRepository.getInstance().clearOnLogout()
+                StoreCacheRepository.getInstance().clearOnLogout()
+                MomentsCacheRepository.getInstance().clearOnLogout()
+                CalendarCacheRepository.getInstance().clearOnLogout()
+                
+                // Clear widget cache and stop observers
+                WidgetManager.onUserLoggedOut(context)
+                
+                Log.d("AuthViewModel", "🗑️ All caches cleared on logout")
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error clearing caches on logout", e)
             }
             
             authRepository.signOut()

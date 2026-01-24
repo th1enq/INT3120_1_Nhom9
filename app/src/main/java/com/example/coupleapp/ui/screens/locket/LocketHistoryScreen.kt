@@ -1,5 +1,9 @@
 package com.example.coupleapp.ui.screens.locket
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -38,7 +42,7 @@ import com.example.coupleapp.viewmodel.LocketViewModelFirebase
 import kotlinx.coroutines.delay
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LocketHistoryScreen(
     onBackClick: () -> Unit,
@@ -58,6 +62,23 @@ fun LocketHistoryScreen(
     var visible by remember { mutableStateOf(false) }
     var selectedBottomNavItem by remember { mutableStateOf<BottomNavItem?>(null) }
     var selectedPost by remember { mutableStateOf<LocketPost?>(null) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    
+    // Show snackbar for delete success/error
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    LaunchedEffect(uiState.deleteSuccess) {
+        if (uiState.deleteSuccess) {
+            snackbarHostState.showSnackbar("Đã xóa Locket thành công")
+        }
+    }
+    
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearError()
+        }
+    }
     
     // Handle navigation
     LaunchedEffect(selectedBottomNavItem) {
@@ -97,13 +118,23 @@ fun LocketHistoryScreen(
     
     Scaffold(
         bottomBar = {
-            CoupleBottomNavigation(
-                selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
-                onItemSelected = { item ->
-                    selectedBottomNavItem = item
-                }
-            )
+            if (uiState.isSelectionMode) {
+                // Selection mode bottom bar
+                SelectionModeBottomBar(
+                    selectedCount = uiState.selectedForDeletion.size,
+                    onCancelClick = { viewModel.toggleSelectionMode(false) },
+                    onDeleteClick = { showDeleteConfirmDialog = true }
+                )
+            } else {
+                CoupleBottomNavigation(
+                    selectedItem = selectedBottomNavItem ?: BottomNavItem.HOME,
+                    onItemSelected = { item ->
+                        selectedBottomNavItem = item
+                    }
+                )
+            }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = Color.Transparent
     ) { paddingValues ->
         
@@ -142,7 +173,15 @@ fun LocketHistoryScreen(
                         ) {
                             HistoryTopBar(
                                 partnerName = uiState.partnerUser.name,
-                                onBackClick = onBackClick
+                                isSelectionMode = uiState.isSelectionMode,
+                                onBackClick = {
+                                    if (uiState.isSelectionMode) {
+                                        viewModel.toggleSelectionMode(false)
+                                    } else {
+                                        onBackClick()
+                                    }
+                                },
+                                onToggleSelectionMode = { viewModel.toggleSelectionMode(!uiState.isSelectionMode) }
                             )
                         }
                         
@@ -179,10 +218,30 @@ fun LocketHistoryScreen(
                                     items = uiState.locketHistory,
                                     key = { it.id }
                                 ) { post ->
+                                    val isSelected = post.id in uiState.selectedForDeletion
+                                    val canDelete = post.senderId == uiState.currentUser.id
+                                    
                                     HistoryGridItem(
                                         post = post,
                                         currentUserId = uiState.currentUser.id,
-                                        onClick = { selectedPost = post }
+                                        isSelectionMode = uiState.isSelectionMode,
+                                        isSelected = isSelected,
+                                        canDelete = canDelete,
+                                        onClick = {
+                                            if (uiState.isSelectionMode) {
+                                                if (canDelete) {
+                                                    viewModel.toggleLocketSelection(post.id)
+                                                }
+                                            } else {
+                                                selectedPost = post
+                                            }
+                                        },
+                                        onLongClick = {
+                                            if (canDelete && !uiState.isSelectionMode) {
+                                                viewModel.toggleSelectionMode(true)
+                                                viewModel.toggleLocketSelection(post.id)
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -194,11 +253,58 @@ fun LocketHistoryScreen(
         
         // Post detail dialog
         selectedPost?.let { post ->
+            val canDelete = post.senderId == uiState.currentUser.id
             LocketPostDetailDialog(
                 post = post,
                 currentUserId = uiState.currentUser.id,
-                onDismiss = { selectedPost = null }
+                canDelete = canDelete,
+                onDismiss = { selectedPost = null },
+                onDelete = {
+                    viewModel.deleteLocket(post)
+                    selectedPost = null
+                }
             )
+        }
+        
+        // Delete confirmation dialog
+        if (showDeleteConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmDialog = false },
+                title = { Text("Xác nhận xóa") },
+                text = { 
+                    Text("Bạn có chắc muốn xóa ${uiState.selectedForDeletion.size} Locket đã chọn?")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val selectedPosts = uiState.locketHistory.filter { 
+                                it.id in uiState.selectedForDeletion 
+                            }
+                            viewModel.deleteMultipleLockets(selectedPosts)
+                            showDeleteConfirmDialog = false
+                        }
+                    ) {
+                        Text("Xóa", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                        Text("Hủy")
+                    }
+                }
+            )
+        }
+        
+        // Loading overlay when deleting
+        if (uiState.isDeleting) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Color.White)
+            }
         }
     }
 }
@@ -206,7 +312,9 @@ fun LocketHistoryScreen(
 @Composable
 private fun HistoryTopBar(
     partnerName: String,
+    isSelectionMode: Boolean,
     onBackClick: () -> Unit,
+    onToggleSelectionMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -221,8 +329,8 @@ private fun HistoryTopBar(
             modifier = Modifier.size(36.dp)
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
+                imageVector = if (isSelectionMode) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = if (isSelectionMode) "Cancel" else "Back",
                 tint = Color(0xFF2D2D2D),
                 modifier = Modifier.size(22.dp)
             )
@@ -230,38 +338,64 @@ private fun HistoryTopBar(
         
         Spacer(modifier = Modifier.width(8.dp))
         
-        // Partner avatar
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF9ED9FF).copy(alpha = 0.3f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = partnerName,
-                tint = Color(0xFF9ED9FF),
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
+        if (isSelectionMode) {
             Text(
-                text = partnerName,
+                text = "Chọn để xóa",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold
                 ),
-                color = Color(0xFF2D2D2D)
+                color = Color(0xFF2D2D2D),
+                modifier = Modifier.weight(1f)
             )
+        } else {
+            // Partner avatar
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF9ED9FF).copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = partnerName,
+                    tint = Color(0xFF9ED9FF),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
             
-            Text(
-                text = stringResource(R.string.message_history),
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF757575)
-            )
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = partnerName,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color(0xFF2D2D2D)
+                )
+                
+                Text(
+                    text = stringResource(R.string.message_history),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF757575)
+                )
+            }
+        }
+        
+        // Selection mode toggle button
+        if (!isSelectionMode) {
+            IconButton(
+                onClick = onToggleSelectionMode,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Select to delete",
+                    tint = Color(0xFF757575),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
     }
 }
@@ -366,11 +500,16 @@ private fun StatItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HistoryGridItem(
     post: LocketPost,
     currentUserId: String,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    canDelete: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isFromCurrentUser = post.senderId == currentUserId
@@ -381,8 +520,20 @@ private fun HistoryGridItem(
         modifier = modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(20.dp))
+            .then(
+                if (isSelectionMode && isSelected) {
+                    Modifier.border(
+                        width = 3.dp,
+                        color = Color(0xFFFF6B9D),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                } else Modifier
+            )
             .background(getPostBackground(post.type))
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         // Content based on type
         Box(
@@ -451,6 +602,40 @@ private fun HistoryGridItem(
             }
         }
         
+        // Selection checkbox overlay (when in selection mode)
+        if (isSelectionMode) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) Color(0xFFFF6B9D)
+                        else if (canDelete) Color.White.copy(alpha = 0.9f)
+                        else Color.Gray.copy(alpha = 0.5f)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Selected",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else if (!canDelete) {
+                    // Show lock icon for items that can't be deleted
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Cannot delete",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+        
         // Sender avatar (bottom left)
         Box(
             modifier = Modifier
@@ -473,26 +658,28 @@ private fun HistoryGridItem(
         }
         
         // Time badge (top right)
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black.copy(alpha = 0.4f))
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = post.timestamp.format(timeFormatter),
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = post.timestamp.format(dateFormatter),
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 9.sp
-                )
+        if (!isSelectionMode) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = post.timestamp.format(timeFormatter),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = post.timestamp.format(dateFormatter),
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 9.sp
+                    )
+                }
             }
         }
     }
@@ -523,10 +710,34 @@ private fun getPostBackground(type: LocketType): Brush {
 fun LocketPostDetailDialog(
     post: LocketPost,
     currentUserId: String,
-    onDismiss: () -> Unit
+    canDelete: Boolean = false,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit = {}
 ) {
     val isFromCurrentUser = post.senderId == currentUserId
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Xác nhận xóa") },
+            text = { Text("Bạn có chắc muốn xóa Locket này?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) {
+                    Text("Xóa", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -645,13 +856,92 @@ fun LocketPostDetailDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(
-                    text = stringResource(R.string.close),
-                    color = Color(0xFF4CAF50),
-                    fontWeight = FontWeight.SemiBold
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (canDelete) {
+                    TextButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = Color.Red,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Xóa",
+                            color = Color.Red,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        text = stringResource(R.string.close),
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     )
+}
+
+/**
+ * Bottom bar for selection mode
+ */
+@Composable
+private fun SelectionModeBottomBar(
+    selectedCount: Int,
+    onCancelClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color.White,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onCancelClick) {
+                Text(
+                    text = "Hủy",
+                    color = Color(0xFF757575),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            
+            Text(
+                text = "Đã chọn $selectedCount",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = Color(0xFF2D2D2D)
+            )
+            
+            Button(
+                onClick = onDeleteClick,
+                enabled = selectedCount > 0,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFF6B9D),
+                    disabledContainerColor = Color(0xFFE0E0E0)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Xóa")
+            }
+        }
+    }
 }

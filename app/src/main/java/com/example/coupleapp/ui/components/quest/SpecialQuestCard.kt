@@ -34,7 +34,8 @@ fun SpecialQuestCard(
     quest: Quest,
     onClaimClick: () -> Unit,
     onGoClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isClaimingReward: Boolean = false
 ) {
     val gradientColors = listOf(
         Color(0xFFFFB8D6),
@@ -164,19 +165,29 @@ fun SpecialQuestCard(
                     QuestStatus.COMPLETED -> {
                         Button(
                             onClick = onClaimClick,
+                            enabled = !isClaimingReward,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White
+                                containerColor = Color.White,
+                                disabledContainerColor = Color.White.copy(alpha = 0.7f)
                             ),
                             shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
                         ) {
-                            Text(
-                                text = stringResource(R.string.claim),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = Color(0xFFFF9ECE)
-                            )
+                            if (isClaimingReward) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color(0xFFFF9ECE),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.claim),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = Color(0xFFFF9ECE)
+                                )
+                            }
                         }
                     }
                     else -> {

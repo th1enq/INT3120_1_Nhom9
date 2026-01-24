@@ -901,12 +901,18 @@ class SleepFirebaseRepository(
     
     /**
      * Save sleep segment from Google API
+     * 
+     * @param trackingMethod The source of sleep data:
+     *   - "GOOGLE_API": Official SleepSegmentEvent from Google (delivered after waking, may have delay)
+     *   - "GOOGLE_API_PARTIAL": SleepSegmentEvent with STATUS_MISSING_DATA
+     *   - "GOOGLE_API_CLASSIFY": Calculated from SleepClassifyEvents (more accurate timing, real-time)
      */
     suspend fun saveSleepSegmentFromGoogleApi(
         userId: String,
         startTimeMillis: Long,
         endTimeMillis: Long,
-        durationMillis: Long
+        durationMillis: Long,
+        trackingMethod: String = "GOOGLE_API"
     ): Result<String> {
         return try {
             val startInstant = Instant.ofEpochMilli(startTimeMillis)
@@ -915,6 +921,12 @@ class SleepFirebaseRepository(
             
             val startDateTime = LocalDateTime.ofInstant(startInstant, ZoneId.systemDefault())
             val endDateTime = LocalDateTime.ofInstant(endInstant, ZoneId.systemDefault())
+            
+            Log.d(TAG, "saveSleepSegmentFromGoogleApi: Processing sleep data")
+            Log.d(TAG, "  Start: $startDateTime")
+            Log.d(TAG, "  End: $endDateTime")
+            Log.d(TAG, "  Duration: $durationMinutes minutes")
+            Log.d(TAG, "  Method: $trackingMethod")
             
             // Get settings
             val settings = getSleepSettings(userId).getOrNull()
@@ -927,11 +939,17 @@ class SleepFirebaseRepository(
             val coupleIdResult = getCoupleId(userId)
             val coupleId = coupleIdResult.getOrNull() ?: ""
             
+            // Determine the date for this sleep record
+            // Use the date when sleep ENDED (wake up date) as the record date
+            // This matches how most sleep apps work (e.g., sleep on Jan 24 night, wake up Jan 25 = Jan 25's sleep)
+            val recordDate = endDateTime.toLocalDate()
+            val recordTimestamp = Timestamp(Date.from(recordDate.atStartOfDay(ZoneId.systemDefault()).toInstant()))
+            
             // Create record
             val record = FirebaseSleepRecord(
                 userId = userId,
                 coupleId = coupleId,
-                date = Timestamp(Date.from(startDateTime.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant())),
+                date = recordTimestamp,
                 bedTimeHour = startDateTime.hour,
                 bedTimeMinute = startDateTime.minute,
                 wakeUpTimeHour = endDateTime.hour,
@@ -941,16 +959,45 @@ class SleepFirebaseRepository(
                 sleepDurationMinutes = durationMinutes,
                 quality = quality.name,
                 achievementPercentage = achievement,
-                trackingMethod = "GOOGLE_API",
+                trackingMethod = trackingMethod,
                 isManualTracking = false
             )
             
             // Check if record already exists for this date
-            val existingRecord = getTodaySleepRecord(userId).getOrNull()
-            if (existingRecord != null && existingRecord.trackingMethod == "MANUAL") {
-                // Don't overwrite manual tracking with Google API data
-                Log.d(TAG, "saveSleepSegmentFromGoogleApi: Skipping - manual record exists")
-                return Result.success(existingRecord.id)
+            val existingRecord = getSleepRecordForDate(userId, recordDate).getOrNull()
+            
+            if (existingRecord != null) {
+                when {
+                    // Don't overwrite manual tracking
+                    existingRecord.trackingMethod == "MANUAL" -> {
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Skipping - manual record exists")
+                        return Result.success(existingRecord.id)
+                    }
+                    // GOOGLE_API_CLASSIFY is more accurate than GOOGLE_API for timing
+                    // But GOOGLE_API has official Google validation
+                    // Priority: MANUAL > GOOGLE_API_CLASSIFY > GOOGLE_API > GOOGLE_API_PARTIAL
+                    existingRecord.trackingMethod == "GOOGLE_API_CLASSIFY" && trackingMethod == "GOOGLE_API" -> {
+                        // Official segment arrived, but we already have classify-based data
+                        // Compare durations - if significantly different, Google's segment might be more accurate
+                        val existingDuration = existingRecord.actualSleepDurationMinutes
+                        val durationDiff = kotlin.math.abs(durationMinutes - existingDuration)
+                        
+                        if (durationDiff > 60) {
+                            // Significant difference (>1 hour), log but keep classify-based (more accurate timing)
+                            Log.w(TAG, "saveSleepSegmentFromGoogleApi: Duration mismatch - classify=$existingDuration min, official=$durationMinutes min")
+                            // Still keep the classify-based one as it has better timing
+                            Log.d(TAG, "saveSleepSegmentFromGoogleApi: Keeping classify-based record (better timing)")
+                        }
+                        return Result.success(existingRecord.id)
+                    }
+                    trackingMethod == "GOOGLE_API_CLASSIFY" && existingRecord.trackingMethod.startsWith("GOOGLE_API") -> {
+                        // Classify-based is better, update the record
+                        Log.d(TAG, "saveSleepSegmentFromGoogleApi: Updating to classify-based (more accurate)")
+                        val updatedRecord = record.copy(id = existingRecord.id)
+                        saveSleepRecord(updatedRecord).getOrThrow()
+                        return Result.success(existingRecord.id)
+                    }
+                }
             }
             
             val recordId = saveSleepRecord(record).getOrThrow()
@@ -959,6 +1006,42 @@ class SleepFirebaseRepository(
             Result.success(recordId)
         } catch (e: Exception) {
             Log.e(TAG, "saveSleepSegmentFromGoogleApi: Error", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Get sleep record for a specific date
+     */
+    private suspend fun getSleepRecordForDate(userId: String, date: LocalDate): Result<FirebaseSleepRecord?> {
+        return try {
+            val startOfDay = date.atStartOfDay()
+            val endOfDay = date.plusDays(1).atStartOfDay()
+            
+            val startTimestamp = Timestamp(Date.from(startOfDay.atZone(ZoneId.systemDefault()).toInstant()))
+            val endTimestamp = Timestamp(Date.from(endOfDay.atZone(ZoneId.systemDefault()).toInstant()))
+            
+            val snapshot = firestore.collection(SLEEP_RECORDS_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .get()
+                .await()
+            
+            val record = snapshot.documents
+                .mapNotNull { doc ->
+                    try {
+                        doc.toObject(FirebaseSleepRecord::class.java)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                .firstOrNull { record ->
+                    val recordDate = record.date ?: return@firstOrNull false
+                    recordDate.seconds >= startTimestamp.seconds && recordDate.seconds < endTimestamp.seconds
+                }
+            
+            Result.success(record)
+        } catch (e: Exception) {
+            Log.e(TAG, "getSleepRecordForDate: Error", e)
             Result.failure(e)
         }
     }

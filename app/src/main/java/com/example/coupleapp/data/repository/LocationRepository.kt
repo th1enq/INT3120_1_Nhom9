@@ -13,6 +13,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -348,30 +349,150 @@ class LocationRepository(
     }
     
     /**
-     * Load location history for a user
-     * Includes logic to:
-     * 1. Merge consecutive entries at the same location
-     * 2. Fix "departureTime = null" for entries from past days
-     * 3. Ensure only the most recent entry can show "currently here"
+     * Delete location history entries older than specified number of days.
+     * This helps save database storage.
+     * 
+     * @param userId The user ID to delete history for
+     * @param coupleId The couple ID
+     * @param daysToKeep Number of days of history to keep (default 3)
+     * @return Number of deleted entries
      */
-    suspend fun loadLocationHistory(userId: String, coupleId: String): Result<List<LocationHistory>> {
+    suspend fun deleteOldLocationHistory(userId: String, coupleId: String, daysToKeep: Int = 3): Result<Int> {
         return try {
-            android.util.Log.d("LocationRepository", "Loading location history for userId=$userId, coupleId=$coupleId")
+            val cutoffDate = Date(System.currentTimeMillis() - daysToKeep * 24 * 60 * 60 * 1000L)
+            android.util.Log.d("LocationRepository", "Deleting location history older than $daysToKeep days (before $cutoffDate)")
+            
+            val oldEntries = db.collection(LOCATION_HISTORY_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("coupleId", coupleId)
+                .get()
+                .await()
+            
+            var deletedCount = 0
+            for (doc in oldEntries.documents) {
+                val arrivalTime = doc.getDate("arrivalTime")
+                if (arrivalTime != null && arrivalTime.before(cutoffDate)) {
+                    doc.reference.delete().await()
+                    deletedCount++
+                }
+            }
+            
+            android.util.Log.d("LocationRepository", "Deleted $deletedCount old location history entries")
+            Result.success(deletedCount)
+        } catch (e: Exception) {
+            android.util.Log.e("LocationRepository", "Error deleting old location history", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Sync active entry's duration when app is opened.
+     * Finds the entry with departureTime = null and updates its durationMinutes to reflect 
+     * the actual time from arrivalTime to NOW.
+     * 
+     * This ensures the "currently here" entry shows accurate duration even if 
+     * BackgroundLocationWorker hasn't run recently.
+     */
+    private suspend fun syncActiveEntryDuration(documents: List<com.google.firebase.firestore.DocumentSnapshot>) {
+        try {
+            val now = System.currentTimeMillis()
+            val today = java.time.LocalDate.now()
+            
+            // Find entry with departureTime = null (active entry)
+            for (doc in documents) {
+                val departureTime = doc.getDate("departureTime")
+                val arrivalTime = doc.getDate("arrivalTime") ?: continue
+                
+                // Skip if not active (has departureTime)
+                if (departureTime != null) continue
+                
+                // Only sync entries from today
+                val arrivalDate = arrivalTime.toInstant()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate()
+                if (arrivalDate != today) continue
+                
+                // Validate arrivalTime is not in the future
+                if (arrivalTime.time > now) {
+                    android.util.Log.w("LocationRepository", "Active entry has future arrivalTime, skipping sync")
+                    continue
+                }
+                
+                // Calculate accurate duration from arrivalTime to now
+                val durationMinutes = ((now - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
+                val currentDuration = doc.getLong("durationMinutes")?.toInt() ?: 0
+                
+                // Only update if there's a significant difference (> 5 minutes)
+                if (kotlin.math.abs(durationMinutes - currentDuration) > 5) {
+                    doc.reference.update("durationMinutes", durationMinutes).await()
+                    android.util.Log.d("LocationRepository", 
+                        "★ Synced active entry duration: ${doc.getString("locationName")} - ${currentDuration}min → ${durationMinutes}min")
+                }
+                
+                // Only one active entry should exist, so we can break after finding it
+                break
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LocationRepository", "Error syncing active entry duration", e)
+            // Don't throw - this is a best-effort sync
+        }
+    }
+    
+    /**
+     * Load location history for a user - only last 3 days
+     * Includes logic to:
+     * 1. Filter to only last 3 days (older entries are cleaned up automatically)
+     * 2. Merge consecutive entries at the same location
+     * 3. Fix "departureTime = null" for entries from past days
+     * 4. Ensure only the most recent entry can show "currently here"
+     * 
+     * @param userId The user ID to load history for
+     * @param coupleId The couple ID
+     * @param isCurrentUser TRUE if loading for current user (updates myLocationHistory), FALSE for partner (updates partnerLocationHistory)
+     */
+    suspend fun loadLocationHistory(userId: String, coupleId: String, isCurrentUser: Boolean = true): Result<List<LocationHistory>> {
+        return try {
+            android.util.Log.d("LocationRepository", "Loading location history for userId=$userId, coupleId=$coupleId, isCurrentUser=$isCurrentUser")
+            
+            // Clean up old entries (older than 3 days) in background - only for current user to avoid duplicate cleanup
+            if (isCurrentUser) {
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        deleteOldLocationHistory(userId, coupleId, daysToKeep = 3)
+                    } catch (e: Exception) {
+                        android.util.Log.e("LocationRepository", "Error cleaning up old history", e)
+                    }
+                }
+            }
+            
+            // Calculate cutoff date for filtering (3 days ago)
+            val threeDaysAgo = java.time.LocalDate.now().minusDays(3)
             
             // Note: Removed orderBy to avoid index requirement - sorting locally
             val snapshot = db.collection(LOCATION_HISTORY_COLLECTION)
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("coupleId", coupleId)
-                .limit(50)
+                .limit(100) // Increased limit to ensure we get enough entries
                 .get()
                 .await()
             
-            android.util.Log.d("LocationRepository", "Found ${snapshot.documents.size} history documents")
+            android.util.Log.d("LocationRepository", "Found ${snapshot.documents.size} history documents for ${if (isCurrentUser) "current user" else "partner"}")
+            
+            // ★ SYNC: Update active entry's duration to current time in Firebase
+            // This ensures when user opens app, the "currently here" entry has correct duration
+            if (isCurrentUser) {
+                syncActiveEntryDuration(snapshot.documents)
+            }
             
             val rawHistory = snapshot.documents.mapNotNull { doc ->
                 try {
-                    doc.toObject(FirebaseLocationHistory::class.java)?.toLocationHistory()?.also {
-                        android.util.Log.d("LocationRepository", "Parsed history: ${it.locationName} at ${it.arrivalTime}")
+                    val history = doc.toObject(FirebaseLocationHistory::class.java)?.toLocationHistory()
+                    // Filter to only last 3 days
+                    if (history != null && history.arrivalTime.toLocalDate() >= threeDaysAgo) {
+                        android.util.Log.d("LocationRepository", "Parsed history: ${history.locationName} at ${history.arrivalTime}")
+                        history
+                    } else {
+                        null // Skip entries older than 3 days
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("LocationRepository", "Error parsing history doc: ${doc.id}", e)
@@ -384,9 +505,12 @@ class LocationRepository(
             
             android.util.Log.d("LocationRepository", "Final history list size after processing: ${cleanedHistory.size}")
             
-            if (userId == _myCurrentLocation.value?.userId) {
+            // Use explicit parameter instead of comparing with potentially unset _myCurrentLocation
+            if (isCurrentUser) {
+                android.util.Log.d("LocationRepository", "Updating _myLocationHistory with ${cleanedHistory.size} entries")
                 _myLocationHistory.value = cleanedHistory
             } else {
+                android.util.Log.d("LocationRepository", "Updating _partnerLocationHistory with ${cleanedHistory.size} entries")
                 _partnerLocationHistory.value = cleanedHistory
             }
             
@@ -399,9 +523,10 @@ class LocationRepository(
     
     /**
      * Process location history to fix common issues:
-     * 1. Merge consecutive entries at the same location (within 300m)
-     * 2. Fix entries from past days that still have departureTime = null
-     * 3. Ensure only the MOST RECENT entry can have departureTime = null ("currently here")
+     * 1. Validate and fix startTime > endTime issues
+     * 2. Merge consecutive entries at the same location (within 300m)
+     * 3. Fix entries from past days that still have departureTime = null
+     * 4. Ensure only the MOST RECENT entry can have departureTime = null ("currently here")
      */
     private fun processLocationHistory(rawHistory: List<LocationHistory>): List<LocationHistory> {
         if (rawHistory.isEmpty()) return emptyList()
@@ -417,12 +542,34 @@ class LocationRepository(
             var processedEntry = entry
             val entryDate = entry.arrivalTime.toLocalDate()
             
+            // Fix 0: Validate that departureTime is not BEFORE arrivalTime (bug fix)
+            if (entry.departureTime != null && entry.departureTime.isBefore(entry.arrivalTime)) {
+                android.util.Log.w("LocationRepository", 
+                    "BUG: Entry ${entry.locationName} has departureTime (${entry.departureTime}) before arrivalTime (${entry.arrivalTime})! Swapping values.")
+                // Swap arrival and departure times
+                processedEntry = entry.copy(
+                    arrivalTime = entry.departureTime,
+                    departureTime = entry.arrivalTime,
+                    durationMinutes = java.time.Duration.between(entry.departureTime, entry.arrivalTime).toMinutes().toInt().coerceAtLeast(0)
+                )
+            }
+            
             // Fix 1: Only the FIRST entry (most recent) can have departureTime = null
             // All other entries must have a departure time
-            if (entry.departureTime == null) {
+            if (processedEntry.departureTime == null) {
                 if (!foundCurrentLocation && entryDate == today) {
                     // This is the current location (most recent, today, no departure)
                     foundCurrentLocation = true
+                    
+                    // ★ CRITICAL: Calculate REAL-TIME duration from arrivalTime to NOW
+                    // This ensures UI shows accurate duration immediately, not stale data from Firebase
+                    val now = LocalDateTime.now()
+                    val realTimeDuration = java.time.Duration.between(processedEntry.arrivalTime, now).toMinutes().toInt().coerceAtLeast(0)
+                    if (realTimeDuration != processedEntry.durationMinutes) {
+                        android.util.Log.d("LocationRepository", 
+                            "★ Real-time duration update: ${processedEntry.locationName} - ${processedEntry.durationMinutes}min → ${realTimeDuration}min")
+                        processedEntry = processedEntry.copy(durationMinutes = realTimeDuration)
+                    }
                 } else {
                     // This entry is NOT the current location, but has no departure time
                     // Set departure time to end of that day or to the arrival time of the next (earlier in time) entry
@@ -435,10 +582,10 @@ class LocationRepository(
                         entryDate.atTime(23, 59, 59)
                     }
                     
-                    val durationMinutes = java.time.Duration.between(entry.arrivalTime, departureTime).toMinutes().toInt()
-                    processedEntry = entry.copy(
+                    val durationMinutes = java.time.Duration.between(processedEntry.arrivalTime, departureTime).toMinutes().toInt().coerceAtLeast(0)
+                    processedEntry = processedEntry.copy(
                         departureTime = departureTime,
-                        durationMinutes = maxOf(durationMinutes, entry.durationMinutes)
+                        durationMinutes = maxOf(durationMinutes, processedEntry.durationMinutes)
                     )
                     android.util.Log.d("LocationRepository", "Fixed entry without departure: ${entry.locationName} -> departure=$departureTime")
                 }
@@ -459,9 +606,9 @@ class LocationRepository(
                         departureTime = lastEntry.departureTime ?: processedEntry.departureTime,
                         durationMinutes = if (lastEntry.departureTime != null || processedEntry.departureTime != null) {
                             val endTime = lastEntry.departureTime ?: processedEntry.departureTime ?: LocalDateTime.now()
-                            java.time.Duration.between(processedEntry.arrivalTime, endTime).toMinutes().toInt()
+                            java.time.Duration.between(processedEntry.arrivalTime, endTime).toMinutes().toInt().coerceAtLeast(0)
                         } else {
-                            java.time.Duration.between(processedEntry.arrivalTime, LocalDateTime.now()).toMinutes().toInt()
+                            java.time.Duration.between(processedEntry.arrivalTime, LocalDateTime.now()).toMinutes().toInt().coerceAtLeast(0)
                         }
                     )
                     result[result.lastIndex] = mergedEntry

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.FirebaseSleepRecord
+import com.example.coupleapp.data.repository.ProfileCacheRepository
 import com.example.coupleapp.data.repository.SleepCacheRepository
 import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -36,6 +37,7 @@ class SleepCalendarViewModel(
     
     private val firebaseRepository = SleepFirebaseRepository(context)
     private val sleepCache = context?.let { SleepCacheRepository.getInstance(it) }
+    private val profileCache = context?.let { ProfileCacheRepository.getInstance(it) }
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     
@@ -201,23 +203,40 @@ class SleepCalendarViewModel(
     }
     
     /**
-     * Get user display name from Firebase
+     * Get user display name - uses ProfileCacheRepository first for instant display
      */
     private suspend fun getUserName(userId: String): String {
         return try {
             val currentUserId = auth.currentUser?.uid
+            
+            // ========== TRY PROFILE CACHE FIRST (instant, no network) ==========
             if (userId == currentUserId) {
-                // Current user - get from Firebase Auth or Firestore
+                // Current user - try cache first
+                val cachedUser = profileCache?.getCachedCurrentUser()
+                if (cachedUser != null && cachedUser.id == userId && cachedUser.displayName.isNotEmpty()) {
+                    Log.d(TAG, "📦 Using cached current user name: ${cachedUser.displayName}")
+                    return cachedUser.displayName
+                }
+                
+                // Fallback to Firebase Auth or Firestore
                 auth.currentUser?.displayName?.takeIf { it.isNotEmpty() }
                     ?: firestore.collection("users").document(userId).get().await()
                         .getString("displayName")
                     ?: "You"
             } else {
-                // Partner - get from Firestore
+                // Partner - try cache first
+                val cachedPartner = profileCache?.getCachedPartner()
+                if (cachedPartner != null && cachedPartner.id == userId && cachedPartner.displayName.isNotEmpty()) {
+                    Log.d(TAG, "📦 Using cached partner name: ${cachedPartner.displayName}")
+                    return cachedPartner.displayName
+                }
+                
+                // Fallback to Firestore
                 firestore.collection("users").document(userId).get().await()
                     .getString("displayName") ?: "Partner"
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Error getting user name", e)
             "User"
         }
     }

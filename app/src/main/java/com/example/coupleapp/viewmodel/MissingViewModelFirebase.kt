@@ -8,6 +8,7 @@ import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
 import com.example.coupleapp.data.repository.MissingCacheRepository
+import com.example.coupleapp.data.repository.ProfileCacheRepository
 import com.example.coupleapp.widget.WidgetManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,6 +29,7 @@ class MissingViewModelFirebase : ViewModel() {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
     private val cacheRepository = MissingCacheRepository.getInstance()
+    private val profileCache = ProfileCacheRepository.getInstance()
 
     companion object {
         private const val TAG = "MissingViewModel"
@@ -48,6 +50,9 @@ class MissingViewModelFirebase : ViewModel() {
     
     // Track couple ID for caching
     private var currentCoupleId: String = ""
+    
+    // Flag to prevent multiple simultaneous initial loads
+    private var isInitialLoadComplete = false
 
     init {
         Log.d(TAG, "MissingViewModelFirebase initialized")
@@ -55,10 +60,11 @@ class MissingViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Load initial data with cache-first strategy:
-     * 1. Try to load from cache first (instant)
-     * 2. If cache exists, show it immediately and sync in background
-     * 3. If no cache, fall back to loading from Firebase
+     * Load initial data with TRUE cache-first strategy:
+     * 1. Load user info from ProfileCacheRepository (instant, no network)
+     * 2. If profile cache exists → load missing data from cache immediately
+     * 3. Background sync from Firebase only after UI is ready
+     * 4. If no cache at all → fall back to Firebase with loading indicator
      */
     private fun loadInitialDataWithCache() {
         viewModelScope.launch {
@@ -71,45 +77,49 @@ class MissingViewModelFirebase : ViewModel() {
                 }
 
                 val userId = firebaseUser.uid
-                Log.d(TAG, "Loading data for user: $userId (cache-first)")
+                Log.d(TAG, "Loading data for user: $userId (TRUE cache-first)")
 
-                // Load current user info (needed for coupleId)
-                val currentUserResult = firestoreRepository.getDocument(
-                    "users",
-                    userId,
-                    FirebaseUser::class.java
-                )
-
-                val currentUser = currentUserResult.getOrNull()
-                if (currentUser == null) {
-                    Log.e(TAG, "Failed to load current user")
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
-                }
-
-                val partnerId = currentUser.partnerId
-                if (partnerId.isNullOrEmpty()) {
-                    Log.d(TAG, "No partner linked")
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
-                }
-
-                // Generate coupleId for caching
-                currentCoupleId = listOf(userId, partnerId).sorted().joinToString("_")
+                // ========== STEP 1: Try ProfileCache first (instant, no network) ==========
+                val cachedCurrentUser = profileCache.getCachedCurrentUser()
+                val cachedPartner = profileCache.getCachedPartner()
                 
-                // Try to load from cache first
-                val hasCached = cacheRepository.hasCachedData(currentCoupleId)
-                val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-                val lastLoadedDate = _uiState.value.lastLoadedDate
-                val isDayChanged = lastLoadedDate.isNotEmpty() && lastLoadedDate != today
+                Log.d(TAG, "ProfileCache: currentUser=${cachedCurrentUser?.displayName}, partner=${cachedPartner?.displayName}")
                 
-                if (hasCached && !isDayChanged) {
-                    Log.d(TAG, "📦 Cache found! Loading from cache first...")
-                    loadFromCacheAndSyncBackground(currentCoupleId, userId, partnerId)
+                if (cachedCurrentUser != null && cachedCurrentUser.id == userId) {
+                    val partnerId = cachedCurrentUser.partnerId
+                    
+                    if (!partnerId.isNullOrEmpty()) {
+                        // Generate coupleId from cached data
+                        currentCoupleId = listOf(userId, partnerId).sorted().joinToString("_")
+                        
+                        // Check if we have COMPLETE and FRESH cache
+                        // - hasCompleteCache: ensures cache has full history (not just today)
+                        // - isFresh: ensures data is recent (within 30 minutes)
+                        val hasComplete = cacheRepository.hasCompleteCache(currentCoupleId)
+                        val isFresh = cacheRepository.isCacheFresh(currentCoupleId)
+                        
+                        Log.d(TAG, "MissingCache: hasComplete=$hasComplete, isFresh=$isFresh")
+                        
+                        // ONLY use cache if it's COMPLETE and FRESH
+                        // Otherwise always fetch from Firebase to ensure user sees correct data
+                        if (hasComplete && isFresh) {
+                            Log.d(TAG, "📦 Cache is COMPLETE and FRESH! Loading instantly...")
+                            loadFromCacheInstantly(currentCoupleId, userId, partnerId, cachedCurrentUser, cachedPartner)
+                            return@launch
+                        } else {
+                            // Cache is incomplete or stale - fetch from Firebase with loading
+                            Log.d(TAG, "⚠️ Cache incomplete or stale, fetching fresh data from Firebase...")
+                        }
+                    } else {
+                        Log.d(TAG, "⚠️ No partner linked in cached profile")
+                    }
                 } else {
-                    Log.d(TAG, "🌐 No cache or day changed, loading from Firebase...")
-                    loadInitialDataFromFirebase()
+                    Log.d(TAG, "⚠️ No valid profile cache for userId=$userId")
                 }
+                
+                // ========== STEP 2: No cache → Load from Firebase (with loading) ==========
+                Log.d(TAG, "🌐 No profile/missing cache, loading from Firebase...")
+                loadInitialDataFromFirebase()
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error in loadInitialDataWithCache", e)
@@ -120,87 +130,119 @@ class MissingViewModelFirebase : ViewModel() {
     }
     
     /**
-     * Load data from cache immediately, then sync in background
+     * Load from cache INSTANTLY - no network calls
+     * UI updates immediately with cached data
      */
-    private suspend fun loadFromCacheAndSyncBackground(
+    private suspend fun loadFromCacheInstantly(
         coupleId: String,
         currentUserId: String,
-        partnerId: String
+        partnerId: String,
+        cachedFirebaseUser: FirebaseUser,
+        cachedFirebasePartner: FirebaseUser?
     ) {
         try {
-            // Load profiles from cache
-            val (cachedCurrentUser, cachedPartner) = cacheRepository.getCachedProfiles(coupleId)
+            val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
             
-            if (cachedCurrentUser != null) {
-                val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-                
-                // Load history from cache
-                val cachedHistory = cacheRepository.getCachedHistory(coupleId, currentUserId)
-                
-                // Load today counts from cache
-                val myTodayCount = cacheRepository.getCachedTodayCount(
-                    coupleId, currentUserId,
-                    cachedCurrentUser.name, cachedCurrentUser.avatarUrl
+            // Convert FirebaseUser to UserProfile
+            val currentUserProfile = UserProfile(
+                id = cachedFirebaseUser.id,
+                name = cachedFirebaseUser.displayName,
+                avatarUrl = cachedFirebaseUser.profileImageUrl.takeIf { it.isNotEmpty() }
+            )
+            
+            // Try to get partner profile from ProfileCache first, then from MissingCache
+            var partnerProfile = cachedFirebasePartner?.let {
+                UserProfile(
+                    id = it.id,
+                    name = it.displayName,
+                    avatarUrl = it.profileImageUrl.takeIf { url -> url.isNotEmpty() }
                 )
-                val partnerTodayCount = cachedPartner?.let {
-                    cacheRepository.getCachedTodayCount(coupleId, it.id, it.name, it.avatarUrl)
-                } ?: UserMissCount("", "", null, 0)
-                
-                // Load summary from cache
-                val cachedSummary = cacheRepository.getCachedSummary(coupleId)
-                
-                // Calculate flags
-                val mySentToday = myTodayCount.todayCount > 0
-                val partnerSentToday = partnerTodayCount.todayCount > 0
-                val bothSentToday = mySentToday && partnerSentToday
-                
-                val summary = MissingSummary(
-                    totalMissCount = cachedSummary?.totalMissCount ?: cachedHistory.sumOf { day ->
-                        day.summaries.sumOf { it.missCount }
-                    },
-                    todayMissCount = myTodayCount.todayCount + partnerTodayCount.todayCount,
-                    currentStreak = cachedSummary?.currentStreak ?: 0,
-                    longestStreak = cachedSummary?.longestStreak ?: 0,
-                    hasSentToday = bothSentToday,
-                    myTodayCount = myTodayCount.todayCount,
-                    partnerTodayCount = partnerTodayCount.todayCount,
-                    meSentToday = mySentToday,
-                    partnerSentToday = partnerSentToday
-                )
-                
-                // Update UI immediately with cached data
-                _uiState.update {
-                    it.copy(
-                        currentUser = cachedCurrentUser,
-                        partnerUser = cachedPartner,
-                        dailyHistory = cachedHistory,
-                        summary = summary,
-                        myTodayCount = myTodayCount,
-                        partnerTodayCount = partnerTodayCount,
-                        isLoading = false, // UI ready!
-                        lastLoadedDate = today
-                    )
-                }
-                
-                Log.d(TAG, "✅ Loaded from cache instantly! Starting background sync...")
-                
-                // Sync in background (don't block UI)
-                startBackgroundSync()
-                
-            } else {
-                // Cache corrupted or incomplete, fall back to Firebase
-                Log.d(TAG, "⚠️ Cache incomplete, falling back to Firebase")
-                loadInitialDataFromFirebase()
             }
             
+            // If no partner in ProfileCache, try MissingCacheRepository
+            if (partnerProfile == null) {
+                val (_, cachedPartnerFromMissing) = cacheRepository.getCachedProfiles(coupleId)
+                partnerProfile = cachedPartnerFromMissing
+                Log.d(TAG, "Using partner from MissingCache: ${partnerProfile?.name}")
+            }
+            
+            // If still no partner profile, fallback to Firebase (shouldn't happen often)
+            if (partnerProfile == null) {
+                Log.d(TAG, "⚠️ No partner in any cache, falling back to Firebase")
+                loadInitialDataFromFirebase()
+                return
+            }
+            
+            // Load history from cache
+            val cachedHistory = cacheRepository.getCachedHistory(coupleId, currentUserId)
+            
+            // Load today counts from cache
+            val myTodayCount = cacheRepository.getCachedTodayCount(
+                coupleId, currentUserId,
+                currentUserProfile.name, currentUserProfile.avatarUrl
+            )
+            val partnerTodayCount = cacheRepository.getCachedTodayCount(
+                coupleId, partnerProfile.id, partnerProfile.name, partnerProfile.avatarUrl
+            )
+            
+            // Load summary from cache
+            val cachedSummary = cacheRepository.getCachedSummary(coupleId)
+            
+            // Calculate flags
+            val mySentToday = myTodayCount.todayCount > 0
+            val partnerSentToday = partnerTodayCount.todayCount > 0
+            val bothSentToday = mySentToday && partnerSentToday
+            
+            val summary = MissingSummary(
+                totalMissCount = cachedSummary?.totalMissCount ?: cachedHistory.sumOf { day ->
+                    day.summaries.sumOf { it.missCount }
+                },
+                todayMissCount = myTodayCount.todayCount + partnerTodayCount.todayCount,
+                currentStreak = cachedSummary?.currentStreak ?: 0,
+                longestStreak = cachedSummary?.longestStreak ?: 0,
+                hasSentToday = bothSentToday,
+                myTodayCount = myTodayCount.todayCount,
+                partnerTodayCount = partnerTodayCount.todayCount,
+                meSentToday = mySentToday,
+                partnerSentToday = partnerSentToday
+            )
+            
+            Log.d(TAG, "✅ INSTANT cache load: me=${myTodayCount.todayCount}, partner=${partnerTodayCount.todayCount}")
+            
+            // ========== INSTANT UI UPDATE ==========
+            _uiState.update {
+                it.copy(
+                    currentUser = currentUserProfile,
+                    partnerUser = partnerProfile,
+                    dailyHistory = cachedHistory,
+                    summary = summary,
+                    myTodayCount = myTodayCount,
+                    partnerTodayCount = partnerTodayCount,
+                    isLoading = false, // ✅ UI ready INSTANTLY!
+                    lastLoadedDate = today
+                )
+            }
+            
+            Log.d(TAG, "✅ INSTANT cache load complete! UI ready without waiting")
+            
+            // Mark initial load as complete
+            isInitialLoadComplete = true
+            
+            // ========== NO BACKGROUND SYNC NEEDED ==========
+            // Cache is already COMPLETE and FRESH, no need to call API
+            // This ensures UI stays stable and no race conditions
+            // User can manually refresh if they want latest data
+            
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading from cache", e)
+            Log.e(TAG, "Error loading from cache instantly", e)
             loadInitialDataFromFirebase()
         }
     }
     
     /**
      * Start background sync to refresh data from Firebase
+     * Uses loadMissingData for FULL sync (not just partner count)
+     * This ensures cache has complete data including history
      */
     private fun startBackgroundSync() {
         backgroundSyncJob?.cancel()
@@ -213,8 +255,10 @@ class MissingViewModelFirebase : ViewModel() {
                     return@launch
                 }
                 
-                Log.d(TAG, "🔄 Starting background sync from Firebase...")
-                loadMissingDataSilent()
+                Log.d(TAG, "🔄 Starting FULL background sync from Firebase...")
+                // Use loadMissingData for FULL sync (history + summary + today counts)
+                // This ensures cache is populated with complete data
+                loadMissingData()
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error in background sync", e)
@@ -224,89 +268,99 @@ class MissingViewModelFirebase : ViewModel() {
 
     /**
      * Original Firebase loading (renamed, used as fallback)
+     * This is a suspend function - should be called from existing coroutine
      */
-    private fun loadInitialDataFromFirebase() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+    private suspend fun loadInitialDataFromFirebase() {
+        _uiState.update { it.copy(isLoading = true) }
+        Log.d(TAG, "🌐 loadInitialDataFromFirebase started, isLoading=true")
 
-            try {
-                val firebaseUser = authRepository.currentUser
-                if (firebaseUser == null) {
-                    Log.e(TAG, "User not logged in")
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
-                }
+        try {
+            val firebaseUser = authRepository.currentUser
+            if (firebaseUser == null) {
+                Log.e(TAG, "User not logged in")
+                _uiState.update { it.copy(isLoading = false) }
+                return
+            }
 
-                val userId = firebaseUser.uid
-                Log.d(TAG, "Loading data for user: $userId")
+            val userId = firebaseUser.uid
+            Log.d(TAG, "Loading data for user: $userId")
 
-                // Load current user
-                val currentUserResult = firestoreRepository.getDocument(
+            // Load current user
+            val currentUserResult = firestoreRepository.getDocument(
+                "users",
+                userId,
+                FirebaseUser::class.java
+            )
+
+            val currentUser = currentUserResult.getOrNull()
+            if (currentUser == null) {
+                Log.e(TAG, "Failed to load current user")
+                _uiState.update { it.copy(isLoading = false) }
+                return
+            }
+
+            // Convert to UserProfile
+            val currentUserProfile = UserProfile(
+                id = currentUser.id,
+                name = currentUser.displayName,
+                avatarUrl = currentUser.profileImageUrl.takeIf { it.isNotEmpty() }
+            )
+
+            // Load partner if exists
+            val partnerId = currentUser.partnerId
+            var partnerProfile: UserProfile? = null
+            var partnerFirebaseUser: FirebaseUser? = null
+
+            if (!partnerId.isNullOrEmpty()) {
+                val partnerResult = firestoreRepository.getDocument(
                     "users",
-                    userId,
+                    partnerId,
                     FirebaseUser::class.java
                 )
-
-                val currentUser = currentUserResult.getOrNull()
-                if (currentUser == null) {
-                    Log.e(TAG, "Failed to load current user")
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
-                }
-
-                // Convert to UserProfile
-                val currentUserProfile = UserProfile(
-                    id = currentUser.id,
-                    name = currentUser.displayName,
-                    avatarUrl = currentUser.profileImageUrl.takeIf { it.isNotEmpty() }
-                )
-
-                // Load partner if exists
-                val partnerId = currentUser.partnerId
-                var partnerProfile: UserProfile? = null
-
-                if (!partnerId.isNullOrEmpty()) {
-                    val partnerResult = firestoreRepository.getDocument(
-                        "users",
-                        partnerId,
-                        FirebaseUser::class.java
-                    )
-                    val partner = partnerResult.getOrNull()
-                    if (partner != null) {
-                        partnerProfile = UserProfile(
-                            id = partner.id,
-                            name = partner.displayName,
-                            avatarUrl = partner.profileImageUrl.takeIf { it.isNotEmpty() }
-                        )
-                    }
-                    
-                    // Cache profiles for next time
-                    currentCoupleId = listOf(userId, partnerId).sorted().joinToString("_")
-                    cacheRepository.cacheProfiles(currentCoupleId, currentUserProfile, partnerProfile)
-                }
-
-                // Update profiles first (but keep isLoading = true)
-                _uiState.update {
-                    it.copy(
-                        currentUser = currentUserProfile,
-                        partnerUser = partnerProfile
-                        // NOTE: isLoading remains true - will be set to false by loadMissingDataInternal
+                val partner = partnerResult.getOrNull()
+                if (partner != null) {
+                    partnerFirebaseUser = partner
+                    partnerProfile = UserProfile(
+                        id = partner.id,
+                        name = partner.displayName,
+                        avatarUrl = partner.profileImageUrl.takeIf { it.isNotEmpty() }
                     )
                 }
-
-                // Load missing data - this will set isLoading = false when complete
-                loadMissingDataInternal(currentUserProfile, partnerProfile)
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading initial data", e)
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                
+                // Cache to MissingCacheRepository for next time
+                currentCoupleId = listOf(userId, partnerId).sorted().joinToString("_")
+                cacheRepository.cacheProfiles(currentCoupleId, currentUserProfile, partnerProfile)
+                
+                // Also cache to ProfileCacheRepository for instant loading
+                profileCache.cacheCurrentUser(currentUser)
+                partnerFirebaseUser?.let { profileCache.cachePartner(it) }
+                Log.d(TAG, "✅ Cached profiles to ProfileCacheRepository for instant loading")
             }
+
+            // Update profiles first (but keep isLoading = true)
+            _uiState.update {
+                it.copy(
+                    currentUser = currentUserProfile,
+                    partnerUser = partnerProfile
+                    // NOTE: isLoading remains true - will be set to false by loadMissingDataInternal
+                )
+            }
+
+            // Load missing data - this will set isLoading = false when complete
+            loadMissingDataInternal(currentUserProfile, partnerProfile)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading initial data", e)
+            _uiState.update { it.copy(isLoading = false, error = e.message) }
         }
     }
 
     /**
      * Internal function to load missing data with provided user profiles
      * Called from loadInitialData when profiles are already loaded
+     * 
+     * Note: This is called during initial load (no cache), so optimistic updates
+     * are less likely but we still handle them for safety.
      */
     private suspend fun loadMissingDataInternal(
         currentUserProfile: UserProfile,
@@ -328,37 +382,67 @@ class MissingViewModelFirebase : ViewModel() {
 
             Log.d(TAG, "Loading missing data for coupleId: $coupleId, date: $today")
 
+            // Capture pending state before API call
+            val pendingHeartsBeforeLoad = pendingApiCount
+            val optimisticMyCount = _uiState.value.myTodayCount.todayCount
+
             // Load today's counts for both users
             val myTodayResult = loadTodayCountWithProfile(coupleId, currentUserId, today, currentUserProfile)
             val partnerTodayResult = loadTodayCountWithProfile(coupleId, partnerId, today, partnerProfile)
 
+            // Merge with optimistic updates (same logic as loadMissingData)
+            val currentPendingHearts = pendingApiCount
+            val serverCount = myTodayResult.todayCount
+            val finalMyCount = if (currentPendingHearts > 0) {
+                Log.d(TAG, "⚠️ Preserving optimistic count in initial load: server=$serverCount, optimistic=$optimisticMyCount")
+                optimisticMyCount
+            } else {
+                serverCount
+            }
+            val adjustedMyTodayResult = myTodayResult.copy(todayCount = finalMyCount)
+
             // Load last 7 days history
             val historyList = loadLast7DaysHistoryWithProfiles(coupleId, currentUserId, partnerId, currentUserProfile, partnerProfile)
+            
+            // Adjust history if needed
+            val todayDate = LocalDate.now()
+            val adjustedHistoryList = if (finalMyCount != serverCount) {
+                updateDailyHistoryOptimistically(
+                    currentHistory = historyList,
+                    today = todayDate,
+                    currentUser = currentUserProfile,
+                    partnerUser = partnerProfile,
+                    newMyCount = finalMyCount,
+                    partnerCount = partnerTodayResult.todayCount
+                )
+            } else {
+                historyList
+            }
 
             // Calculate summary
-            val totalMissing = historyList.sumOf { day ->
+            val totalMissing = adjustedHistoryList.sumOf { day ->
                 day.summaries.sumOf { it.missCount }
             }
 
             // Calculate streak with longest
-            val (currentStreak, longestStreak) = calculateStreakWithLongest(historyList, currentUserId, partnerId)
+            val (currentStreak, longestStreak) = calculateStreakWithLongest(adjustedHistoryList, currentUserId, partnerId)
 
             // Check if both users sent today
-            val mySentToday = myTodayResult.todayCount > 0
+            val mySentToday = finalMyCount > 0
             val partnerSentToday = partnerTodayResult.todayCount > 0
             val bothSentToday = mySentToday && partnerSentToday
 
-            Log.d(TAG, "📊 Today stats: me=$mySentToday (${myTodayResult.todayCount}), " +
+            Log.d(TAG, "📊 Today stats: me=$mySentToday ($finalMyCount), " +
                     "partner=$partnerSentToday (${partnerTodayResult.todayCount}), " +
                     "bothSentToday=$bothSentToday, streak=$currentStreak")
 
             val summary = MissingSummary(
                 totalMissCount = totalMissing,
-                todayMissCount = myTodayResult.todayCount + partnerTodayResult.todayCount,
+                todayMissCount = finalMyCount + partnerTodayResult.todayCount,
                 currentStreak = currentStreak,
                 longestStreak = longestStreak,
                 hasSentToday = bothSentToday,
-                myTodayCount = myTodayResult.todayCount,
+                myTodayCount = finalMyCount,
                 partnerTodayCount = partnerTodayResult.todayCount,
                 meSentToday = mySentToday,
                 partnerSentToday = partnerSentToday
@@ -366,22 +450,48 @@ class MissingViewModelFirebase : ViewModel() {
 
             _uiState.update {
                 it.copy(
-                    dailyHistory = historyList,
+                    dailyHistory = adjustedHistoryList,
                     summary = summary,
-                    myTodayCount = myTodayResult,
+                    myTodayCount = adjustedMyTodayResult,
                     partnerTodayCount = partnerTodayResult,
                     isLoading = false,
-                    lastLoadedDate = today,
-                    pendingHearts = 0
+                    lastLoadedDate = today
+                    // NOTE: Do NOT reset pendingHearts - let sendMissing handle it
                 )
             }
             
+            // Mark initial load as complete
+            isInitialLoadComplete = true
+            
             // Cache data for next time (background operation)
+            // Use SERVER counts for cache
             viewModelScope.launch {
                 try {
+                    // Cache history (server data)
                     cacheRepository.cacheMissingHistory(coupleId, historyList)
+                    
+                    // Cache summary
                     cacheRepository.cacheSummary(coupleId, currentStreak, longestStreak, totalMissing)
-                    Log.d(TAG, "📦 Cached missing data for couple $coupleId")
+                    
+                    // Cache today's counts - use SERVER counts
+                    cacheRepository.updateTodayCount(
+                        coupleId = coupleId,
+                        userId = currentUserId,
+                        userName = currentUserProfile.name,
+                        userAvatarUrl = currentUserProfile.avatarUrl,
+                        newCount = serverCount // Server count, not optimistic
+                    )
+                    if (partnerProfile != null) {
+                        cacheRepository.updateTodayCount(
+                            coupleId = coupleId,
+                            userId = partnerId,
+                            userName = partnerProfile.name,
+                            userAvatarUrl = partnerProfile.avatarUrl,
+                            newCount = partnerTodayResult.todayCount
+                        )
+                    }
+                    
+                    Log.d(TAG, "📦 Cached missing data for couple $coupleId (server counts)")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error caching missing data", e)
                 }
@@ -398,6 +508,9 @@ class MissingViewModelFirebase : ViewModel() {
     /**
      * Load missing data from Firestore
      * Also handles day change detection and resets counts appropriately
+     * 
+     * IMPORTANT: This function respects optimistic updates!
+     * If there are pending hearts (user clicked while loading), we preserve them.
      */
     private fun loadMissingData() {
         loadDataJob?.cancel()
@@ -427,38 +540,82 @@ class MissingViewModelFirebase : ViewModel() {
 
                 Log.d(TAG, "Loading missing data for coupleId: $coupleId, date: $today")
 
+                // ========== CAPTURE PENDING STATE BEFORE API CALL ==========
+                // This is CRUCIAL to preserve optimistic updates
+                val pendingHeartsBeforeLoad = pendingApiCount
+                val optimisticMyCount = _uiState.value.myTodayCount.todayCount
+                
                 // Load today's counts for both users
                 val myTodayResult = loadTodayCount(coupleId, currentUserId, today)
                 val partnerTodayResult = loadTodayCount(coupleId, partnerId, today)
 
+                // ========== MERGE WITH OPTIMISTIC UPDATES ==========
+                // If user clicked while we were loading, we need to preserve their optimistic count
+                val currentPendingHearts = pendingApiCount
+                val pendingDuringLoad = currentPendingHearts - pendingHeartsBeforeLoad
+                
+                // Calculate final count:
+                // - Start with server count
+                // - Add any hearts that were pending BEFORE we started loading (not yet sent to server)
+                // - Add any hearts user added DURING loading
+                val serverCount = myTodayResult.todayCount
+                val finalMyCount = if (currentPendingHearts > 0) {
+                    // There are pending hearts - use optimistic count
+                    // The optimistic count already includes all pending hearts
+                    Log.d(TAG, "⚠️ Preserving optimistic count: server=$serverCount, optimistic=$optimisticMyCount, pending=$currentPendingHearts")
+                    optimisticMyCount
+                } else {
+                    // No pending hearts - safe to use server count
+                    serverCount
+                }
+                
+                // Create adjusted result with preserved count
+                val adjustedMyTodayResult = myTodayResult.copy(todayCount = finalMyCount)
+
                 // Load last 7 days history
                 val historyList = loadLast7DaysHistory(coupleId, currentUserId, partnerId)
+                
+                // Update history with correct counts (in case we preserved optimistic count)
+                val todayDate = LocalDate.now()
+                val adjustedHistoryList = if (finalMyCount != serverCount) {
+                    // Need to adjust today's entry in history
+                    updateDailyHistoryOptimistically(
+                        currentHistory = historyList,
+                        today = todayDate,
+                        currentUser = _uiState.value.currentUser,
+                        partnerUser = _uiState.value.partnerUser,
+                        newMyCount = finalMyCount,
+                        partnerCount = partnerTodayResult.todayCount
+                    )
+                } else {
+                    historyList
+                }
 
                 // Calculate summary
-                val totalMissing = historyList.sumOf { day ->
+                val totalMissing = adjustedHistoryList.sumOf { day ->
                     day.summaries.sumOf { it.missCount }
                 }
                 
                 // Calculate streak with longest
-                val (currentStreak, longestStreak) = calculateStreakWithLongest(historyList, currentUserId, partnerId)
+                val (currentStreak, longestStreak) = calculateStreakWithLongest(adjustedHistoryList, currentUserId, partnerId)
                 
                 // Check if both users sent today - THIS IS THE KEY FOR STREAK ACTIVATION
                 // hasSentToday = TRUE only when BOTH users have sent at least 1 heart today
-                val mySentToday = myTodayResult.todayCount > 0
+                val mySentToday = finalMyCount > 0
                 val partnerSentToday = partnerTodayResult.todayCount > 0
                 val bothSentToday = mySentToday && partnerSentToday
                 
-                Log.d(TAG, "📊 Today stats: me=$mySentToday (${myTodayResult.todayCount}), " +
+                Log.d(TAG, "📊 Today stats: me=$mySentToday ($finalMyCount), " +
                         "partner=$partnerSentToday (${partnerTodayResult.todayCount}), " +
                         "bothSentToday=$bothSentToday, streak=$currentStreak")
 
                 val summary = MissingSummary(
                     totalMissCount = totalMissing,
-                    todayMissCount = myTodayResult.todayCount + partnerTodayResult.todayCount,
+                    todayMissCount = finalMyCount + partnerTodayResult.todayCount,
                     currentStreak = currentStreak,
                     longestStreak = longestStreak,
                     hasSentToday = bothSentToday, // Both must send for streak to be active
-                    myTodayCount = myTodayResult.todayCount,
+                    myTodayCount = finalMyCount,
                     partnerTodayCount = partnerTodayResult.todayCount,
                     meSentToday = mySentToday,       // For UI - show if I sent today
                     partnerSentToday = partnerSentToday // For UI - show if partner sent today
@@ -466,22 +623,50 @@ class MissingViewModelFirebase : ViewModel() {
 
                 _uiState.update {
                     it.copy(
-                        dailyHistory = historyList,
+                        dailyHistory = adjustedHistoryList,
                         summary = summary,
-                        myTodayCount = myTodayResult,
+                        myTodayCount = adjustedMyTodayResult,
                         partnerTodayCount = partnerTodayResult,
                         isLoading = false,
-                        lastLoadedDate = today, // Remember current date
-                        pendingHearts = 0 // Clear pending after sync with server
+                        lastLoadedDate = today
+                        // NOTE: Do NOT reset pendingHearts here - let sendMissing handle it
                     )
                 }
                 
                 // Cache data for next time (background operation)
+                // NOTE: Cache SERVER data, not optimistic data
+                // Optimistic data will be updated when sendMissing completes
                 viewModelScope.launch {
                     try {
+                        // Cache history (use original historyList with server data)
                         cacheRepository.cacheMissingHistory(coupleId, historyList)
+                        
+                        // Cache summary
                         cacheRepository.cacheSummary(coupleId, currentStreak, longestStreak, totalMissing)
-                        Log.d(TAG, "📦 Cached missing data after loadMissingData")
+                        
+                        // Cache today's counts - use SERVER counts
+                        // Pending hearts will update cache when they are sent successfully
+                        val currentUser = _uiState.value.currentUser
+                        val partnerUser = _uiState.value.partnerUser
+                        
+                        cacheRepository.updateTodayCount(
+                            coupleId = coupleId,
+                            userId = currentUserId,
+                            userName = currentUser.name,
+                            userAvatarUrl = currentUser.avatarUrl,
+                            newCount = serverCount // Use server count, not optimistic
+                        )
+                        if (partnerUser != null) {
+                            cacheRepository.updateTodayCount(
+                                coupleId = coupleId,
+                                userId = partnerId,
+                                userName = partnerUser.name,
+                                userAvatarUrl = partnerUser.avatarUrl,
+                                newCount = partnerTodayResult.todayCount
+                            )
+                        }
+                        
+                        Log.d(TAG, "📦 Cached missing data after loadMissingData (server counts)")
                     } catch (e: Exception) {
                         Log.e(TAG, "Error caching missing data", e)
                     }
@@ -721,8 +906,15 @@ class MissingViewModelFirebase : ViewModel() {
      * 2. Batch multiple rapid clicks into single API call (debounce 500ms)
      * 3. On success: sync with server data
      * 4. On error: rollback only the failed batch
+     * 
+     * IMPORTANT: Cancels any ongoing background sync to prevent race conditions
      */
     fun sendMissing() {
+        // ========== CANCEL BACKGROUND SYNC ==========
+        // Prevent race condition where background sync overwrites optimistic updates
+        backgroundSyncJob?.cancel()
+        loadDataJob?.cancel()
+        
         // ========== IMMEDIATE UI UPDATE ==========
         // Update UI INSTANTLY - no waiting for anything
         val currentMyCount = _uiState.value.myTodayCount.todayCount
@@ -958,6 +1150,36 @@ class MissingViewModelFirebase : ViewModel() {
                         )
                     )
                 }
+                
+                // IMPORTANT: Cache updated data (This was missing!)
+                try {
+                    // Cache updated history
+                    cacheRepository.cacheMissingHistory(coupleId, updatedHistory)
+                    
+                    // Cache partner's today count
+                    if (partnerUser != null) {
+                        cacheRepository.updateTodayCount(
+                            coupleId = coupleId,
+                            userId = partnerId,
+                            userName = partnerUser.name,
+                            userAvatarUrl = partnerUser.avatarUrl,
+                            newCount = partnerTodayResult.todayCount
+                        )
+                    }
+                    
+                    // Also cache my count (ensure it's synced)
+                    cacheRepository.updateTodayCount(
+                        coupleId = coupleId,
+                        userId = currentUserId,
+                        userName = currentUser.name,
+                        userAvatarUrl = currentUser.avatarUrl,
+                        newCount = myCount
+                    )
+                    
+                    Log.d(TAG, "📦 Cached data after silent load (partner count: ${partnerTodayResult.todayCount})")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error caching after silent load", e)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in silent load", e)
             }
@@ -965,10 +1187,58 @@ class MissingViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Refresh data
+     * Refresh data - called when screen resumes or user pulls to refresh
+     * 
+     * Smart refresh logic:
+     * - If initial load not complete: skip (let init handle it)
+     * - If day changed: force refresh from Firebase
+     * - If cache is stale (>30 min): refresh from Firebase
+     * - Otherwise: skip refresh, use cached data
      */
     fun refreshData() {
-        loadMissingData()
+        viewModelScope.launch {
+            // Skip if initial load hasn't completed yet
+            if (!isInitialLoadComplete) {
+                Log.d(TAG, "⏳ Initial load not complete, skipping refreshData()")
+                return@launch
+            }
+            
+            val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val lastLoadedDate = _uiState.value.lastLoadedDate
+            
+            // Check if day changed
+            val dayChanged = lastLoadedDate.isNotEmpty() && lastLoadedDate != today
+            
+            // Check if cache is stale
+            val isCacheStale = currentCoupleId.isNotEmpty() && 
+                               !cacheRepository.isCacheFresh(currentCoupleId)
+            
+            if (dayChanged) {
+                Log.d(TAG, "📅 Day changed ($lastLoadedDate → $today), forcing refresh...")
+                loadMissingData()
+            } else if (isCacheStale) {
+                Log.d(TAG, "⏰ Cache is stale, refreshing in background...")
+                loadMissingData()
+            } else {
+                Log.d(TAG, "✅ Cache is fresh and day unchanged, skipping refresh")
+            }
+        }
+    }
+    
+    /**
+     * Force refresh - always calls API regardless of cache state
+     * Use this for pull-to-refresh
+     */
+    fun forceRefresh() {
+        viewModelScope.launch {
+            Log.d(TAG, "🔄 Force refresh requested")
+            // Clear cache first to ensure fresh data from Firebase
+            if (currentCoupleId.isNotEmpty()) {
+                cacheRepository.clearCache(currentCoupleId)
+                Log.d(TAG, "🗑️ Missing cache cleared for force refresh")
+            }
+            loadMissingData()
+        }
     }
 
     /**

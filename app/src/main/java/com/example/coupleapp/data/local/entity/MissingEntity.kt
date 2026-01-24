@@ -12,10 +12,13 @@ import androidx.room.PrimaryKey
  * - Reduces API calls: Only syncs when data is stale or manually refreshed
  * - Offline-first: Works even without network
  * - Better UX: No 5-6s loading every time entering Missing screen
+ * 
+ * Note: unique index on (coupleId, userId, date) ensures we can have
+ * one record per user per day per couple (i.e., both partners' data for each day)
  */
 @Entity(
     tableName = "missing_data",
-    indices = [Index(value = ["coupleId", "date"], unique = true)]
+    indices = [Index(value = ["coupleId", "userId", "date"], unique = true)]
 )
 data class MissingEntity(
     @PrimaryKey(autoGenerate = true)

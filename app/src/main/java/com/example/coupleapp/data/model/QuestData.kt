@@ -117,7 +117,8 @@ data class QuestUiState(
     val claimedReward: QuestReward? = null,
     val errorMessage: String? = null,
     val todayDate: String = "",
-    val isLinkedWithPartner: Boolean = false
+    val isLinkedWithPartner: Boolean = false,
+    val isClaimingReward: Boolean = false // Prevent multiple claim clicks
 )
 
 /**

@@ -438,6 +438,188 @@ class LocketViewModelFirebase : ViewModel() {
             locketRepository.markAsRead(locketId)
         }
     }
+    
+    /**
+     * Delete a single locket (only allowed for sender)
+     */
+    fun deleteLocket(locketPost: LocketPost) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isDeleting = true) }
+                
+                val currentUserId = auth.currentUser?.uid
+                if (currentUserId == null || locketPost.senderId != currentUserId) {
+                    _uiState.update { it.copy(
+                        isDeleting = false,
+                        error = "Bạn chỉ có thể xóa Locket do mình đăng"
+                    )}
+                    return@launch
+                }
+                
+                // Convert to FirebaseLocketPost for deletion
+                val firebaseLocketPost = com.example.coupleapp.data.model.FirebaseLocketPost(
+                    id = locketPost.id,
+                    type = when (locketPost.type) {
+                        LocketType.PHOTO -> "photo"
+                        LocketType.EMOJI -> "emoji"
+                        LocketType.DRAWING -> "drawing"
+                        LocketType.TEXT -> "text"
+                    },
+                    photoUrl = if (locketPost.type == LocketType.PHOTO) locketPost.content else "",
+                    drawingUrl = if (locketPost.type == LocketType.DRAWING) locketPost.content else "",
+                    emoji = if (locketPost.type == LocketType.EMOJI) locketPost.content else "",
+                    textContent = if (locketPost.type == LocketType.TEXT) locketPost.content else "",
+                    senderId = locketPost.senderId,
+                    receiverId = locketPost.receiverId
+                )
+                
+                val result = locketRepository.deleteLocket(locketPost.id, firebaseLocketPost)
+                
+                if (result.isSuccess) {
+                    // Remove from local state
+                    _uiState.update { state ->
+                        state.copy(
+                            isDeleting = false,
+                            locketHistory = state.locketHistory.filter { it.id != locketPost.id },
+                            deleteSuccess = true
+                        )
+                    }
+                    
+                    // Update widget
+                    LocketWidgetManager.onLocketSent(CoupleApplication.instance)
+                    
+                    // Reset success flag
+                    delay(2000)
+                    _uiState.update { it.copy(deleteSuccess = false) }
+                } else {
+                    _uiState.update { it.copy(
+                        isDeleting = false,
+                        error = "Không thể xóa Locket"
+                    )}
+                }
+                
+            } catch (e: Exception) {
+                _uiState.update { it.copy(
+                    isDeleting = false,
+                    error = e.message ?: "Lỗi khi xóa Locket"
+                )}
+            }
+        }
+    }
+    
+    /**
+     * Delete multiple lockets at once (only allowed for sender)
+     */
+    fun deleteMultipleLockets(locketPosts: List<LocketPost>) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isDeleting = true) }
+                
+                val currentUserId = auth.currentUser?.uid
+                if (currentUserId == null) {
+                    _uiState.update { it.copy(
+                        isDeleting = false,
+                        error = "Vui lòng đăng nhập"
+                    )}
+                    return@launch
+                }
+                
+                // Filter only lockets from current user
+                val deletableLockets = locketPosts.filter { it.senderId == currentUserId }
+                
+                if (deletableLockets.isEmpty()) {
+                    _uiState.update { it.copy(
+                        isDeleting = false,
+                        error = "Không có Locket nào có thể xóa"
+                    )}
+                    return@launch
+                }
+                
+                var deletedCount = 0
+                val deletedIds = mutableListOf<String>()
+                
+                for (locketPost in deletableLockets) {
+                    val firebaseLocketPost = com.example.coupleapp.data.model.FirebaseLocketPost(
+                        id = locketPost.id,
+                        type = when (locketPost.type) {
+                            LocketType.PHOTO -> "photo"
+                            LocketType.EMOJI -> "emoji"
+                            LocketType.DRAWING -> "drawing"
+                            LocketType.TEXT -> "text"
+                        },
+                        photoUrl = if (locketPost.type == LocketType.PHOTO) locketPost.content else "",
+                        drawingUrl = if (locketPost.type == LocketType.DRAWING) locketPost.content else "",
+                        emoji = if (locketPost.type == LocketType.EMOJI) locketPost.content else "",
+                        textContent = if (locketPost.type == LocketType.TEXT) locketPost.content else "",
+                        senderId = locketPost.senderId,
+                        receiverId = locketPost.receiverId
+                    )
+                    
+                    val result = locketRepository.deleteLocket(locketPost.id, firebaseLocketPost)
+                    if (result.isSuccess) {
+                        deletedCount++
+                        deletedIds.add(locketPost.id)
+                    }
+                }
+                
+                // Update local state
+                _uiState.update { state ->
+                    state.copy(
+                        isDeleting = false,
+                        locketHistory = state.locketHistory.filter { it.id !in deletedIds },
+                        deleteSuccess = deletedCount > 0,
+                        selectedForDeletion = emptySet()
+                    )
+                }
+                
+                // Update widget
+                if (deletedCount > 0) {
+                    LocketWidgetManager.onLocketSent(CoupleApplication.instance)
+                }
+                
+                // Reset success flag
+                delay(2000)
+                _uiState.update { it.copy(deleteSuccess = false) }
+                
+            } catch (e: Exception) {
+                _uiState.update { it.copy(
+                    isDeleting = false,
+                    error = e.message ?: "Lỗi khi xóa Locket"
+                )}
+            }
+        }
+    }
+    
+    /**
+     * Toggle selection mode for batch deletion
+     */
+    fun toggleSelectionMode(enabled: Boolean) {
+        _uiState.update { it.copy(
+            isSelectionMode = enabled,
+            selectedForDeletion = if (enabled) it.selectedForDeletion else emptySet()
+        )}
+    }
+    
+    /**
+     * Toggle selection of a locket for deletion
+     */
+    fun toggleLocketSelection(locketId: String) {
+        _uiState.update { state ->
+            val newSelection = if (locketId in state.selectedForDeletion) {
+                state.selectedForDeletion - locketId
+            } else {
+                state.selectedForDeletion + locketId
+            }
+            state.copy(selectedForDeletion = newSelection)
+        }
+    }
+    
+    /**
+     * Clear error message
+     */
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
 
     // Pin toggle
     fun togglePinMode(isPinMode: Boolean) {

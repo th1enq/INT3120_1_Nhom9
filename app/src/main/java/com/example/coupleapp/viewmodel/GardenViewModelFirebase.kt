@@ -1660,7 +1660,7 @@ private fun FirebaseGalleryItem.toCachedGalleryItem(): CachedGalleryItem {
         rarity = this.rarity,
         plantType = this.plantType,
         isUnlocked = this.isUnlocked,
-        unlockedDate = this.unlockedDate?.time
+        unlockedDate = this.unlockedAt?.toDate()?.time
     )
 }
 

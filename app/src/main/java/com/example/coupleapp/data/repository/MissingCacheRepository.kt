@@ -34,8 +34,9 @@ class MissingCacheRepository(context: Context = CoupleApplication.instance) {
     companion object {
         private const val TAG = "MissingCacheRepo"
         
-        // Cache is considered fresh for 5 minutes
-        const val CACHE_FRESHNESS_MS = 5 * 60 * 1000L // 5 minutes
+        // Cache is considered fresh for 30 minutes
+        // This balances between showing instant data and keeping data relatively up-to-date
+        const val CACHE_FRESHNESS_MS = 30 * 60 * 1000L // 30 minutes
         
         // Keep history for last 7 days
         const val HISTORY_DAYS = 7
@@ -61,6 +62,50 @@ class MissingCacheRepository(context: Context = CoupleApplication.instance) {
     suspend fun hasCachedData(coupleId: String): Boolean = withContext(Dispatchers.IO) {
         val history = missingDao.getMissingHistory(coupleId, 1)
         history.isNotEmpty()
+    }
+    
+    /**
+     * Check if cache has COMPLETE data (at least 2 different dates)
+     * This prevents showing incomplete cache (only today, missing yesterday)
+     */
+    suspend fun hasCompleteCache(coupleId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val history = missingDao.getMissingHistory(coupleId, HISTORY_DAYS)
+            // Get unique dates
+            val uniqueDates = history.map { it.date }.distinct()
+            // Cache is complete if we have at least 2 different dates OR we have profiles cached
+            val hasMultipleDays = uniqueDates.size >= 2
+            val hasProfiles = missingDao.getCurrentUserProfile(coupleId) != null
+            
+            Log.d(TAG, "hasCompleteCache: uniqueDates=${uniqueDates.size}, hasProfiles=$hasProfiles")
+            hasMultipleDays && hasProfiles
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking complete cache", e)
+            false
+        }
+    }
+    
+    /**
+     * Check if we have cached data for TODAY (more precise check)
+     * Returns true only if there's recent data (within 24 hours) for today
+     */
+    suspend fun hasTodayData(coupleId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val todayEntries = missingDao.getMissingByDateOnly(coupleId, today)
+            
+            // Check if we have profile cache too
+            val hasProfiles = missingDao.getCurrentUserProfile(coupleId) != null
+            
+            // If we have today's entries OR just profiles (for new day with no sends yet)
+            val hasData = todayEntries.isNotEmpty() || hasProfiles
+            
+            Log.d(TAG, "hasTodayData check: hasEntries=${todayEntries.isNotEmpty()}, hasProfiles=$hasProfiles")
+            hasData
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking today's data", e)
+            false
+        }
     }
     
     /**
@@ -112,7 +157,9 @@ class MissingCacheRepository(context: Context = CoupleApplication.instance) {
         currentUserId: String
     ): List<DailyMissingHistory> = withContext(Dispatchers.IO) {
         val entities = missingDao.getMissingHistory(coupleId, HISTORY_DAYS)
-        convertEntitiesToHistory(entities, currentUserId)
+        val history = convertEntitiesToHistory(entities, currentUserId)
+        Log.d(TAG, "Loaded ${entities.size} entities -> ${history.size} days of history from cache")
+        history
     }
     
     /**
@@ -126,6 +173,7 @@ class MissingCacheRepository(context: Context = CoupleApplication.instance) {
     ): UserMissCount = withContext(Dispatchers.IO) {
         val today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
         val count = missingDao.getTodayCount(coupleId, userId, today) ?: 0
+        
         UserMissCount(
             userId = userId,
             userName = userName,

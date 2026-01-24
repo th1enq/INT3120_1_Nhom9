@@ -9,6 +9,9 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 
 /**
  * Repository for caching Moments data.
@@ -31,7 +34,6 @@ class MomentsCacheRepository(
         private const val TAG = "MomentsCacheRepo"
         private const val PREFS_NAME = "moments_cache"
         private const val KEY_MOMENTS_GROUPS = "moments_groups"
-        private const val KEY_USER_INFO = "user_info"
         
         // Cache freshness - 15 minutes since it aggregates multiple sources
         const val MOMENTS_FRESHNESS_MS = 15 * 60 * 1000L
@@ -68,7 +70,10 @@ class MomentsCacheRepository(
             // Convert cached groups back to MomentsGroup
             cachedGroups.map { cached ->
                 MomentsGroup(
-                    date = cached.date,
+                    section = TimelineSection(
+                        date = LocalDate.parse(cached.sectionDate),
+                        label = cached.sectionLabel
+                    ),
                     moments = cached.moments.mapNotNull { it.toMomentItem() }
                 )
             }
@@ -88,7 +93,8 @@ class MomentsCacheRepository(
             // Convert to cacheable format
             val cachedGroups = groups.map { group ->
                 CachedMomentsGroup(
-                    date = group.date,
+                    sectionDate = group.section.date.toString(),
+                    sectionLabel = group.section.label,
                     moments = group.moments.map { it.toCachedMoment() }
                 )
             }
@@ -150,7 +156,8 @@ class MomentsCacheRepository(
  * Wrapper for caching MomentsGroup with serializable moments
  */
 data class CachedMomentsGroup(
-    val date: java.time.LocalDate,
+    val sectionDate: String, // LocalDate as string
+    val sectionLabel: String,
     val moments: List<CachedMoment>
 )
 
@@ -161,10 +168,10 @@ data class CachedMoment(
     val type: String,
     val id: String,
     val timestamp: String, // ISO format
-    val userName: String?,
-    val userAvatar: String?,
     
     // Sleep moment fields
+    val userName: String? = null,
+    val userAvatar: String? = null,
     val bedTime: String? = null,
     val wakeUpTime: String? = null,
     val sleepDuration: Int? = null,
@@ -172,37 +179,47 @@ data class CachedMoment(
     val achievementPercentage: Float? = null,
     
     // Missing moment fields
-    val missingCount: Int? = null,
-    val message: String? = null,
+    val senderName: String? = null,
+    val senderAvatar: String? = null,
+    val receiverName: String? = null,
+    val receiverAvatar: String? = null,
+    val missCount: Int? = null,
     
     // Locket moment fields
-    val photoUrl: String? = null,
+    val locketType: String? = null,
+    val content: String? = null,
     val caption: String? = null,
     
     // Anniversary moment fields
-    val daysTogether: Int? = null,
-    val milestone: String? = null,
-    val relationshipStartDate: String? = null,
+    val daysTogether: Long? = null,
+    val monthsTogether: Long? = null,
+    val yearsTogether: Long? = null,
+    val user1Name: String? = null,
+    val user1Avatar: String? = null,
+    val user2Name: String? = null,
+    val user2Avatar: String? = null,
     
     // Event moment fields
     val eventTitle: String? = null,
-    val eventDate: String? = null,
     val eventDescription: String? = null,
-    val eventEmoji: String? = null,
-    val daysUntil: Int? = null,
+    val eventDate: String? = null,
+    val eventType: String? = null,
+    val daysUntil: Long? = null,
     
     // Garden moment fields
     val plantName: String? = null,
-    val plantStage: String? = null,
     val plantEmoji: String? = null,
-    val milestoneType: String? = null,
+    val gardenEventType: String? = null,
+    val growthStage: Int? = null,
+    val message: String? = null,
     
     // Message moment fields
-    val messageType: String? = null,
-    val senderName: String? = null,
-    val senderAvatar: String? = null,
-    val messageContent: String? = null
+    val messagePreview: String? = null,
+    val messageCount: Int? = null,
+    val isRead: Boolean? = null
 )
+
+// ============ Extension Functions ============
 
 /**
  * Extension to convert MomentItem to CachedMoment
@@ -225,70 +242,65 @@ fun MomentItem.toCachedMoment(): CachedMoment {
             type = "missing",
             id = id,
             timestamp = timestamp.toString(),
-            userName = userName,
-            userAvatar = userAvatar,
-            missingCount = missingCount,
-            message = message
+            senderName = senderName,
+            senderAvatar = senderAvatar,
+            receiverName = receiverName,
+            receiverAvatar = receiverAvatar,
+            missCount = missCount
         )
         is LocketMoment -> CachedMoment(
             type = "locket",
             id = id,
             timestamp = timestamp.toString(),
-            userName = userName,
-            userAvatar = userAvatar,
-            photoUrl = photoUrl,
+            senderName = senderName,
+            senderAvatar = senderAvatar,
+            locketType = locketType.name,
+            content = content,
             caption = caption
         )
         is AnniversaryMoment -> CachedMoment(
             type = "anniversary",
             id = id,
             timestamp = timestamp.toString(),
-            userName = null,
-            userAvatar = null,
             daysTogether = daysTogether,
-            milestone = milestone,
-            relationshipStartDate = relationshipStartDate.toString()
+            monthsTogether = monthsTogether,
+            yearsTogether = yearsTogether,
+            user1Name = user1Name,
+            user1Avatar = user1Avatar,
+            user2Name = user2Name,
+            user2Avatar = user2Avatar
         )
         is EventMoment -> CachedMoment(
             type = "event",
             id = id,
             timestamp = timestamp.toString(),
-            userName = null,
-            userAvatar = null,
             eventTitle = title,
-            eventDate = date.toString(),
             eventDescription = description,
-            eventEmoji = emoji,
+            eventDate = eventDate.toString(),
+            eventType = eventType.name,
             daysUntil = daysUntil
         )
         is GardenMoment -> CachedMoment(
             type = "garden",
             id = id,
             timestamp = timestamp.toString(),
-            userName = null,
-            userAvatar = null,
+            userName = userName,
+            userAvatar = userAvatar,
             plantName = plantName,
-            plantStage = plantStage,
             plantEmoji = plantEmoji,
-            milestoneType = milestoneType
+            gardenEventType = eventType.name,
+            growthStage = growthStage,
+            message = message
         )
         is MessageMoment -> CachedMoment(
             type = "message",
             id = id,
             timestamp = timestamp.toString(),
-            userName = null,
-            userAvatar = null,
-            messageType = this.type.name,
             senderName = senderName,
             senderAvatar = senderAvatar,
-            messageContent = message
-        )
-        else -> CachedMoment(
-            type = "unknown",
-            id = "unknown",
-            timestamp = java.time.LocalDateTime.now().toString(),
-            userName = null,
-            userAvatar = null
+            messagePreview = messagePreview,
+            messageCount = messageCount,
+            isRead = isRead
         )
     }
 }
@@ -298,7 +310,7 @@ fun MomentItem.toCachedMoment(): CachedMoment {
  */
 fun CachedMoment.toMomentItem(): MomentItem? {
     return try {
-        val timestamp = java.time.LocalDateTime.parse(this.timestamp)
+        val timestamp = LocalDateTime.parse(this.timestamp)
         
         when (type) {
             "sleep" -> SleepMoment(
@@ -306,8 +318,8 @@ fun CachedMoment.toMomentItem(): MomentItem? {
                 timestamp = timestamp,
                 userName = userName ?: "",
                 userAvatar = userAvatar,
-                bedTime = java.time.LocalTime.parse(bedTime),
-                wakeUpTime = java.time.LocalTime.parse(wakeUpTime),
+                bedTime = LocalTime.parse(bedTime),
+                wakeUpTime = LocalTime.parse(wakeUpTime),
                 sleepDuration = sleepDuration ?: 0,
                 quality = SleepQuality.valueOf(sleepQuality ?: "GOOD"),
                 achievementPercentage = achievementPercentage ?: 0f
@@ -315,50 +327,60 @@ fun CachedMoment.toMomentItem(): MomentItem? {
             "missing" -> MissingMoment(
                 id = id,
                 timestamp = timestamp,
-                userName = userName ?: "",
-                userAvatar = userAvatar,
-                missingCount = missingCount ?: 0,
-                message = message
+                senderName = senderName ?: "",
+                senderAvatar = senderAvatar,
+                receiverName = receiverName ?: "",
+                receiverAvatar = receiverAvatar,
+                missCount = missCount ?: 0
             )
             "locket" -> LocketMoment(
                 id = id,
                 timestamp = timestamp,
-                userName = userName ?: "",
-                userAvatar = userAvatar,
-                photoUrl = photoUrl ?: "",
+                senderName = senderName ?: "",
+                senderAvatar = senderAvatar,
+                locketType = try { LocketType.valueOf(locketType ?: "PHOTO") } catch (e: Exception) { LocketType.PHOTO },
+                content = content ?: "",
                 caption = caption
             )
             "anniversary" -> AnniversaryMoment(
                 id = id,
                 timestamp = timestamp,
-                daysTogether = daysTogether ?: 0,
-                milestone = milestone ?: "",
-                relationshipStartDate = java.time.LocalDate.parse(relationshipStartDate)
+                daysTogether = daysTogether ?: 0L,
+                monthsTogether = monthsTogether ?: 0L,
+                yearsTogether = yearsTogether ?: 0L,
+                user1Name = user1Name ?: "",
+                user1Avatar = user1Avatar,
+                user2Name = user2Name ?: "",
+                user2Avatar = user2Avatar
             )
             "event" -> EventMoment(
                 id = id,
                 timestamp = timestamp,
                 title = eventTitle ?: "",
-                date = java.time.LocalDate.parse(eventDate),
                 description = eventDescription,
-                emoji = eventEmoji ?: "📅",
-                daysUntil = daysUntil ?: 0
+                eventDate = LocalDate.parse(eventDate),
+                eventType = try { MomentEventType.valueOf(eventType ?: "REMINDER") } catch (e: Exception) { MomentEventType.REMINDER },
+                daysUntil = daysUntil ?: 0L
             )
             "garden" -> GardenMoment(
                 id = id,
                 timestamp = timestamp,
+                userName = userName ?: "",
+                userAvatar = userAvatar,
                 plantName = plantName ?: "",
-                plantStage = plantStage ?: "",
                 plantEmoji = plantEmoji ?: "🌱",
-                milestoneType = milestoneType ?: ""
+                eventType = try { GardenEventType.valueOf(gardenEventType ?: "PLANTED") } catch (e: Exception) { GardenEventType.PLANTED },
+                growthStage = growthStage ?: 0,
+                message = message ?: ""
             )
             "message" -> MessageMoment(
                 id = id,
                 timestamp = timestamp,
-                type = MessageNotificationType.valueOf(messageType ?: "RECEIVED"),
                 senderName = senderName ?: "",
                 senderAvatar = senderAvatar,
-                message = messageContent ?: ""
+                messagePreview = messagePreview ?: "",
+                messageCount = messageCount ?: 0,
+                isRead = isRead ?: false
             )
             else -> null
         }

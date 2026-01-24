@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.coupleapp.CoupleApplication
 import com.example.coupleapp.data.cache.CacheManager
+import com.example.coupleapp.data.model.FirebaseUserWallet
 import com.example.coupleapp.data.model.UserWallet
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -204,16 +205,7 @@ class StoreCacheRepository(
     }
 }
 
-/**
- * Firebase wallet document model
- */
-data class FirebaseUserWallet(
-    val id: String = "",
-    val userId: String = "",
-    val coins: Int = 0,
-    val freeCoins: Int = 0,
-    val lastFreeGiftDate: String? = null
-)
+// NOTE: FirebaseUserWallet is imported from FirebaseModels.kt
 
 /**
  * Inventory item model

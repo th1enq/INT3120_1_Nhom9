@@ -15,6 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
+import com.example.coupleapp.data.model.StoreUiState
 import com.example.coupleapp.ui.components.LoadingScreen
 import com.example.coupleapp.ui.components.store.*
 import com.example.coupleapp.viewmodel.StoreViewModelFirebase
@@ -27,24 +28,24 @@ fun StoreScreen(
     questViewModel: com.example.coupleapp.viewmodel.QuestViewModelFirebase? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var visible by remember { mutableStateOf(false) }
+    
+    // Track if we ever showed loading (to distinguish cache hit vs network load)
+    var wasLoading by remember { mutableStateOf(uiState.isLoading) }
+    var visible by remember { mutableStateOf(!uiState.isLoading) } // If cache hit, show immediately
 
-    // Animation timing - minimal delay for smooth transition
+    // Update wasLoading flag when loading starts
     LaunchedEffect(uiState.isLoading) {
         if (uiState.isLoading) {
+            wasLoading = true
             visible = false
         } else {
             if (!visible) {
-                delay(50)  // Minimal delay for smooth transition
+                // If we showed loading, use longer delay to avoid lag during transition
+                // If cache hit (never showed loading), show immediately
+                val transitionDelay = if (wasLoading) 150L else 0L
+                if (transitionDelay > 0) delay(transitionDelay)
                 visible = true
             }
-        }
-    }
-    
-    LaunchedEffect(Unit) {
-        if (!uiState.isLoading) {
-            delay(50)
-            visible = true
         }
     }
 
@@ -71,7 +72,8 @@ fun StoreScreen(
                 questViewModel?.updateQuestProgress(com.example.coupleapp.data.model.QuestType.CARE_PLANT, 1)
             },
             onWatchAd = { viewModel.watchAdForReward(it) },
-            onPurchaseReal = { viewModel.purchaseWithRealMoney(it) }
+            onPurchaseReal = { viewModel.purchaseWithRealMoney(it) },
+            isPurchasing = uiState.isPurchasing
         )
     }
 
@@ -86,59 +88,87 @@ fun StoreScreen(
         )
     }
 
-    Crossfade(
-        targetState = uiState.isLoading,
-        animationSpec = tween(durationMillis = 200),  // Fast like Missing/Quest
-        label = "LoadingCrossfade"
-    ) { loading ->
-        if (loading) {
-            LoadingScreen(message = stringResource(R.string.loading_store))
-        } else {
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Background image (store2.png) - full screen
-                Image(
-                    painter = painterResource(id = R.drawable.store2),
-                    contentDescription = "Store background",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds
+    // If cache hit (never showed loading), skip Crossfade entirely and show content directly
+    // This avoids any transition lag when data is already cached
+    if (!wasLoading && !uiState.isLoading) {
+        // Direct content render for cache hit - no transition animation
+        StoreContent(
+            visible = visible,
+            uiState = uiState,
+            onBackClick = onBackClick,
+            viewModel = viewModel
+        )
+    } else {
+        // Normal flow with Crossfade for loading → content transition
+        Crossfade(
+            targetState = uiState.isLoading,
+            animationSpec = tween(durationMillis = 250),  // Slightly longer for smoother transition
+            label = "LoadingCrossfade"
+        ) { loading ->
+            if (loading) {
+                LoadingScreen(message = stringResource(R.string.loading_store))
+            } else {
+                StoreContent(
+                    visible = visible,
+                    uiState = uiState,
+                    onBackClick = onBackClick,
+                    viewModel = viewModel
                 )
-
-                // Top bar with slide animation (like Friend page)
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = fadeIn(animationSpec = tween(500)) +
-                            slideInVertically(animationSpec = tween(500)) { -it / 4 },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                ) {
-                    StoreTopBar(
-                        coins = uiState.userWallet.coins,
-                        onBackClick = onBackClick
-                    )
-                }
-
-                // Scrollable content with staggered animation (like Friend page)
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = fadeIn(animationSpec = tween(500, delayMillis = 150)) +
-                            slideInVertically(animationSpec = tween(500, delayMillis = 150)) { it / 4 },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.75f)
-                        .align(Alignment.BottomCenter)
-                ) {
-                    ShelvesContent(
-                        categories = uiState.categories,
-                        onItemClick = { viewModel.selectItem(it) },
-                        userCoins = uiState.userWallet.coins,
-                        canClaimFree = uiState.canClaimFreeGift,
-                        cooldownDays = uiState.freeGiftCooldownDays
-                    )
-                }
             }
+        }
+    }
+}
+
+@Composable
+private fun StoreContent(
+    visible: Boolean,
+    uiState: StoreUiState,
+    onBackClick: () -> Unit,
+    viewModel: StoreViewModelFirebase
+) {
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Background image (store2.png) - full screen
+        Image(
+            painter = painterResource(id = R.drawable.store2),
+            contentDescription = "Store background",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillBounds
+        )
+
+        // Top bar with slide animation (like Friend page)
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(500)) +
+                    slideInVertically(animationSpec = tween(500)) { -it / 4 },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+        ) {
+            StoreTopBar(
+                coins = uiState.userWallet.coins,
+                onBackClick = onBackClick
+            )
+        }
+
+        // Scrollable content with staggered animation (like Friend page)
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(500, delayMillis = 150)) +
+                    slideInVertically(animationSpec = tween(500, delayMillis = 150)) { it / 4 },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.75f)
+                .align(Alignment.BottomCenter)
+        ) {
+            ShelvesContent(
+                categories = uiState.categories,
+                onItemClick = { viewModel.selectItem(it) },
+                userCoins = uiState.userWallet.coins,
+                canClaimFree = uiState.canClaimFreeGift,
+                cooldownDays = uiState.freeGiftCooldownDays
+            )
         }
     }
 }    

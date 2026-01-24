@@ -217,12 +217,17 @@ data class CachedQuestData(
 data class CachedQuest(
     val id: String,
     val title: String,
+    val vietnameseTitle: String = "",
     val description: String,
-    val coinReward: Int,
+    val vietnameseDescription: String = "",
+    val iconRes: Int,
+    val rewardCoins: Int,
     val targetProgress: Int,
     val currentProgress: Int,
     val status: String, // QuestStatus name
-    val type: String // QuestType name
+    val type: String, // QuestType name
+    val isSpecial: Boolean = false,
+    val navigationRoute: String = ""
 )
 
 /**
@@ -231,9 +236,10 @@ data class CachedQuest(
 data class CachedDailySummary(
     val completedQuests: Int,
     val totalQuests: Int,
+    val claimedQuests: Int,
     val totalCoinsEarned: Int,
-    val bonusRewardUnlocked: Boolean,
-    val bonusRewardClaimed: Boolean
+    val totalCoinsAvailable: Int,
+    val bonusRewardUnlocked: Boolean
 )
 
 /**

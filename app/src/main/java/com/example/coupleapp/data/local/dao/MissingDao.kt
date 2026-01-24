@@ -22,24 +22,33 @@ interface MissingDao {
     suspend fun getMissingByDate(coupleId: String, userId: String, date: String): MissingEntity?
     
     /**
+     * Get all missing entries for a specific date (for all users in couple)
+     */
+    @Query("SELECT * FROM missing_data WHERE coupleId = :coupleId AND date = :date")
+    suspend fun getMissingByDateOnly(coupleId: String, date: String): List<MissingEntity>
+    
+    /**
      * Get all missing data for a couple within last N days, ordered by date descending
+     * IMPORTANT: Each day can have 2 records (one per user), so we need days * 2 limit
+     * But to be safe with different scenarios, we use days * 3 to ensure we get all data
      */
     @Query("""
         SELECT * FROM missing_data 
         WHERE coupleId = :coupleId 
-        ORDER BY date DESC 
-        LIMIT :days * 2
+        ORDER BY date DESC, userId ASC 
+        LIMIT :days * 3
     """)
     suspend fun getMissingHistory(coupleId: String, days: Int = 7): List<MissingEntity>
     
     /**
      * Observe missing data changes for reactive UI updates
+     * IMPORTANT: Each day can have 2 records (one per user), so we need days * 3 to be safe
      */
     @Query("""
         SELECT * FROM missing_data 
         WHERE coupleId = :coupleId 
-        ORDER BY date DESC 
-        LIMIT :days * 2
+        ORDER BY date DESC, userId ASC 
+        LIMIT :days * 3
     """)
     fun observeMissingHistory(coupleId: String, days: Int = 7): Flow<List<MissingEntity>>
     

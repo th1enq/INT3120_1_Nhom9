@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.ProfileCacheRepository
 import com.google.firebase.database.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -21,6 +22,7 @@ import com.google.firebase.ktx.Firebase
 class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
+    private val profileCache = ProfileCacheRepository.getInstance()
     private val realtimeDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(
         "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
     )
@@ -512,6 +514,10 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
                             "coupleId" to ""
                         )
                     )
+
+                    // Invalidate profile cache to ensure fresh data after unlink
+                    profileCache.invalidateCache()
+                    Log.d(TAG, "🗑️ Profile cache invalidated after unlinking")
 
                     Log.d(TAG, "Partner unlinked successfully")
                     loadData()

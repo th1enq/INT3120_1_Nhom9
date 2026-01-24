@@ -27,7 +27,7 @@ import com.example.coupleapp.data.local.entity.*
         MissingSummaryEntity::class,
         MissingUserProfileEntity::class
     ],
-    version = 2,
+    version = 3, // Bumped: Fixed MissingEntity index to include userId
     exportSchema = true
 )
 abstract class CoupleAppDatabase : RoomDatabase() {

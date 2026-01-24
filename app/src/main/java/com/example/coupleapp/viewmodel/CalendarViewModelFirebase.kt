@@ -334,15 +334,28 @@ class CalendarViewModelFirebase : ViewModel() {
 
     /**
      * Parse date string to LocalDate
+     * Supports both ISO format (YYYY-MM-DD) and DD/MM/YYYY format
      */
     private fun parseDateString(dateString: String): LocalDate {
         return try {
-            if (dateString.isNotEmpty()) {
+            if (dateString.isEmpty()) {
+                return LocalDate.now().minusYears(25)
+            }
+            
+            // Try ISO format first (YYYY-MM-DD)
+            try {
                 LocalDate.parse(dateString, DateTimeFormatter.ISO_LOCAL_DATE)
-            } else {
-                LocalDate.now().minusYears(25)
+            } catch (e: Exception) {
+                // Try DD/MM/YYYY format (used for dateOfBirth during registration)
+                try {
+                    LocalDate.parse(dateString, DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                } catch (e2: Exception) {
+                    Log.e(TAG, "Failed to parse date: $dateString, using default")
+                    LocalDate.now().minusYears(25)
+                }
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Error parsing date string: $dateString", e)
             LocalDate.now().minusYears(25)
         }
     }
@@ -659,6 +672,11 @@ class CalendarViewModelFirebase : ViewModel() {
             ).fold(
                 onSuccess = {
                     Log.d(TAG, "[CALENDAR] ✅ Anniversary saved successfully: $eventId")
+                    // Invalidate cache to ensure fresh data is loaded
+                    viewModelScope.launch {
+                        calendarCache.invalidateCache(coupleId)
+                        Log.d(TAG, "[CALENDAR] 🗑️ Cache invalidated after save")
+                    }
                     loadAnniversaries(coupleId)
                     hideEventDialog()
                 },
@@ -698,6 +716,11 @@ class CalendarViewModelFirebase : ViewModel() {
                     onSuccess = {
                         Log.d(TAG, "[CALENDAR] ✅ Anniversary deleted successfully: $anniversaryId")
                         if (coupleId.isNotEmpty()) {
+                            // Invalidate cache to ensure fresh data is loaded
+                            viewModelScope.launch {
+                                calendarCache.invalidateCache(coupleId)
+                                Log.d(TAG, "[CALENDAR] 🗑️ Cache invalidated after delete")
+                            }
                             loadAnniversaries(coupleId)
                         }
                         hideEventDialog()
@@ -812,6 +835,11 @@ class CalendarViewModelFirebase : ViewModel() {
                 ).fold(
                     onSuccess = {
                         Log.d(TAG, "[CALENDAR] ✅ Nickname updated successfully")
+                        // Invalidate cache to ensure fresh data is loaded
+                        viewModelScope.launch {
+                            calendarCache.invalidateCache(coupleId)
+                            Log.d(TAG, "[CALENDAR] 🗑️ Cache invalidated after nickname update")
+                        }
                         // Reload data to reflect changes
                         loadData()
                     },
@@ -886,6 +914,11 @@ class CalendarViewModelFirebase : ViewModel() {
                     ).fold(
                         onSuccess = {
                             Log.d(TAG, "[CALENDAR] ✅ Created couple document and set anniversary date: $dateString")
+                            // Invalidate cache to ensure fresh data is loaded
+                            viewModelScope.launch {
+                                calendarCache.invalidateCache(coupleId)
+                                Log.d(TAG, "[CALENDAR] 🗑️ Cache invalidated after creating couple")
+                            }
                             loadData()
                         },
                         onFailure = { error ->
@@ -906,6 +939,11 @@ class CalendarViewModelFirebase : ViewModel() {
                 ).fold(
                     onSuccess = {
                         Log.d(TAG, "[CALENDAR] ✅ Anniversary date updated successfully to: $dateString")
+                        // Invalidate cache to ensure fresh data is loaded
+                        viewModelScope.launch {
+                            calendarCache.invalidateCache(coupleId)
+                            Log.d(TAG, "[CALENDAR] 🗑️ Cache invalidated after date update")
+                        }
                         // Reload data to reflect changes
                         loadData()
                     },
@@ -954,6 +992,11 @@ class CalendarViewModelFirebase : ViewModel() {
                 ).fold(
                     onSuccess = {
                         Log.d(TAG, "[CALENDAR] ✅ Background image updated successfully")
+                        // Invalidate cache to ensure fresh data is loaded
+                        viewModelScope.launch {
+                            calendarCache.invalidateCache(coupleId)
+                            Log.d(TAG, "[CALENDAR] 🗑️ Cache invalidated after background update")
+                        }
                         // Update local UI state
                         _uiState.update { state ->
                             state.copy(
@@ -1011,29 +1054,49 @@ class CalendarViewModelFirebase : ViewModel() {
 // ============ Cache Extension Functions ============
 
 /**
+ * Parse date string supporting both ISO (YYYY-MM-DD) and DD/MM/YYYY formats
+ */
+private fun parseDateOfBirthString(dateString: String?): LocalDate {
+    if (dateString.isNullOrEmpty()) {
+        return LocalDate.now().minusYears(25)
+    }
+    return try {
+        // Try ISO format first (YYYY-MM-DD)
+        LocalDate.parse(dateString, DateTimeFormatter.ISO_LOCAL_DATE)
+    } catch (e: Exception) {
+        // Try DD/MM/YYYY format (used for dateOfBirth during registration)
+        try {
+            LocalDate.parse(dateString, DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        } catch (e2: Exception) {
+            LocalDate.now().minusYears(25)
+        }
+    }
+}
+
+/**
  * Convert CachedCalendarProfile to CoupleProfile domain model
  */
 private fun CachedCalendarProfile.toCoupleProfile(): CoupleProfile {
+    val user1DateOfBirth = parseDateOfBirthString(user1DateOfBirth)
+    
     val user1 = CalendarUserProfile(
         id = user1Id,
         name = user1Name,
         nickname = user1Nickname,
-        avatarUrl = user1AvatarUrl,
-        dateOfBirth = user1DateOfBirth?.let { 
-            try { LocalDate.parse(it) } catch (e: Exception) { LocalDate.now().minusYears(25) }
-        } ?: LocalDate.now().minusYears(25),
-        zodiacSign = ZodiacSign.UNKNOWN
+        avatarUrl = user1AvatarUrl ?: "",
+        dateOfBirth = user1DateOfBirth,
+        zodiacSign = ZodiacSign.fromDate(user1DateOfBirth)
     )
+    
+    val user2DateOfBirth = parseDateOfBirthString(user2DateOfBirth)
     
     val user2 = CalendarUserProfile(
         id = user2Id,
         name = user2Name,
         nickname = user2Nickname,
-        avatarUrl = user2AvatarUrl,
-        dateOfBirth = user2DateOfBirth?.let { 
-            try { LocalDate.parse(it) } catch (e: Exception) { LocalDate.now().minusYears(25) }
-        } ?: LocalDate.now().minusYears(25),
-        zodiacSign = ZodiacSign.UNKNOWN
+        avatarUrl = user2AvatarUrl ?: "",
+        dateOfBirth = user2DateOfBirth,
+        zodiacSign = ZodiacSign.fromDate(user2DateOfBirth)
     )
     
     val startDate = try {
@@ -1073,7 +1136,7 @@ private fun CachedCalendarEvent.toAnniversary(): Anniversary? {
         Anniversary(
             id = this.id,
             title = this.title,
-            description = this.description,
+            description = this.description ?: "",
             date = dateTime,
             type = type,
             isRecurring = this.isRecurring,

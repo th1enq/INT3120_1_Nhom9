@@ -223,7 +223,8 @@ fun BonusRewardBanner(
     isUnlocked: Boolean,
     currentStreak: Int,
     onClaimBonus: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isClaimingReward: Boolean = false
 ) {
     Card(
         modifier = modifier
@@ -292,16 +293,26 @@ fun BonusRewardBanner(
             if (isUnlocked) {
                 Button(
                     onClick = onClaimBonus,
+                    enabled = !isClaimingReward,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF6B35)
+                        containerColor = Color(0xFFFF6B35),
+                        disabledContainerColor = Color(0xFFFF6B35).copy(alpha = 0.5f)
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.claim),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                    if (isClaimingReward) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.claim),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             } else {
                 Icon(

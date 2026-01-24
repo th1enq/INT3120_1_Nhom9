@@ -207,7 +207,7 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                     // Load location histories
                     launch {
                         try {
-                            locationRepository.loadLocationHistory(userId, coupleId)
+                            locationRepository.loadLocationHistory(userId, coupleId, isCurrentUser = true)
                             locationRepository.myLocationHistory.collect { history ->
                                 _uiState.update { it.copy(myLocationHistory = history) }
                             }
@@ -218,7 +218,7 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                     
                     launch {
                         try {
-                            locationRepository.loadLocationHistory(partnerId, coupleId)
+                            locationRepository.loadLocationHistory(partnerId, coupleId, isCurrentUser = false)
                             locationRepository.partnerLocationHistory.collect { history ->
                                 _uiState.update { it.copy(partnerLocationHistory = history) }
                             }
@@ -502,9 +502,9 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                     
                     // Reload histories if coupleId is available
                     if (coupleId.isNotEmpty()) {
-                        locationRepository.loadLocationHistory(userId, coupleId)
+                        locationRepository.loadLocationHistory(userId, coupleId, isCurrentUser = true)
                         if (partnerId.isNotEmpty()) {
-                            locationRepository.loadLocationHistory(partnerId, coupleId)
+                            locationRepository.loadLocationHistory(partnerId, coupleId, isCurrentUser = false)
                         }
                     }
                     

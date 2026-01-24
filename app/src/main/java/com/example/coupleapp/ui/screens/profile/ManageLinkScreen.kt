@@ -56,10 +56,14 @@ fun ManageLinkScreen(
         visible = true
     }
     
+    // State for showing loading and error/success messages
+    var isUnlinking by remember { mutableStateOf(false) }
+    var unlinkError by remember { mutableStateOf<String?>(null) }
+    
     // Unlink confirmation dialog
     if (showUnlinkDialog) {
         AlertDialog(
-            onDismissRequest = { showUnlinkDialog = false },
+            onDismissRequest = { if (!isUnlinking) showUnlinkDialog = false },
             title = {
                 Text(
                     text = "Hủy liên kết",
@@ -68,21 +72,62 @@ fun ManageLinkScreen(
                 )
             },
             text = {
-                Text(
-                    text = "Bạn có chắc muốn hủy liên kết với $partnerName? Hành động này không thể hoàn tác và tất cả dữ liệu chia sẻ sẽ bị xóa.",
-                    color = Color(0xFF718096)
-                )
+                Column {
+                    Text(
+                        text = "Bạn có chắc muốn hủy liên kết với $partnerName? Hành động này không thể hoàn tác và tất cả dữ liệu chia sẻ sẽ bị xóa.",
+                        color = Color(0xFF718096)
+                    )
+                    if (isUnlinking) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color(0xFFE53935),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Đang hủy liên kết...",
+                                color = Color(0xFF718096),
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                    unlinkError?.let { error ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = error,
+                            color = Color(0xFFE53935),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showUnlinkDialog = false
-                        onUnlink()
-                    }
+                        isUnlinking = true
+                        unlinkError = null
+                        viewModel.unlinkPartner(
+                            onSuccess = {
+                                isUnlinking = false
+                                showUnlinkDialog = false
+                                onUnlink() // Navigate back after successful unlink
+                            },
+                            onError = { error ->
+                                isUnlinking = false
+                                unlinkError = error
+                            }
+                        )
+                    },
+                    enabled = !isUnlinking
                 ) {
                     Text(
                         text = "Hủy liên kết",
-                        color = Color(0xFFE53935),
+                        color = if (isUnlinking) Color(0xFFBDBDBD) else Color(0xFFE53935),
                         fontWeight = FontWeight.SemiBold
                     )
                 }

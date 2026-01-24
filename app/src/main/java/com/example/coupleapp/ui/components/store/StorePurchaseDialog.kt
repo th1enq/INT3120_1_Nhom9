@@ -51,7 +51,8 @@ fun PurchaseConfirmDialog(
     onPurchaseCoins: (StoreItem) -> Unit,
     onClaimFree: (StoreItem) -> Unit,
     onWatchAd: (StoreItem) -> Unit,
-    onPurchaseReal: (StoreItem) -> Unit
+    onPurchaseReal: (StoreItem) -> Unit,
+    isPurchasing: Boolean = false
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val isVietnamese = Locale.getDefault().language == "vi"
@@ -275,15 +276,16 @@ fun PurchaseConfirmDialog(
         },
         confirmButton = {
             val enabled = when (item.purchaseType) {
-                PurchaseType.FREE_DAILY -> canClaimFree
-                PurchaseType.WATCH_AD -> true
-                PurchaseType.COIN -> userCoins >= (item.coinPrice * quantity)
-                PurchaseType.REAL_MONEY -> true
+                PurchaseType.FREE_DAILY -> canClaimFree && !isPurchasing
+                PurchaseType.WATCH_AD -> !isPurchasing
+                PurchaseType.COIN -> userCoins >= (item.coinPrice * quantity) && !isPurchasing
+                PurchaseType.REAL_MONEY -> !isPurchasing
             }
 
             BeautifulPurchaseButton(
                 purchaseType = item.purchaseType,
                 enabled = enabled,
+                isPurchasing = isPurchasing,
                 onClick = {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     when (item.purchaseType) {
@@ -569,7 +571,8 @@ fun BeautifulDivider() {
 fun BeautifulPurchaseButton(
     purchaseType: PurchaseType,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isPurchasing: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -627,41 +630,49 @@ fun BeautifulPurchaseButton(
             .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Icon based on purchase type
-            when (purchaseType) {
-                PurchaseType.FREE_DAILY -> Text(text = "🎁", fontSize = 20.sp)
-                PurchaseType.WATCH_AD -> androidx.compose.material3.Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-                PurchaseType.COIN -> {
-                    androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color(0xFFFFD700), Color(0xFFDAA520))
-                            )
-                        )
-                        drawCircle(
-                            color = Color(0xFFB8860B),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                        )
-                    }
-                }
-                PurchaseType.REAL_MONEY -> Text(text = "💎", fontSize = 20.sp)
-            }
-            
-            Text(
-                text = buttonText,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+        if (isPurchasing) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = Color.White,
+                strokeWidth = 2.dp
             )
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Icon based on purchase type
+                when (purchaseType) {
+                    PurchaseType.FREE_DAILY -> Text(text = "🎁", fontSize = 20.sp)
+                    PurchaseType.WATCH_AD -> androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    PurchaseType.COIN -> {
+                        androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0xFFFFD700), Color(0xFFDAA520))
+                                )
+                            )
+                            drawCircle(
+                                color = Color(0xFFB8860B),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                            )
+                        }
+                    }
+                    PurchaseType.REAL_MONEY -> Text(text = "💎", fontSize = 20.sp)
+                }
+                
+                Text(
+                    text = buttonText,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
         }
     }
 }
