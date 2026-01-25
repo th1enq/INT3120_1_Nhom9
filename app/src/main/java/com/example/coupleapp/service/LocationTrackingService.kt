@@ -671,7 +671,8 @@ class LocationTrackingService : Service() {
                     
                     // Use unified threshold: 200m
                     if (distance <= SAME_LOCATION_THRESHOLD_METERS) {
-                        // Found active entry at this location - update duration and keep departureTime null
+                        // Found active entry at this location - update duration AND location
+                        // Updating location helps improve accuracy as GPS gets better fixes
                         val arrivalTime = doc.getDate("arrivalTime")
                         val actualDuration = if (arrivalTime != null && arrivalTime.time <= now) {
                             ((now - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
@@ -679,9 +680,18 @@ class LocationTrackingService : Service() {
                             durationMinutes
                         }
                         
-                        doc.reference.update("durationMinutes", actualDuration).await()
+                        val locationName = detectPlaceName(entry.address)
+                        doc.reference.update(
+                            mapOf(
+                                "durationMinutes" to actualDuration,
+                                "latitude" to entry.coordinate.latitude,
+                                "longitude" to entry.coordinate.longitude,
+                                "address" to entry.address,
+                                "locationName" to locationName
+                            )
+                        ).await()
                         android.util.Log.d("LocationTrackingService", 
-                            "Updated active history entry duration: ${actualDuration}min")
+                            "Updated active history entry: ${actualDuration}min + location")
                         foundActiveEntry = true
                         break
                     }
@@ -714,14 +724,20 @@ class LocationTrackingService : Service() {
                                 durationMinutes
                             }
                             
+                            // Reopen entry AND update location for better accuracy
+                            val locationName = detectPlaceName(entry.address)
                             doc.reference.update(
                                 mapOf(
                                     "departureTime" to null,
-                                    "durationMinutes" to actualDuration
+                                    "durationMinutes" to actualDuration,
+                                    "latitude" to entry.coordinate.latitude,
+                                    "longitude" to entry.coordinate.longitude,
+                                    "address" to entry.address,
+                                    "locationName" to locationName
                                 )
                             ).await()
                             android.util.Log.d("LocationTrackingService", 
-                                "Reopened recent history entry for continuous tracking")
+                                "Reopened recent history entry + updated location")
                             merged = true
                             break
                         }

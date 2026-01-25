@@ -318,6 +318,9 @@ class SignificantLocationReceiver : BroadcastReceiver() {
             // Get address
             val address = getAddressFromCoordinate(context, latitude, longitude)
             
+            // Get battery level
+            val batteryLevel = getBatteryLevel(context)
+            
             // Upload to Firebase
             val documentId = "${coupleId}_${userId}"
             val locationData = mapOf(
@@ -328,6 +331,7 @@ class SignificantLocationReceiver : BroadcastReceiver() {
                 "latitude" to latitude,
                 "longitude" to longitude,
                 "address" to address,
+                "batteryLevel" to batteryLevel,
                 "isOnline" to true,
                 "timestamp" to Date(),
                 "source" to "significant_change", // Mark as battery-efficient source
@@ -365,9 +369,11 @@ class SignificantLocationReceiver : BroadcastReceiver() {
             val currentCoord = LocationCoordinate(latitude, longitude)
             
             // Check recent history for nearby locations
+            // IMPORTANT: Must orderBy arrivalTime DESC to get most recent entries first
             val recentHistory = firestore.collection("location_history")
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("coupleId", coupleId)
+                .orderBy("arrivalTime", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(10)
                 .get()
                 .await()
@@ -386,19 +392,31 @@ class SignificantLocationReceiver : BroadcastReceiver() {
             
             if (activeEntry != null) {
                 // Update existing active entry - user is still at same location
+                // Also update coordinates to improve accuracy over time (FREE - no extra battery)
                 val arrivalTime = activeEntry.getDate("arrivalTime")
                 val durationMinutes = if (arrivalTime != null) {
                     ((now.time - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
                 } else 0
                 
-                activeEntry.reference.update("durationMinutes", durationMinutes).await()
-                Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min")
+                // Update duration + location (improves accuracy as GPS gets better fixes)
+                val locationName = address.split(",").firstOrNull()?.trim() ?: address
+                activeEntry.reference.update(
+                    mapOf(
+                        "durationMinutes" to durationMinutes,
+                        "latitude" to latitude,
+                        "longitude" to longitude,
+                        "address" to address,
+                        "locationName" to locationName
+                    )
+                ).await()
+                Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min + location")
                 return
             }
             
-            // No active entry at current location - close any old active entry, then create new
-            val oldActiveEntry = recentHistory.documents.find { it.getDate("departureTime") == null }
-            if (oldActiveEntry != null) {
+            // No active entry at current location - close ALL old active entries, then create new
+            // This ensures we never have multiple ACTIVE entries at the same time
+            val oldActiveEntries = recentHistory.documents.filter { it.getDate("departureTime") == null }
+            for (oldActiveEntry in oldActiveEntries) {
                 val arrivalTime = oldActiveEntry.getDate("arrivalTime")
                 val durationMinutes = if (arrivalTime != null) {
                     ((now.time - arrivalTime.time) / 60_000).toInt()
@@ -519,6 +537,15 @@ class SignificantLocationReceiver : BroadcastReceiver() {
             lower.contains("park") || lower.contains("công viên") -> LocationType.PARK
             lower.contains("hospital") || lower.contains("bệnh viện") -> LocationType.HOSPITAL
             else -> LocationType.OTHER
+        }
+    }
+    
+    private fun getBatteryLevel(context: Context): Int {
+        return try {
+            val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
+            batteryManager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        } catch (e: Exception) {
+            100
         }
     }
     

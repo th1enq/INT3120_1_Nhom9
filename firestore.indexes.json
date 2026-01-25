@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "location_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "coupleId", "order": "ASCENDING" },
+        { "fieldPath": "arrivalTime", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "sleep_records",
       "queryScope": "COLLECTION",
       "fields": [

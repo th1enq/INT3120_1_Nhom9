@@ -398,39 +398,83 @@ class BackgroundLocationWorker(
             val now = System.currentTimeMillis()
             
             // Fetch recent history entries
+            // IMPORTANT: Must orderBy arrivalTime DESC to get most recent entries first
             val recentHistory = db.collection("location_history")
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("coupleId", coupleId)
+                .orderBy("arrivalTime", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(20)
                 .get()
                 .await()
             
             // Step 1: Find ACTIVE entry (no departureTime) within 200m
+            // Since results are ordered by arrivalTime DESC, first match is the LATEST
             var foundActiveEntry: com.google.firebase.firestore.DocumentSnapshot? = null
+            val allActiveEntries = mutableListOf<com.google.firebase.firestore.DocumentSnapshot>()
+            
             for (doc in recentHistory.documents) {
                 val departureTime = doc.getDate("departureTime")
                 if (departureTime != null) continue // Skip closed entries
+                
+                // Collect all ACTIVE entries for later cleanup
+                allActiveEntries.add(doc)
                 
                 val historyLat = doc.getDouble("latitude") ?: continue
                 val historyLng = doc.getDouble("longitude") ?: continue
                 val historyCoord = LocationCoordinate(historyLat, historyLng)
                 
-                if (calculateDistance(coordinate, historyCoord) <= SAME_LOCATION_THRESHOLD_METERS) {
+                // Take FIRST match (which is LATEST due to orderBy DESC)
+                if (foundActiveEntry == null && calculateDistance(coordinate, historyCoord) <= SAME_LOCATION_THRESHOLD_METERS) {
                     foundActiveEntry = doc
-                    break
+                    // Don't break - continue to collect all active entries for cleanup
                 }
             }
             
             if (foundActiveEntry != null) {
-                // Update active entry's duration
+                // Update active entry's duration AND location (to improve accuracy over time)
                 val arrivalTime = foundActiveEntry.getDate("arrivalTime")
                 val durationMinutes = if (arrivalTime != null && arrivalTime.time <= now) {
                     ((now - arrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
                 } else {
                     0
                 }
-                foundActiveEntry.reference.update("durationMinutes", durationMinutes).await()
-                Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min at ${foundActiveEntry.getString("locationName")}")
+                
+                // Update duration + location coordinates (improves accuracy as GPS gets better fixes)
+                // This is FREE - no extra battery cost since we already have the location
+                foundActiveEntry.reference.update(
+                    mapOf(
+                        "durationMinutes" to durationMinutes,
+                        "latitude" to coordinate.latitude,
+                        "longitude" to coordinate.longitude,
+                        "address" to address,
+                        "locationName" to detectPlaceName(address)
+                    )
+                ).await()
+                Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min + location at ${foundActiveEntry.getString("locationName")}")
+                
+                // CLEANUP: Close any OTHER stale ACTIVE entries to prevent duplicates
+                for (staleEntry in allActiveEntries) {
+                    if (staleEntry.id == foundActiveEntry.id) continue // Skip the one we just updated
+                    
+                    val staleArrival = staleEntry.getDate("arrivalTime")
+                    val staleDuration = if (staleArrival != null && staleArrival.time <= now) {
+                        ((now - staleArrival.time) / 60_000).toInt().coerceAtLeast(0)
+                    } else 0
+                    
+                    if (staleDuration >= 3) {
+                        staleEntry.reference.update(
+                            mapOf(
+                                "departureTime" to Date(now),
+                                "durationMinutes" to staleDuration
+                            )
+                        ).await()
+                        Log.d(TAG, "🧹 Cleaned up stale entry: ${staleEntry.getString("locationName")} (${staleDuration}min)")
+                    } else {
+                        staleEntry.reference.delete().await()
+                        Log.d(TAG, "🗑️ Deleted stale short entry: ${staleEntry.getString("locationName")}")
+                    }
+                }
+                
                 return
             }
             
