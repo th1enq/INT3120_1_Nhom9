@@ -167,16 +167,67 @@ class Base64ImageFetcher(
 object Base64ImageDecoder {
     
     /**
-     * Decode base64 string to Bitmap
+     * Decode base64 string to Bitmap with memory-safe handling
+     * Uses sampling to prevent OOM on low-RAM devices
      */
-    fun decodeBase64ToBitmap(base64: String): Bitmap? {
+    fun decodeBase64ToBitmap(base64: String, maxWidth: Int = 1024, maxHeight: Int = 1024): Bitmap? {
         return try {
             val bytes = Base64.decode(base64, Base64.NO_WRAP)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            
+            // First, decode just the bounds to calculate sample size
+            val boundsOptions = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOptions)
+            
+            // Calculate sample size for memory efficiency
+            val sampleSize = calculateInSampleSize(boundsOptions, maxWidth, maxHeight)
+            
+            // Now decode with the calculated sample size
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565 // Uses less memory than ARGB_8888
+            }
+            
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.e("Base64ImageDecoder", "OOM while decoding base64, trying with smaller size", e)
+            // Try again with more aggressive sampling
+            try {
+                val bytes = Base64.decode(base64, Base64.NO_WRAP)
+                val options = BitmapFactory.Options().apply {
+                    inSampleSize = 4 // Reduce to 1/4 size
+                    inPreferredConfig = Bitmap.Config.RGB_565
+                }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+            } catch (e2: Exception) {
+                android.util.Log.e("Base64ImageDecoder", "Failed to decode even with reduced size", e2)
+                null
+            }
         } catch (e: Exception) {
             android.util.Log.e("Base64ImageDecoder", "Failed to decode base64", e)
             null
         }
+    }
+    
+    /**
+     * Calculate an appropriate sample size for BitmapFactory
+     */
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val height = options.outHeight
+        val width = options.outWidth
+        var inSampleSize = 1
+        
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            
+            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        
+        return inSampleSize
     }
     
     /**
@@ -213,6 +264,7 @@ object Base64ImageDecoder {
 
 /**
  * Create a custom ImageLoader that supports base64 images from Firestore
+ * with memory optimization for low-RAM devices
  */
 fun createImageLoaderWithBase64Support(context: Context): ImageLoader {
     return ImageLoader.Builder(context)
@@ -223,5 +275,16 @@ fun createImageLoaderWithBase64Support(context: Context): ImageLoader {
             add(Base64ImageFetcher.Factory())
         }
         .crossfade(true)
+        // Memory optimization for low-RAM devices like Xiaomi Redmi Note 5
+        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+        // Limit memory cache size (default is 25% of app memory, reduce to 15% for low-RAM)
+        .memoryCache {
+            coil.memory.MemoryCache.Builder(context)
+                .maxSizePercent(0.15) // 15% of available memory
+                .build()
+        }
+        // Enable bitmap pooling to reduce allocations
+        .bitmapFactoryMaxParallelism(2) // Limit parallel decoding
         .build()
 }

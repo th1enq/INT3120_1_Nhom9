@@ -322,6 +322,14 @@ class SleepCalendarViewModel(
             } ?: false
         }
     }
+    
+    /**
+     * Clean up resources when ViewModel is destroyed
+     */
+    override fun onCleared() {
+        super.onCleared()
+        Log.d(TAG, "SleepCalendarViewModel cleared")
+    }
 }
 
 /**

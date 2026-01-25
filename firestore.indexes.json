@@ -40,6 +40,14 @@
         { "fieldPath": "coupleId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "sync_triggers",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        { "fieldPath": "targetUserId", "order": "ASCENDING" },
+        { "fieldPath": "processed", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

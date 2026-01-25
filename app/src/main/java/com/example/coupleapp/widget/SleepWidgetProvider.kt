@@ -97,7 +97,9 @@ class SleepWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int
     ) {
-        CoroutineScope(Dispatchers.Main).launch {
+        // Use GlobalScope for widget updates since widgets don't have a lifecycle
+        // but use Dispatchers.Main.immediate for UI operations
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main.immediate) {
             val views = RemoteViews(context.packageName, R.layout.widget_sleep_tracker)
             
             try {

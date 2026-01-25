@@ -83,12 +83,19 @@ fun SleepTrackerScreen(
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshSleepState()
+                // Also check for new data when screen becomes visible
+                viewModel.onScreenVisible()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+    
+    // Check for new data when screen first appears
+    LaunchedEffect(Unit) {
+        viewModel.onScreenVisible()
     }
     
     // Show sync status snackbar

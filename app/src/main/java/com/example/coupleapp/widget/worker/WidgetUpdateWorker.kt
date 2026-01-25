@@ -1,10 +1,15 @@
 package com.example.coupleapp.widget.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.*
+import com.example.coupleapp.R
 import com.example.coupleapp.widget.LocationWidgetProvider
 import com.example.coupleapp.widget.LocketWidgetProvider
 import com.example.coupleapp.widget.MissingWidgetProvider
@@ -41,6 +46,11 @@ class WidgetUpdateWorker(
         const val WIDGET_TYPE_LOCKET = "locket"
         const val WIDGET_TYPE_MISSING = "missing"
         const val WIDGET_TYPE_LOCATION = "location"
+        
+        // Notification ID and channel for foreground service (required for expedited work on Android 11-)
+        private const val WIDGET_UPDATE_NOTIFICATION_ID = 10003
+        private const val CHANNEL_ID_SYNC = "sync_channel"
+        private const val CHANNEL_NAME_SYNC = "Background Sync"
         
         /**
          * Schedule periodic widget updates
@@ -132,6 +142,41 @@ class WidgetUpdateWorker(
             
             WorkManager.getInstance(context).enqueue(bedtimeWorkRequest)
             Log.d(TAG, "Scheduled bedtime update in $delayMinutes minutes")
+        }
+    }
+    
+    /**
+     * Required for expedited work on Android 11 (API 30) and below.
+     * On Android 12+, expedited work uses Android 12's expedited job feature.
+     * On older versions, WorkManager runs the work as a foreground service.
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        createNotificationChannel()
+        
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID_SYNC)
+            .setSmallIcon(R.drawable.ic_heart_notification)
+            .setContentTitle("Đang cập nhật widget")
+            .setContentText("Đang làm mới dữ liệu widget...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        
+        return ForegroundInfo(WIDGET_UPDATE_NOTIFICATION_ID, notification)
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID_SYNC,
+                CHANNEL_NAME_SYNC,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Hiển thị khi đang cập nhật widget"
+                setShowBadge(false)
+            }
+            
+            val notificationManager = applicationContext.getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
@@ -236,16 +281,5 @@ class WidgetUpdateWorker(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update location widget", e)
         }
-    }
-    
-    override suspend fun getForegroundInfo(): ForegroundInfo {
-        // For expedited work on Android 12+
-        val notification = androidx.core.app.NotificationCompat.Builder(context, "widget_update_channel")
-            .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setContentTitle("Đang cập nhật widget...")
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
-            .build()
-        
-        return ForegroundInfo(9999, notification)
     }
 }

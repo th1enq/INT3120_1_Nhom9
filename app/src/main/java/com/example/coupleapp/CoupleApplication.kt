@@ -277,6 +277,75 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         }
     }
     
+    /**
+     * Handle low memory situations from the system.
+     * This is critical for preventing crashes on low-RAM devices like Xiaomi Redmi Note 5.
+     * 
+     * Android calls this method when the system is running low on memory.
+     * We should release any non-critical resources here.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        Log.d("CoupleApplication", "onTrimMemory called with level: $level")
+        
+        when (level) {
+            // App is in background and system is running low on memory
+            TRIM_MEMORY_RUNNING_MODERATE,
+            TRIM_MEMORY_RUNNING_LOW -> {
+                Log.d("CoupleApplication", "System running low on memory, cleaning non-critical caches")
+                // Clean location caches
+                LocationTrackingService.cleanupCaches()
+            }
+            
+            // App is in background, release everything we can
+            TRIM_MEMORY_RUNNING_CRITICAL,
+            TRIM_MEMORY_BACKGROUND,
+            TRIM_MEMORY_MODERATE -> {
+                Log.w("CoupleApplication", "Memory pressure high, releasing caches aggressively")
+                // Clear all caches
+                LocationTrackingService.cleanupCaches()
+                // Clear Coil image cache
+                try {
+                    Coil.imageLoader(this).memoryCache?.clear()
+                } catch (e: Exception) {
+                    Log.e("CoupleApplication", "Error clearing Coil cache", e)
+                }
+            }
+            
+            // App will be killed soon, release everything
+            TRIM_MEMORY_COMPLETE -> {
+                Log.w("CoupleApplication", "App may be killed, releasing all resources")
+                LocationTrackingService.resetAllCaches()
+                try {
+                    Coil.imageLoader(this).memoryCache?.clear()
+                } catch (e: Exception) {
+                    Log.e("CoupleApplication", "Error clearing Coil cache", e)
+                }
+            }
+            
+            // UI is hidden, release UI-related resources
+            TRIM_MEMORY_UI_HIDDEN -> {
+                Log.d("CoupleApplication", "UI hidden, releasing UI resources")
+                // This is a good time to release cached bitmaps
+                LocationTrackingService.cleanupCaches()
+            }
+        }
+    }
+    
+    /**
+     * Handle low memory callback (legacy, but still called)
+     */
+    override fun onLowMemory() {
+        super.onLowMemory()
+        Log.w("CoupleApplication", "onLowMemory called, releasing all caches")
+        LocationTrackingService.resetAllCaches()
+        try {
+            Coil.imageLoader(this).memoryCache?.clear()
+        } catch (e: Exception) {
+            Log.e("CoupleApplication", "Error clearing Coil cache", e)
+        }
+    }
+    
     override fun onTerminate() {
         super.onTerminate()
         Log.d("CoupleApplication", "Application terminating, cleaning up resources")

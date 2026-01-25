@@ -204,26 +204,29 @@ class DistanceViewModel(application: Application) : AndroidViewModel(application
                         }
                     }
                     
-                    // Load location histories
+                    // Load location histories with REAL-TIME LISTENERS
+                    // This ensures both users see each other's history updates immediately
                     launch {
                         try {
-                            locationRepository.loadLocationHistory(userId, coupleId, isCurrentUser = true)
-                            locationRepository.myLocationHistory.collect { history ->
+                            android.util.Log.d("DistanceViewModel", ">>> Starting real-time listener for MY location history")
+                            locationRepository.listenToLocationHistory(userId, coupleId, isCurrentUser = true).collect { history ->
+                                android.util.Log.d("DistanceViewModel", "My location history updated: ${history.size} entries")
                                 _uiState.update { it.copy(myLocationHistory = history) }
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("DistanceViewModel", "Error loading my location history", e)
+                            android.util.Log.e("DistanceViewModel", "Error listening to my location history", e)
                         }
                     }
                     
                     launch {
                         try {
-                            locationRepository.loadLocationHistory(partnerId, coupleId, isCurrentUser = false)
-                            locationRepository.partnerLocationHistory.collect { history ->
+                            android.util.Log.d("DistanceViewModel", ">>> Starting real-time listener for PARTNER location history")
+                            locationRepository.listenToLocationHistory(partnerId, coupleId, isCurrentUser = false).collect { history ->
+                                android.util.Log.d("DistanceViewModel", "Partner location history updated: ${history.size} entries")
                                 _uiState.update { it.copy(partnerLocationHistory = history) }
                             }
                         } catch (e: Exception) {
-                            android.util.Log.e("DistanceViewModel", "Error loading partner location history", e)
+                            android.util.Log.e("DistanceViewModel", "Error listening to partner location history", e)
                         }
                     }
                     

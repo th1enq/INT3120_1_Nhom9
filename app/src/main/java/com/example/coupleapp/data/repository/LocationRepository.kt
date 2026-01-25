@@ -522,6 +522,78 @@ class LocationRepository(
     }
     
     /**
+     * Listen to location history changes in real-time for a user.
+     * This allows both users in a couple to see each other's history updates immediately.
+     * 
+     * @param userId The user ID to listen history for
+     * @param coupleId The couple ID
+     * @param isCurrentUser TRUE if listening for current user (updates myLocationHistory), FALSE for partner
+     */
+    fun listenToLocationHistory(userId: String, coupleId: String, isCurrentUser: Boolean = true): Flow<List<LocationHistory>> = callbackFlow {
+        // Validate inputs
+        if (userId.isEmpty() || coupleId.isEmpty()) {
+            android.util.Log.w("LocationRepository", "Cannot listen to location history: userId or coupleId is empty")
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
+        
+        android.util.Log.d("LocationRepository", "Starting real-time listener for location history - userId=$userId, coupleId=$coupleId, isCurrentUser=$isCurrentUser")
+        
+        // Calculate cutoff date for filtering (3 days ago)
+        val threeDaysAgo = java.time.LocalDate.now().minusDays(3)
+        
+        val subscription = db.collection(LOCATION_HISTORY_COLLECTION)
+            .whereEqualTo("userId", userId)
+            .whereEqualTo("coupleId", coupleId)
+            .limit(100)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.e("LocationRepository", "Error listening to location history for ${if (isCurrentUser) "current user" else "partner"}", error)
+                    return@addSnapshotListener
+                }
+                
+                if (snapshot != null) {
+                    android.util.Log.d("LocationRepository", "Location history snapshot received: ${snapshot.documents.size} documents for ${if (isCurrentUser) "current user" else "partner"}")
+                    
+                    val rawHistory = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            val history = doc.toObject(FirebaseLocationHistory::class.java)?.toLocationHistory()
+                            // Filter to only last 3 days
+                            if (history != null && history.arrivalTime.toLocalDate() >= threeDaysAgo) {
+                                history
+                            } else {
+                                null
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("LocationRepository", "Error parsing history doc: ${doc.id}", e)
+                            null
+                        }
+                    }.sortedByDescending { it.arrivalTime }
+                    
+                    // Process and clean the history data
+                    val cleanedHistory = processLocationHistory(rawHistory)
+                    
+                    android.util.Log.d("LocationRepository", "Processed ${cleanedHistory.size} history entries for ${if (isCurrentUser) "current user" else "partner"}")
+                    
+                    // Update the appropriate StateFlow
+                    if (isCurrentUser) {
+                        _myLocationHistory.value = cleanedHistory
+                    } else {
+                        _partnerLocationHistory.value = cleanedHistory
+                    }
+                    
+                    trySend(cleanedHistory)
+                }
+            }
+        
+        awaitClose {
+            android.util.Log.d("LocationRepository", "Stopped listening to location history for ${if (isCurrentUser) "current user" else "partner"}")
+            subscription.remove()
+        }
+    }
+    
+    /**
      * Process location history for display:
      * 1. Sort by arrival time (most recent first)
      * 2. Fix swapped times (departureTime < arrivalTime)

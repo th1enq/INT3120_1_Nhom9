@@ -898,4 +898,12 @@ class StoreViewModelFirebase(
     fun clearPurchaseResult() {
         _uiState.update { it.copy(purchaseResult = null) }
     }
+    
+    /**
+     * Clean up resources when ViewModel is destroyed
+     */
+    override fun onCleared() {
+        super.onCleared()
+        Log.d(TAG, "StoreViewModelFirebase cleared")
+    }
 }

@@ -646,6 +646,14 @@ class ProfileViewModel : ViewModel() {
             }
         }
     }
+    
+    /**
+     * Clean up resources when ViewModel is destroyed
+     */
+    override fun onCleared() {
+        super.onCleared()
+        Log.d(TAG, "ProfileViewModel cleared")
+    }
 }
 
 /**

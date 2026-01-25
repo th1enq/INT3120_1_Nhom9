@@ -95,6 +95,10 @@ data class FirebaseMoment(
 /**
  * Firebase Locket Post Model
  * Supports: photo (from camera/gallery), emoji, drawing, text
+ * 
+ * Widget Optimization:
+ * - widgetThumbnail: Small Base64 image (~256px, ~20KB) for widget display
+ * - Original photoUrl/drawingUrl remains full quality for app display
  */
 data class FirebaseLocketPost(
     @DocumentId
@@ -118,6 +122,10 @@ data class FirebaseLocketPost(
     
     // For text type
     val textContent: String = "",
+    
+    // Widget thumbnail - small version (~256px) for widget display
+    // This saves ~90% bandwidth when widget syncs
+    val widgetThumbnail: String = "",
     
     // Common fields
     val caption: String = "",

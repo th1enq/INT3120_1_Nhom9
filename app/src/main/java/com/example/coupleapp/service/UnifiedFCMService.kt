@@ -80,9 +80,29 @@ class UnifiedFCMService : FirebaseMessagingService() {
         private const val NOTIFICATION_ID_MISSING = 2002
         private const val NOTIFICATION_ID_LOCKET = 2003
         
-        // Deduplication: Track recently shown notifications
-        private val recentNotifications = mutableMapOf<String, Long>()
+        // Deduplication: Track recently shown notifications with bounded size
+        private val recentNotifications = object : LinkedHashMap<String, Long>(50, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+                // Remove oldest entries when size exceeds 50 OR when entry is older than dedup window
+                if (size > 50) return true
+                eldest?.let {
+                    if (System.currentTimeMillis() - it.value > NOTIFICATION_DEDUP_WINDOW_MS * 2) {
+                        return true
+                    }
+                }
+                return false
+            }
+        }
         private const val NOTIFICATION_DEDUP_WINDOW_MS = 5000L // 5 seconds window
+        
+        /**
+         * Clear stale entries from deduplication map
+         * Called periodically to prevent memory buildup
+         */
+        fun cleanupRecentNotifications() {
+            val now = System.currentTimeMillis()
+            recentNotifications.entries.removeIf { now - it.value > NOTIFICATION_DEDUP_WINDOW_MS * 2 }
+        }
         
         // Data payload keys
         private const val KEY_TYPE = "type"

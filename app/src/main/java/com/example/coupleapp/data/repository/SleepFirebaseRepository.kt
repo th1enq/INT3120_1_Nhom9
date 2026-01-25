@@ -1142,40 +1142,6 @@ class SleepFirebaseRepository(
     }
     
     /**
-     * Save sleep classification data
-     */
-    suspend fun saveSleepClassification(
-        userId: String,
-        confidence: Int,
-        motion: Int,
-        light: Int,
-        timestampMillis: Long
-    ): Result<String> {
-        return try {
-            val timestamp = Timestamp(Date(timestampMillis))
-            
-            val classification = FirebaseSleepClassification(
-                userId = userId,
-                confidence = confidence,
-                motion = motion,
-                light = light,
-                timestamp = timestamp
-            )
-            
-            val docRef = firestore.collection("sleep_classifications")
-                .document()
-            
-            docRef.set(classification.copy(id = docRef.id)).await()
-            
-            Log.d(TAG, "saveSleepClassification: Saved ${docRef.id}")
-            Result.success(docRef.id)
-        } catch (e: Exception) {
-            Log.e(TAG, "saveSleepClassification: Error", e)
-            Result.failure(e)
-        }
-    }
-    
-    /**
      * Get couple ID for user
      */
     private suspend fun getCoupleId(userId: String): Result<String> {

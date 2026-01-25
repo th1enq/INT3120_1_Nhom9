@@ -35,6 +35,7 @@ class SleepCacheRepository(
         private const val KEY_SLEEP_HISTORY = "sleep_history"
         private const val KEY_TODAY_RECORD = "today_record"
         private const val KEY_LAST_HISTORY_DATE = "last_history_date"
+        private const val KEY_HISTORY_CACHED_DATE = "history_cached_date"
         
         // Cache freshness durations
         const val SETTINGS_FRESHNESS_MS = 60 * 60 * 1000L       // 1 hour - settings rarely change
@@ -122,19 +123,42 @@ class SleepCacheRepository(
     suspend fun cacheHistory(userId: String, history: List<FirebaseSleepRecord>) = withContext(Dispatchers.IO) {
         try {
             val key = "${KEY_SLEEP_HISTORY}_$userId"
+            val dateKey = "${KEY_HISTORY_CACHED_DATE}_$userId"
             val json = gson.toJson(history)
-            prefs.edit().putString(key, json).apply()
+            val today = java.time.LocalDate.now().toString()
+            prefs.edit()
+                .putString(key, json)
+                .putString(dateKey, today)
+                .apply()
             CacheManager.recordSync(context, CacheManager.DataType.SLEEP_DATA, "history_$userId")
-            Log.d(TAG, "📦 Cached ${history.size} sleep records for user: $userId")
+            Log.d(TAG, "📦 Cached ${history.size} sleep records for user: $userId on $today")
         } catch (e: Exception) {
             Log.e(TAG, "Error caching history", e)
         }
     }
     
     /**
-     * Check if history cache is fresh
+     * Check if history cache is fresh.
+     * 
+     * IMPORTANT: Also checks if the cache was made on a different day.
+     * If day changed → cache is stale (new sleep data may be available).
+     * 
+     * This fixes the issue where entering Sleep screen shows yesterday's data
+     * even though today's data is available on Firebase.
      */
     fun isHistoryCacheFresh(userId: String): Boolean {
+        // First check: Did the day change since we cached?
+        val dateKey = "${KEY_HISTORY_CACHED_DATE}_$userId"
+        val cachedDate = prefs.getString(dateKey, null)
+        val today = java.time.LocalDate.now().toString()
+        
+        if (cachedDate != null && cachedDate != today) {
+            // Day changed! Cache is stale regardless of time
+            Log.d(TAG, "📅 Day changed from $cachedDate to $today, history cache is stale")
+            return false
+        }
+        
+        // Second check: Normal time-based freshness
         return CacheManager.isCacheFresh(
             context,
             CacheManager.DataType.SLEEP_DATA,
@@ -229,6 +253,7 @@ class SleepCacheRepository(
             .remove("${KEY_SLEEP_SETTINGS}_$userId")
             .remove("${KEY_SLEEP_HISTORY}_$userId")
             .remove("${KEY_TODAY_RECORD}_$userId")
+            .remove("${KEY_HISTORY_CACHED_DATE}_$userId")
             .apply()
         CacheManager.invalidateCache(context, CacheManager.DataType.SLEEP_DATA, "settings_$userId")
         CacheManager.invalidateCache(context, CacheManager.DataType.SLEEP_DATA, "history_$userId")

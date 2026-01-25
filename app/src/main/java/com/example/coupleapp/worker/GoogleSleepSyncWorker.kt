@@ -1,9 +1,14 @@
 package com.example.coupleapp.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.*
+import com.example.coupleapp.R
 import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.example.coupleapp.data.sleep.GoogleSleepApiManager
 import com.example.coupleapp.receiver.SleepReceiver
@@ -48,6 +53,11 @@ class GoogleSleepSyncWorker(
         
         // Minimum sleep duration to consider valid (60 minutes)
         private const val MIN_SLEEP_DURATION_MS = 60 * 60 * 1000L
+        
+        // Notification ID and channel for foreground service (required for expedited work on Android 11-)
+        private const val SLEEP_SYNC_NOTIFICATION_ID = 10002
+        private const val CHANNEL_ID_SYNC = "sync_channel"
+        private const val CHANNEL_NAME_SYNC = "Background Sync"
         
         /**
          * Schedule aggressive morning sync (multiple times between 5:30 AM - 12:00 PM)
@@ -164,6 +174,41 @@ class GoogleSleepSyncWorker(
         }
     }
     
+    /**
+     * Required for expedited work on Android 11 (API 30) and below.
+     * On Android 12+, expedited work uses Android 12's expedited job feature.
+     * On older versions, WorkManager runs the work as a foreground service.
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        createNotificationChannel()
+        
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID_SYNC)
+            .setSmallIcon(R.drawable.ic_heart_notification)
+            .setContentTitle("Đang đồng bộ giấc ngủ")
+            .setContentText("Đang cập nhật dữ liệu giấc ngủ...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        
+        return ForegroundInfo(SLEEP_SYNC_NOTIFICATION_ID, notification)
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID_SYNC,
+                CHANNEL_NAME_SYNC,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Hiển thị khi đang đồng bộ dữ liệu"
+                setShowBadge(false)
+            }
+            
+            val notificationManager = applicationContext.getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Starting Google Sleep sync work")
@@ -198,6 +243,9 @@ class GoogleSleepSyncWorker(
             } else {
                 Log.d(TAG, "No sleep data to sync")
             }
+            
+            // Cleanup stale SharedPreferences state (handles stuck state from crashes/reboots)
+            cleanupStaleLocalState(prefs)
             
             // Re-schedule morning syncs for tomorrow
             scheduleAggressiveMorningSync(context)
@@ -353,5 +401,48 @@ class GoogleSleepSyncWorker(
             .putString(KEY_SLEEP_DATE, "")
             .putBoolean(KEY_ALREADY_SYNCED_TODAY, false)
             .apply()
+    }
+    
+    /**
+     * Cleanup stale local state in SharedPreferences.
+     * 
+     * Handles cases like:
+     * - State from days ago that was never properly reset
+     * - Corrupted data from crashes
+     */
+    private fun cleanupStaleLocalState(prefs: SharedPreferences) {
+        try {
+            val sleepDate = prefs.getString(KEY_SLEEP_DATE, "") ?: ""
+            val lastEventTime = prefs.getLong(KEY_LAST_EVENT_TIME, 0L)
+            val now = System.currentTimeMillis()
+            
+            // If no sleep date set, nothing to cleanup
+            if (sleepDate.isEmpty() && lastEventTime == 0L) {
+                return
+            }
+            
+            val todayDate = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+                .format(java.util.Date())
+            val currentHour = LocalTime.now().hour
+            
+            // Case 1: Sleep date is from previous days and it's past noon
+            if (sleepDate.isNotEmpty() && sleepDate != todayDate && currentHour >= 12) {
+                Log.d(TAG, "Cleaning up stale state from date $sleepDate (today=$todayDate)")
+                resetSleepState(prefs)
+                return
+            }
+            
+            // Case 2: Last event was more than 24 hours ago
+            val timeSinceLastEvent = now - lastEventTime
+            if (lastEventTime > 0 && timeSinceLastEvent > 24 * 60 * 60 * 1000L) {
+                Log.d(TAG, "Cleaning up stale state (last event ${timeSinceLastEvent / 1000 / 60 / 60}h ago)")
+                resetSleepState(prefs)
+                return
+            }
+            
+            Log.d(TAG, "Local state is fresh, no cleanup needed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during local state cleanup", e)
+        }
     }
 }

@@ -55,6 +55,7 @@ class SleepTrackerViewModelFirebase(
         )
 
     private var loadDataJob: Job? = null
+    private var lastLoadDate: String? = null
 
     init {
         Log.d(TAG, "SleepTrackerViewModelFirebase initialized")
@@ -62,6 +63,44 @@ class SleepTrackerViewModelFirebase(
         checkAndAutoSync()
         checkActiveSleepSession()
         checkGoogleSleepApiStatus()
+    }
+    
+    /**
+     * Called when user navigates to Sleep screen.
+     * Checks if data needs refresh (new day, or stale cache).
+     * 
+     * This fixes the issue where:
+     * - User opens app in the morning
+     * - Sleep data arrived at 11:34 AM
+     * - But cache shows yesterday's data
+     * - Now: Force refresh if new day or cache is stale
+     */
+    fun onScreenVisible() {
+        val today = java.time.LocalDate.now().toString()
+        val userId = auth.currentUser?.uid ?: return
+        
+        // Check if we need to refresh (new day or stale cache)
+        val needsRefresh = lastLoadDate != today || 
+                           sleepCache?.isHistoryCacheFresh(userId) != true ||
+                           sleepCache?.isTodayRecordCacheFresh(userId) != true
+        
+        if (needsRefresh) {
+            Log.d(TAG, "📅 Screen visible: refreshing data (lastLoad=$lastLoadDate, today=$today)")
+            lastLoadDate = today
+            
+            // Show loading only briefly, then refresh
+            viewModelScope.launch {
+                // Invalidate stale today record cache
+                if (sleepCache?.isTodayRecordCacheFresh(userId) != true) {
+                    sleepCache?.clearTodayRecord(userId)
+                }
+                
+                // Refresh from Firebase
+                loadUserDataAndUpdateCache(userId, isInitialLoad = false, showLoading = false)
+            }
+        } else {
+            Log.d(TAG, "📅 Screen visible: cache is fresh, no refresh needed")
+        }
     }
     
     /**

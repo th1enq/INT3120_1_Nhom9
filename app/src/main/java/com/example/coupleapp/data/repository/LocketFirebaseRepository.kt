@@ -55,6 +55,45 @@ class LocketFirebaseRepository(
     }
     
     /**
+     * Create a small thumbnail for widget display.
+     * Widget only needs ~256px image, so we can save ~90% bandwidth.
+     * 
+     * Original: 800px @ 60% quality = ~100-200KB
+     * Thumbnail: 256px @ 50% quality = ~10-20KB
+     */
+    private fun createWidgetThumbnail(bitmap: Bitmap): String {
+        val thumbnailSize = 256
+        val quality = 50
+        
+        // Calculate dimensions maintaining aspect ratio
+        val maxDimension = maxOf(bitmap.width, bitmap.height)
+        val scale = if (maxDimension > thumbnailSize) {
+            thumbnailSize.toFloat() / maxDimension
+        } else {
+            1f
+        }
+        
+        val newWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val newHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        
+        val thumbnail = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        
+        // Compress to JPEG
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        thumbnail.compress(Bitmap.CompressFormat.JPEG, quality, byteArrayOutputStream)
+        val byteArray = byteArrayOutputStream.toByteArray()
+        
+        // Recycle if we created a new bitmap
+        if (thumbnail != bitmap) {
+            thumbnail.recycle()
+        }
+        
+        Log.d(TAG, "Created widget thumbnail: ${newWidth}x${newHeight}, size: ${byteArray.size / 1024}KB")
+        
+        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    }
+    
+    /**
      * Send a photo locket (from camera or gallery)
      * Uses Base64 encoding to store directly in Firestore (no Storage needed)
      */
@@ -74,8 +113,13 @@ class LocketFirebaseRepository(
             val base64Image = bitmapToBase64(bitmap, maxWidth = 800, quality = 60)
             Log.d(TAG, "sendPhotoLocket: Base64 size: ${base64Image.length} chars")
             
+            // Create widget thumbnail (small version for widget display)
+            Log.d(TAG, "sendPhotoLocket: Creating widget thumbnail")
+            val widgetThumbnail = createWidgetThumbnail(bitmap)
+            Log.d(TAG, "sendPhotoLocket: Thumbnail size: ${widgetThumbnail.length} chars")
+            
             // Check if too large for Firestore (max 1MB per document)
-            if (base64Image.length > 900000) { // Leave buffer for other fields
+            if (base64Image.length + widgetThumbnail.length > 900000) { // Leave buffer for other fields
                 Log.e(TAG, "sendPhotoLocket: Image too large after compression")
                 return Result.failure(Exception("Image too large, please try a smaller image"))
             }
@@ -92,7 +136,7 @@ class LocketFirebaseRepository(
             val coupleId = userDoc.getString("coupleId") ?: ""
             Log.d(TAG, "sendPhotoLocket: User info - name: $userName, coupleId: $coupleId")
             
-            // Create locket post with Base64 data
+            // Create locket post with Base64 data + widget thumbnail
             val locketPost = FirebaseLocketPost(
                 coupleId = coupleId,
                 senderId = currentUser.uid,
@@ -101,12 +145,13 @@ class LocketFirebaseRepository(
                 receiverId = receiverId,
                 receiverName = receiverName,
                 type = "photo",
-                photoUrl = base64Image, // Store Base64 directly
+                photoUrl = base64Image, // Store Base64 directly (full quality)
+                widgetThumbnail = widgetThumbnail, // Small version for widget
                 caption = caption
             )
             
             // Save to Firestore
-            Log.d(TAG, "sendPhotoLocket: Saving to Firestore")
+            Log.d(TAG, "sendPhotoLocket: Saving to Firestore (with thumbnail)")
             val docRef = firestore.collection(LOCKET_POSTS_COLLECTION)
                 .add(locketPost)
                 .await()
@@ -182,8 +227,13 @@ class LocketFirebaseRepository(
             val base64Image = bitmapToBase64(drawingBitmap, maxWidth = 800, quality = 70)
             Log.d(TAG, "sendDrawingLocket: Base64 size: ${base64Image.length} chars")
             
+            // Create widget thumbnail (small version for widget display)
+            Log.d(TAG, "sendDrawingLocket: Creating widget thumbnail")
+            val widgetThumbnail = createWidgetThumbnail(drawingBitmap)
+            Log.d(TAG, "sendDrawingLocket: Thumbnail size: ${widgetThumbnail.length} chars")
+            
             // Check if too large for Firestore
-            if (base64Image.length > 900000) {
+            if (base64Image.length + widgetThumbnail.length > 900000) {
                 Log.e(TAG, "sendDrawingLocket: Drawing too large after compression")
                 return Result.failure(Exception("Drawing too large"))
             }
@@ -200,7 +250,7 @@ class LocketFirebaseRepository(
             val coupleId = userDoc.getString("coupleId") ?: ""
             Log.d(TAG, "sendDrawingLocket: User info - name: $userName, coupleId: $coupleId")
             
-            // Create locket post with Base64 data
+            // Create locket post with Base64 data + widget thumbnail
             val locketPost = FirebaseLocketPost(
                 coupleId = coupleId,
                 senderId = currentUser.uid,
@@ -209,11 +259,12 @@ class LocketFirebaseRepository(
                 receiverId = receiverId,
                 receiverName = receiverName,
                 type = "drawing",
-                drawingUrl = base64Image // Store Base64 directly
+                drawingUrl = base64Image, // Store Base64 directly (full quality)
+                widgetThumbnail = widgetThumbnail // Small version for widget
             )
             
             // Save to Firestore
-            Log.d(TAG, "sendDrawingLocket: Saving to Firestore")
+            Log.d(TAG, "sendDrawingLocket: Saving to Firestore (with thumbnail)")
             val docRef = firestore.collection(LOCKET_POSTS_COLLECTION)
                 .add(locketPost)
                 .await()

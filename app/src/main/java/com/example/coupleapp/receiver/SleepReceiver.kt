@@ -11,6 +11,7 @@ import com.example.coupleapp.data.repository.SleepFirebaseRepository
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.SupervisorJob
 import java.text.SimpleDateFormat
@@ -85,15 +86,16 @@ class SleepReceiver : BroadcastReceiver() {
         private const val MAX_EVENT_GAP_MS = 3 * 60 * 60 * 1000L // 3 hours
     }
     
-    private val job = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.IO + job)
-    
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "onReceive: action=${intent.action}")
         
         // Use goAsync() to allow more time for coroutine processing
         // BroadcastReceiver normally has ~10s timeout
         val pendingResult = goAsync()
+        
+        // Create a scope that will be properly cancelled after work completes
+        // This prevents memory leaks from long-lived coroutine scopes in receivers
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         
         scope.launch {
             try {
@@ -116,6 +118,8 @@ class SleepReceiver : BroadcastReceiver() {
             } finally {
                 // Must call finish() when done to release the BroadcastReceiver
                 pendingResult.finish()
+                // Cancel scope to prevent memory leaks
+                scope.cancel()
             }
         }
     }

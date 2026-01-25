@@ -406,7 +406,8 @@ object WidgetDataRepository {
                     type = type,
                     caption = photoEntity.caption,
                     timestamp = photoEntity.timestamp,
-                    hasNewLocket = !photoEntity.isRead
+                    hasNewLocket = !photoEntity.isRead,
+                    widgetThumbnail = null // Room doesn't store thumbnail separately, use full content
                 )
             } else {
                 null
@@ -452,6 +453,9 @@ object WidgetDataRepository {
         val timestamp = doc.getTimestamp("timestamp")?.toDate()?.time ?: 0L
         val isRead = doc.getBoolean("isRead") ?: false
         
+        // Get widget thumbnail if available (optimized for widget)
+        val widgetThumbnail = doc.getString("widgetThumbnail")
+        
         // Get content based on type - each type has its own field
         val content = when (typeStr.lowercase()) {
             "photo" -> doc.getString("photoUrl") ?: ""
@@ -464,13 +468,21 @@ object WidgetDataRepository {
         // Convert type to uppercase for widget display consistency
         val type = typeStr.uppercase()
         
+        // Log thumbnail availability
+        if (widgetThumbnail != null) {
+            Log.d(TAG, "✅ Widget thumbnail available (${widgetThumbnail.length} chars)")
+        } else {
+            Log.d(TAG, "⚠️ No widget thumbnail, will use full content")
+        }
+        
         return LocketWidgetCachedData(
             senderName = senderName,
             content = content,
             type = type,
             caption = caption.ifEmpty { null },
             timestamp = timestamp,
-            hasNewLocket = !isRead
+            hasNewLocket = !isRead,
+            widgetThumbnail = widgetThumbnail
         )
     }
     
@@ -986,7 +998,10 @@ data class LocketWidgetCachedData(
     val type: String,
     val caption: String?,
     val timestamp: Long,
-    val hasNewLocket: Boolean
+    val hasNewLocket: Boolean,
+    // Widget thumbnail - small version for efficient widget display
+    // If available, widget should use this instead of full content
+    val widgetThumbnail: String? = null
 )
 
 data class MissingWidgetCachedData(

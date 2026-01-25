@@ -13,6 +13,7 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -57,8 +58,6 @@ class SleepAlarmReceiver : BroadcastReceiver() {
         private const val TAG = "SleepAlarmReceiver"
     }
     
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "⏰ Sleep alarm triggered at ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
         
@@ -67,6 +66,13 @@ class SleepAlarmReceiver : BroadcastReceiver() {
             Log.d(TAG, "No user logged in, skipping")
             return
         }
+        
+        // Use goAsync() for proper BroadcastReceiver async handling
+        // This prevents memory leaks from orphaned coroutines
+        val pendingResult = goAsync()
+        
+        // Create a scope that will be properly cancelled after work completes
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         
         scope.launch {
             try {
@@ -82,11 +88,15 @@ class SleepAlarmReceiver : BroadcastReceiver() {
                 Log.d(TAG, "✅ Sleep alarm handled successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Error handling sleep alarm", e)
+            } finally {
+                // CRITICAL: Release the BroadcastReceiver and cancel scope
+                pendingResult.finish()
+                scope.cancel()
             }
         }
     }
     
-    private fun ensureSleepApiRegistered(context: Context) {
+    private suspend fun ensureSleepApiRegistered(context: Context) {
         try {
             val googleSleepManager = GoogleSleepApiManager(context)
             

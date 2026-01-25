@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.util.Log
+import com.example.coupleapp.widget.cache.WidgetImageCache
 import com.example.coupleapp.widget.data.WidgetDataRepository
 import com.example.coupleapp.widget.observer.WidgetFirestoreObserver
 import com.example.coupleapp.widget.worker.WidgetUpdateWorker
@@ -14,12 +15,14 @@ import kotlinx.coroutines.launch
 /**
  * Centralized manager for all app widgets
  * 
- * Battery Optimization Strategies:
+ * Battery & Data Optimization Strategies:
  * 1. Aggressive Caching - WidgetDataRepository handles SharedPreferences caching
- * 2. WorkManager Integration - Respects Doze mode and App Standby
- * 3. Smart Invalidation - Only refresh when data actually changes
- * 4. Coalesced Updates - Batch multiple update requests
- * 5. Expedited Work - For time-sensitive updates (new Locket, etc.)
+ * 2. Image Cache - WidgetImageCache stores decoded bitmaps on disk
+ * 3. Widget Thumbnails - Small versions of images for efficient widget sync
+ * 4. WorkManager Integration - Respects Doze mode and App Standby
+ * 5. Smart Invalidation - Only refresh when data actually changes
+ * 6. Coalesced Updates - Batch multiple update requests
+ * 7. Expedited Work - For time-sensitive updates (new Locket, etc.)
  * 
  * Update Intervals:
  * - Sleep: 30 minutes (matches bedtime cycle)
@@ -101,7 +104,8 @@ object WidgetManager {
      */
     fun onLocketUpdated(context: Context) {
         Log.d(TAG, "Locket data changed, updating widget")
-        CoroutineScope(Dispatchers.Main).launch {
+        // Use GlobalScope for widget updates since widgets don't have a lifecycle
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main.immediate) {
             LocketWidgetProvider.onNewLocketReceived(context)
         }
     }
@@ -112,7 +116,7 @@ object WidgetManager {
      */
     fun onMissingUpdated(context: Context) {
         Log.d(TAG, "Missing data changed, updating widget")
-        CoroutineScope(Dispatchers.Main).launch {
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main.immediate) {
             MissingWidgetProvider.onMissingReceived(context)
         }
     }
@@ -123,7 +127,7 @@ object WidgetManager {
      */
     fun onLocationUpdated(context: Context) {
         Log.d(TAG, "Location data changed, updating widget")
-        CoroutineScope(Dispatchers.Main).launch {
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main.immediate) {
             LocationWidgetProvider.onLocationChanged(context)
         }
     }
@@ -134,7 +138,7 @@ object WidgetManager {
      */
     fun onSleepDataUpdated(context: Context) {
         Log.d(TAG, "Sleep data changed, updating widget")
-        CoroutineScope(Dispatchers.Main).launch {
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.Main.immediate) {
             WidgetDataRepository.invalidateSleepCache(context)
             SleepWidgetProvider.updateWidgets(context)
         }
@@ -156,6 +160,7 @@ object WidgetManager {
     fun clearAllWidgetData(context: Context) {
         Log.d(TAG, "Clearing all widget cache data")
         WidgetDataRepository.clearCache(context)
+        WidgetImageCache.clearAll(context) // Clear image cache too
         WidgetUpdateWorker.cancelPeriodicUpdates(context)
         WidgetFirestoreObserver.stopObserving()
         updateAllWidgets(context)

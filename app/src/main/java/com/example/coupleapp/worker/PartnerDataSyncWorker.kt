@@ -1,11 +1,16 @@
 package com.example.coupleapp.worker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.*
+import com.example.coupleapp.R
 import com.example.coupleapp.data.sync.PartnerSyncRepository
 import com.example.coupleapp.widget.LocationWidgetProvider
 import com.example.coupleapp.widget.LocketWidgetProvider
@@ -72,8 +77,10 @@ class PartnerDataSyncWorker(
         private const val ACTION_UPDATE_LOCATION_WIDGET = "com.example.coupleapp.widget.UPDATE_LOCATION"
         private const val ACTION_UPDATE_MISSING_WIDGET = "com.example.coupleapp.UPDATE_MISSING_WIDGET"
         
-        // Notification ID for foreground service
+        // Notification ID and channel for foreground service (required for expedited work on Android 11-)
         private const val SYNC_NOTIFICATION_ID = 10001
+        private const val CHANNEL_ID_SYNC = "sync_channel"
+        private const val CHANNEL_NAME_SYNC = "Background Sync"
         
         /**
          * Enqueue an expedited sync request.
@@ -227,6 +234,41 @@ class PartnerDataSyncWorker(
     
     private val syncRepository = PartnerSyncRepository.getInstance(context)
     
+    /**
+     * Required for expedited work on Android 11 (API 30) and below.
+     * On Android 12+, expedited work uses Android 12's expedited job feature.
+     * On older versions, WorkManager runs the work as a foreground service.
+     */
+    override suspend fun getForegroundInfo(): ForegroundInfo {
+        createNotificationChannel()
+        
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID_SYNC)
+            .setSmallIcon(R.drawable.ic_heart_notification)
+            .setContentTitle("Đang đồng bộ")
+            .setContentText("Đang cập nhật dữ liệu widget...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        
+        return ForegroundInfo(SYNC_NOTIFICATION_ID, notification)
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID_SYNC,
+                CHANNEL_NAME_SYNC,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Hiển thị khi đang đồng bộ dữ liệu"
+                setShowBadge(false)
+            }
+            
+            val notificationManager = applicationContext.getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
     override suspend fun doWork(): Result {
         val partnerId = inputData.getString(KEY_PARTNER_ID)
         val syncTypesStr = inputData.getString(KEY_SYNC_TYPES) ?: SYNC_TYPE_ALL
@@ -378,31 +420,5 @@ class PartnerDataSyncWorker(
                 }
             }
         }
-    }
-    
-    /**
-     * Override to provide foreground notification for expedited work.
-     * Required for Android 12+ expedited work.
-     */
-    override suspend fun getForegroundInfo(): ForegroundInfo {
-        return createForegroundInfo()
-    }
-    
-    private fun createForegroundInfo(): ForegroundInfo {
-        val notification = androidx.core.app.NotificationCompat.Builder(
-            context,
-            "sync_channel"
-        )
-            .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setContentTitle("Syncing Partner Data")
-            .setContentText("Updating widget information...")
-            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build()
-        
-        return ForegroundInfo(
-            SYNC_NOTIFICATION_ID,
-            notification
-        )
     }
 }

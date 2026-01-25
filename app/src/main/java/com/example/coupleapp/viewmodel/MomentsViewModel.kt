@@ -898,6 +898,16 @@ class MomentsViewModel : ViewModel() {
             )
         )
     }
+    
+    /**
+     * Clean up resources when ViewModel is destroyed
+     */
+    override fun onCleared() {
+        super.onCleared()
+        // Clear cached references to allow garbage collection
+        currentCoupleId = null
+        Log.d(TAG, "MomentsViewModel cleared")
+    }
 }
 
 /**

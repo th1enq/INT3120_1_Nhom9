@@ -36,8 +36,13 @@ object SyncTriggerListener {
     private const val TAG = "SyncTriggerListener"
     private const val COLLECTION_SYNC_TRIGGERS = "sync_triggers"
     
-    // Deduplication: Track recently shown notifications to avoid duplicates
-    private val recentNotifications = mutableMapOf<String, Long>()
+    // Deduplication: Track recently shown notifications with bounded size (LRU cache)
+    private const val MAX_DEDUP_ENTRIES = 50
+    private val recentNotifications = object : LinkedHashMap<String, Long>(MAX_DEDUP_ENTRIES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+            return size > MAX_DEDUP_ENTRIES
+        }
+    }
     private const val NOTIFICATION_DEDUP_WINDOW_MS = 5000L // 5 seconds window
     
     private val auth = FirebaseAuth.getInstance()
@@ -76,77 +81,87 @@ object SyncTriggerListener {
         
         Log.d(TAG, "Starting sync trigger listener for user: ${currentUser.uid}")
         
-        // Listen for triggers targeted at current user
-        listenerRegistration = firestore.collection(COLLECTION_SYNC_TRIGGERS)
-            .whereEqualTo("targetUserId", currentUser.uid)
-            .whereEqualTo("processed", false)
-            .addSnapshotListener { snapshots, error ->
-                if (error != null) {
-                    Log.e(TAG, "Error listening for sync triggers", error)
-                    return@addSnapshotListener
-                }
-                
-                if (snapshots == null || snapshots.isEmpty) {
-                    return@addSnapshotListener
-                }
-                
-                // Process new triggers
-                for (doc in snapshots.documents) {
-                    val dataType = doc.getString("dataType") ?: "all"
-                    val senderId = doc.getString("senderId") ?: ""
-                    val senderName = doc.getString("senderName") ?: "Người yêu"
-                    val priority = doc.getString("priority") ?: "normal"
-                    val extraData = doc.getString("extraData") // For question text, etc.
+        try {
+            // Listen for triggers targeted at current user
+            // Note: This query requires a composite index on (targetUserId, processed)
+            listenerRegistration = firestore.collection(COLLECTION_SYNC_TRIGGERS)
+                .whereEqualTo("targetUserId", currentUser.uid)
+                .whereEqualTo("processed", false)
+                .addSnapshotListener { snapshots, error ->
+                    if (error != null) {
+                        // Log error but don't crash - common for missing Firestore indexes
+                        Log.e(TAG, "Error listening for sync triggers (may need Firestore index: sync_triggers [targetUserId, processed])", error)
+                        return@addSnapshotListener
+                    }
                     
-                    Log.d(TAG, "📥 Received sync trigger: $dataType from $senderName")
+                    if (snapshots == null || snapshots.isEmpty) {
+                        return@addSnapshotListener
+                    }
                     
-                    // Trigger sync worker and show notification
-                    getOrCreateScope().launch {
-                        try {
-                            // Show notification based on data type
-                            showNotificationForTrigger(
-                                context = context,
-                                dataType = dataType,
-                                senderName = senderName,
-                                senderId = senderId,
-                                extraData = extraData
-                            )
+                    try {
+                        // Process new triggers
+                        for (doc in snapshots.documents) {
+                            val dataType = doc.getString("dataType") ?: "all"
+                            val senderId = doc.getString("senderId") ?: ""
+                            val senderName = doc.getString("senderName") ?: "Người yêu"
+                            val priority = doc.getString("priority") ?: "normal"
+                            val extraData = doc.getString("extraData") // For question text, etc.
                             
-                            // Get partner ID for sync
-                            val userDoc = firestore.collection("users")
-                                .document(currentUser.uid)
-                                .get()
-                                .await()
+                            Log.d(TAG, "📥 Received sync trigger: $dataType from $senderName")
                             
-                            val partnerId = userDoc.getString("partnerId")
-                            if (!partnerId.isNullOrEmpty()) {
-                                // Enqueue expedited sync
-                                val syncTypes = when (dataType) {
-                                    "all" -> null
-                                    else -> listOf(dataType)
+                            // Trigger sync worker and show notification
+                            getOrCreateScope().launch {
+                                try {
+                                    // Show notification based on data type
+                                    showNotificationForTrigger(
+                                        context = context,
+                                        dataType = dataType,
+                                        senderName = senderName,
+                                        senderId = senderId,
+                                        extraData = extraData
+                                    )
+                                    
+                                    // Get partner ID for sync
+                                    val userDoc = firestore.collection("users")
+                                        .document(currentUser.uid)
+                                        .get()
+                                        .await()
+                                    
+                                    val partnerId = userDoc.getString("partnerId")
+                                    if (!partnerId.isNullOrEmpty()) {
+                                        // Enqueue expedited sync
+                                        val syncTypes = when (dataType) {
+                                            "all" -> null
+                                            else -> listOf(dataType)
+                                        }
+                                        
+                                        PartnerDataSyncWorker.enqueueExpedited(
+                                            context = context,
+                                            partnerId = partnerId,
+                                            syncTypes = syncTypes,
+                                            triggerSource = "firestore_trigger"
+                                        )
+                                        
+                                        Log.d(TAG, "✅ Triggered sync for: $dataType")
+                                    }
+                                    
+                                    // Mark trigger as processed
+                                    doc.reference.update("processed", true).await()
+                                    
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error processing sync trigger", e)
                                 }
-                                
-                                PartnerDataSyncWorker.enqueueExpedited(
-                                    context = context,
-                                    partnerId = partnerId,
-                                    syncTypes = syncTypes,
-                                    triggerSource = "firestore_trigger"
-                                )
-                                
-                                Log.d(TAG, "✅ Triggered sync for: $dataType")
                             }
-                            
-                            // Mark trigger as processed
-                            doc.reference.update("processed", true).await()
-                            
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error processing sync trigger", e)
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing sync trigger snapshots", e)
                     }
                 }
-            }
-        
-        isListening = true
+            
+            isListening = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting sync trigger listener", e)
+        }
     }
     
     /**

@@ -96,37 +96,46 @@ object WidgetFirestoreObserver {
      * Uses "locket_posts" collection which is where lockets are stored
      */
     private fun observeLocketPosts(context: Context, userId: String) {
-        // Remove existing listener
-        locketListener?.remove()
-        
-        // Listen for lockets where current user is the receiver
-        locketListener = firestore.collection("locket_posts")
-            .whereEqualTo("receiverId", userId)
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(5) // Only listen to recent posts
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.e(TAG, "Error listening to locket posts", error)
-                    return@addSnapshotListener
-                }
-                
-                if (snapshot != null && !snapshot.isEmpty) {
-                    // Check if there's a new unread locket
-                    val hasNewLocket = snapshot.documentChanges.any { change ->
-                        change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED &&
-                        change.document.getBoolean("isRead") != true
+        try {
+            // Remove existing listener
+            locketListener?.remove()
+            
+            // Listen for lockets where current user is the receiver
+            locketListener = firestore.collection("locket_posts")
+                .whereEqualTo("receiverId", userId)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(5) // Only listen to recent posts
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        // Log error but don't crash - common for missing indexes
+                        Log.e(TAG, "Error listening to locket posts (may need Firestore index)", error)
+                        return@addSnapshotListener
                     }
                     
-                    if (hasNewLocket) {
-                        Log.d(TAG, "New locket received from partner, updating widget")
-                        observerScope?.launch {
-                            // Invalidate cache and update widget
-                            WidgetDataRepository.invalidateLocketCache(context)
-                            LocketWidgetProvider.updateWidgets(context)
+                    try {
+                        if (snapshot != null && !snapshot.isEmpty) {
+                            // Check if there's a new unread locket
+                            val hasNewLocket = snapshot.documentChanges.any { change ->
+                                change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED &&
+                                change.document.getBoolean("isRead") != true
+                            }
+                            
+                            if (hasNewLocket) {
+                                Log.d(TAG, "New locket received from partner, updating widget")
+                                observerScope?.launch {
+                                    // Invalidate cache and update widget
+                                    WidgetDataRepository.invalidateLocketCache(context)
+                                    LocketWidgetProvider.updateWidgets(context)
+                                }
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing locket snapshot", e)
                     }
                 }
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up locket listener", e)
+        }
     }
     
     /**
@@ -135,47 +144,59 @@ object WidgetFirestoreObserver {
      * Uses "missing_records" collection which stores daily missing counts
      */
     private fun observeMissingSignals(context: Context, userId: String) {
-        // Get user's coupleId and partnerId first
-        firestore.collection("users")
-            .document(userId)
-            .get()
-            .addOnSuccessListener { doc ->
-                val partnerId = doc.getString("partnerId") ?: return@addOnSuccessListener
-                val coupleId = doc.getString("coupleId") 
-                    ?: listOf(userId, partnerId).sorted().joinToString("_")
-                
-                // Remove existing listener
-                missingListener?.remove()
-                
-                // Listen for missing records - look for partner's records today
-                val today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
-                val partnerRecordId = "${coupleId}_${partnerId}_$today"
-                
-                // Listen to partner's missing record for today
-                missingListener = firestore.collection("missing_records")
-                    .document(partnerRecordId)
-                    .addSnapshotListener { snapshot, error ->
-                        if (error != null) {
-                            Log.e(TAG, "Error listening to missing records", error)
-                            return@addSnapshotListener
-                        }
+        try {
+            // Get user's coupleId and partnerId first
+            firestore.collection("users")
+                .document(userId)
+                .get()
+                .addOnSuccessListener { doc ->
+                    try {
+                        val partnerId = doc.getString("partnerId") ?: return@addOnSuccessListener
+                        val coupleId = doc.getString("coupleId") 
+                            ?: listOf(userId, partnerId).sorted().joinToString("_")
                         
-                        if (snapshot != null && snapshot.exists()) {
-                            val count = snapshot.getLong("count")?.toInt() ?: 0
-                            if (count > 0) {
-                                Log.d(TAG, "Partner missing count updated: $count, updating widget")
-                                observerScope?.launch {
-                                    // Invalidate cache and update widget
-                                    WidgetDataRepository.invalidateMissingCache(context)
-                                    MissingWidgetProvider.updateWidgets(context)
+                        // Remove existing listener
+                        missingListener?.remove()
+                        
+                        // Listen for missing records - look for partner's records today
+                        val today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)
+                        val partnerRecordId = "${coupleId}_${partnerId}_$today"
+                        
+                        // Listen to partner's missing record for today
+                        missingListener = firestore.collection("missing_records")
+                            .document(partnerRecordId)
+                            .addSnapshotListener { snapshot, error ->
+                                if (error != null) {
+                                    Log.e(TAG, "Error listening to missing records", error)
+                                    return@addSnapshotListener
+                                }
+                                
+                                try {
+                                    if (snapshot != null && snapshot.exists()) {
+                                        val count = snapshot.getLong("count")?.toInt() ?: 0
+                                        if (count > 0) {
+                                            Log.d(TAG, "Partner missing count updated: $count, updating widget")
+                                            observerScope?.launch {
+                                                // Invalidate cache and update widget
+                                                WidgetDataRepository.invalidateMissingCache(context)
+                                                MissingWidgetProvider.updateWidgets(context)
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error processing missing snapshot", e)
                                 }
                             }
-                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error setting up missing listener", e)
                     }
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Failed to get partnerId for missing listener", e)
-            }
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Failed to get partnerId for missing listener", e)
+                }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in observeMissingSignals", e)
+        }
     }
     
     /**
