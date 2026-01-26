@@ -212,6 +212,16 @@
             android:enabled="true"
             android:exported="false" />
         
+        <!-- Widget Debug Receiver - for testing and diagnostics -->
+        <receiver
+            android:name=".widget.debug.WidgetDebugReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.coupleapp.DEBUG_WIDGETS" />
+            </intent-filter>
+        </receiver>
+        
         <!-- Location Tracking Foreground Service -->
         <service
             android:name=".service.LocationTrackingService"

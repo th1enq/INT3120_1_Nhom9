@@ -132,27 +132,38 @@ class LocketWidgetProvider : AppWidgetProvider() {
                 val currentUser = auth.currentUser
                 
                 if (currentUser == null) {
+                    Log.d(TAG, "User not authenticated")
                     showEmptyState(views, "Đăng nhập để xem Locket")
                 } else {
+                    Log.d(TAG, "Loading Locket data for authenticated user")
                     // Use cached data for battery efficiency
                     val cachedData = WidgetDataRepository.getLocketWidgetData(context)
                     
                     if (cachedData != null && cachedData.type != "EMPTY") {
+                        Log.d(TAG, "Locket widget data loaded successfully")
                         showLocketContentCached(context, views, cachedData, appWidgetManager, appWidgetId)
                     } else {
+                        Log.d(TAG, "No cached data, loading from Firebase")
                         // Fallback to direct Firebase query
                         val latestLocket = loadLatestLocket(currentUser.uid)
                         if (latestLocket != null) {
                             showLocketContent(context, views, latestLocket, appWidgetManager, appWidgetId)
                         } else {
+                            Log.d(TAG, "No Locket data available")
                             showEmptyState(views, "Chưa có Locket mới")
                         }
                     }
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating widget", e)
-                showEmptyState(views, "Không thể tải Locket")
+                Log.e(TAG, "Error updating Locket widget: ${e.message}", e)
+                val errorMessage = when {
+                    e.message?.contains("auth", ignoreCase = true) == true -> "Lỗi xác thực"
+                    e.message?.contains("network", ignoreCase = true) == true -> "Không có mạng"
+                    e.message?.contains("storage", ignoreCase = true) == true -> "Lỗi tải ảnh"
+                    else -> "Không thể tải Locket"
+                }
+                showEmptyState(views, errorMessage)
             }
             
             // Set click intents

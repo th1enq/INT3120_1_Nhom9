@@ -251,11 +251,10 @@ class PartnerSyncRepository(context: Context) {
         val currentUserId = auth.currentUser?.uid ?: throw IllegalStateException("User not logged in")
         val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
         
-        // Fetch latest location
-        val locationDoc = firestore.collection("couples")
-            .document(coupleId)
-            .collection("locations")
-            .document(partnerId)
+        // Fetch latest location - using "locations" collection with document ID format: {coupleId}_{userId}
+        val locationDocId = "${coupleId}_${partnerId}"
+        val locationDoc = firestore.collection("locations")
+            .document(locationDocId)
             .get()
             .await()
         

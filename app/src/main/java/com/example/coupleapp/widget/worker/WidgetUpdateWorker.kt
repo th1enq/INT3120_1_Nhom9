@@ -54,7 +54,7 @@ class WidgetUpdateWorker(
         
         /**
          * Schedule periodic widget updates
-         * This runs every 30 minutes, matching the widget update interval
+         * This runs every 20 minutes (15 min for location), optimized for faster updates
          * Battery optimization: Uses PeriodicWorkRequest which respects Doze
          */
         fun schedulePeriodicUpdates(context: Context) {
@@ -64,8 +64,8 @@ class WidgetUpdateWorker(
                 .build()
             
             val periodicWorkRequest = PeriodicWorkRequestBuilder<WidgetUpdateWorker>(
-                30, TimeUnit.MINUTES,
-                5, TimeUnit.MINUTES // Flex interval for battery optimization
+                20, TimeUnit.MINUTES,
+                3, TimeUnit.MINUTES // Flex interval for battery optimization
             )
                 .setConstraints(constraints)
                 .setInputData(
@@ -87,7 +87,43 @@ class WidgetUpdateWorker(
                 periodicWorkRequest
             )
             
-            Log.d(TAG, "Scheduled periodic widget updates")
+            Log.d(TAG, "Scheduled periodic widget updates every 20 minutes")
+        }
+        
+        /**
+         * Schedule faster updates for location widget (15 minutes)
+         */
+        fun scheduleLocationUpdates(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+            
+            val locationWorkRequest = PeriodicWorkRequestBuilder<WidgetUpdateWorker>(
+                15, TimeUnit.MINUTES,
+                2, TimeUnit.MINUTES // Smaller flex interval
+            )
+                .setConstraints(constraints)
+                .setInputData(
+                    workDataOf(
+                        KEY_WIDGET_TYPE to WIDGET_TYPE_LOCATION,
+                        KEY_FORCE_REFRESH to false
+                    )
+                )
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    5, TimeUnit.MINUTES
+                )
+                .addTag("location_update")
+                .build()
+            
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "${WORK_NAME_PERIODIC}_location",
+                ExistingPeriodicWorkPolicy.KEEP,
+                locationWorkRequest
+            )
+            
+            Log.d(TAG, "Scheduled location widget updates every 15 minutes")
         }
         
         /**
@@ -96,7 +132,8 @@ class WidgetUpdateWorker(
          */
         fun cancelPeriodicUpdates(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME_PERIODIC)
-            Log.d(TAG, "Cancelled periodic widget updates")
+            WorkManager.getInstance(context).cancelUniqueWork("${WORK_NAME_PERIODIC}_location")
+            Log.d(TAG, "Cancelled all periodic widget updates")
         }
         
         /**

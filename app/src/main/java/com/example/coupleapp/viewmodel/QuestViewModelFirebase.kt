@@ -401,6 +401,8 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Load quest progress from Firebase
+     * NOTE: Special quests (like link_partner) are loaded from ANY date since they should only be claimable once ever
+     * Daily quests are filtered to today's progress only
      */
     private suspend fun loadQuestProgressFromFirebase(userId: String): Map<String, SavedQuestProgress> {
         return try {
@@ -415,17 +417,46 @@ class QuestViewModelFirebase : ViewModel() {
 
             result.fold(
                 onSuccess = { allProgress ->
-                    // Filter only today's progress
-                    val todayProgress = allProgress.filter { it.date == todayString }
+                    // Special quests IDs that should only be claimable ONCE ever (not reset daily)
+                    val oneTimeQuestIds = setOf("link_partner")
                     
-                    Log.d(TAG, "Loaded ${todayProgress.size} quest progress for today")
-                    
-                    todayProgress.associate { 
-                        it.questId to SavedQuestProgress(
-                            currentProgress = it.currentProgress,
-                            status = QuestStatus.valueOf(it.status)
-                        )
+                    // Filter: today's progress for daily quests, ANY date for special quests
+                    val relevantProgress = allProgress.filter { progress ->
+                        if (oneTimeQuestIds.contains(progress.questId)) {
+                            // Special quest: include from any date (most recent status wins)
+                            true
+                        } else {
+                            // Daily quest: only include today's progress
+                            progress.date == todayString
+                        }
                     }
+                    
+                    // For special quests, we might have multiple entries from different dates
+                    // We need to check if ANY of them is CLAIMED
+                    val progressMap = mutableMapOf<String, SavedQuestProgress>()
+                    
+                    for (progress in relevantProgress) {
+                        val existingProgress = progressMap[progress.questId]
+                        val currentStatus = try { QuestStatus.valueOf(progress.status) } catch (e: Exception) { QuestStatus.NOT_STARTED }
+                        
+                        if (existingProgress == null) {
+                            progressMap[progress.questId] = SavedQuestProgress(
+                                currentProgress = progress.currentProgress,
+                                status = currentStatus
+                            )
+                        } else {
+                            // For special quests: if any record shows CLAIMED, mark as CLAIMED
+                            if (oneTimeQuestIds.contains(progress.questId) && currentStatus == QuestStatus.CLAIMED) {
+                                progressMap[progress.questId] = SavedQuestProgress(
+                                    currentProgress = progress.currentProgress,
+                                    status = QuestStatus.CLAIMED
+                                )
+                            }
+                        }
+                    }
+                    
+                    Log.d(TAG, "Loaded ${progressMap.size} quest progress (including special quests from any date)")
+                    progressMap
                 },
                 onFailure = { e ->
                     Log.e(TAG, "Error loading quest progress: ${e.message}")
@@ -440,23 +471,34 @@ class QuestViewModelFirebase : ViewModel() {
 
     /**
      * Save quest progress to Firebase
+     * NOTE: Special quests (like link_partner) use a date-independent document ID
+     * so their CLAIMED status persists forever and is not reset daily
      */
     private suspend fun saveQuestProgressToFirebase(quest: Quest) {
         val userId = authRepository.currentUser?.uid ?: return
         val todayString = dateFormat.format(Date())
+        
+        // Special quests IDs that should only be claimable ONCE ever (not reset daily)
+        val oneTimeQuestIds = setOf("link_partner")
+        val isOneTimeQuest = oneTimeQuestIds.contains(quest.id)
         
         try {
             val progressData = FirebaseQuestProgress(
                 userId = userId,
                 questId = quest.id,
                 questType = quest.type.name,
-                date = todayString,
+                date = if (isOneTimeQuest) "permanent" else todayString, // Use "permanent" for one-time quests
                 currentProgress = quest.currentProgress,
                 targetProgress = quest.targetProgress,
                 status = quest.status.name
             )
 
-            val documentId = "${userId}_${quest.id}_$todayString"
+            // For one-time quests, use a date-independent document ID so it doesn't reset daily
+            val documentId = if (isOneTimeQuest) {
+                "${userId}_${quest.id}_permanent"
+            } else {
+                "${userId}_${quest.id}_$todayString"
+            }
             
             val result = firestoreRepository.setDocument(
                 collection = "quest_progress",
@@ -467,7 +509,7 @@ class QuestViewModelFirebase : ViewModel() {
 
             result.fold(
                 onSuccess = {
-                    Log.d(TAG, "Saved quest progress for ${quest.id}")
+                    Log.d(TAG, "Saved quest progress for ${quest.id} (oneTime=$isOneTimeQuest)")
                 },
                 onFailure = { e ->
                     Log.e(TAG, "Failed to save quest progress: ${e.message}")
@@ -686,17 +728,48 @@ class QuestViewModelFirebase : ViewModel() {
     }
 
     /**
-     * Calculate streak multiplier for reward
+     * Calculate streak multiplier for reward based on milestone tiers
      * Higher streak = higher multiplier
+     * 
+     * Milestones:
+     * - 3+ days: 1.1x
+     * - 7+ days: 1.2x
+     * - 14+ days: 1.3x
+     * - 30+ days: 1.5x
+     * - 50+ days: 1.7x
+     * - 100+ days: 2.0x
+     * - 200+ days: 2.5x
+     * - 365+ days: 3.0x
      */
     private fun calculateStreakMultiplier(streak: Int): Float {
         return when {
-            streak >= 30 -> 2.0f  // 30+ days: 2x
-            streak >= 14 -> 1.5f  // 14+ days: 1.5x
-            streak >= 7 -> 1.3f   // 7+ days: 1.3x
-            streak >= 3 -> 1.1f   // 3+ days: 1.1x
-            else -> 1.0f          // Default: 1x
+            streak >= 365 -> 3.0f  // 365+ days: 3x (1 year!)
+            streak >= 200 -> 2.5f  // 200+ days: 2.5x
+            streak >= 100 -> 2.0f  // 100+ days: 2x
+            streak >= 50 -> 1.7f   // 50+ days: 1.7x
+            streak >= 30 -> 1.5f   // 30+ days: 1.5x
+            streak >= 14 -> 1.3f   // 14+ days: 1.3x
+            streak >= 7 -> 1.2f    // 7+ days: 1.2x
+            streak >= 3 -> 1.1f    // 3+ days: 1.1x
+            else -> 1.0f           // Default: 1x (streak reset to 0 means no bonus)
         }
+    }
+    
+    /**
+     * Get the next milestone streak level and its multiplier
+     */
+    fun getNextStreakMilestone(currentStreak: Int): Pair<Int, Float>? {
+        val milestones = listOf(
+            3 to 1.1f,
+            7 to 1.2f,
+            14 to 1.3f,
+            30 to 1.5f,
+            50 to 1.7f,
+            100 to 2.0f,
+            200 to 2.5f,
+            365 to 3.0f
+        )
+        return milestones.firstOrNull { it.first > currentStreak }
     }
 
     /**

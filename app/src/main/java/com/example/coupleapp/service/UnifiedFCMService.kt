@@ -201,6 +201,8 @@ class UnifiedFCMService : FirebaseMessagingService() {
             TYPE_LOCATION_UPDATE,
             TYPE_PHOTO_UPDATE -> {
                 triggerBackgroundSync(partnerId, dataType, priority == PRIORITY_HIGH)
+                // Also invalidate cache for immediate widget update
+                invalidateLegacyCache()
             }
             
             // ==================== NOTIFICATION + SYNC MESSAGES ====================
@@ -333,12 +335,17 @@ class UnifiedFCMService : FirebaseMessagingService() {
     private fun invalidateLegacyCache() {
         CoroutineScope(Dispatchers.Main).launch {
             try {
+                // Invalidate ALL widget caches
                 WidgetDataRepository.invalidateLocketCache(this@UnifiedFCMService)
                 WidgetDataRepository.invalidateMissingCache(this@UnifiedFCMService)
+                WidgetDataRepository.invalidateSleepCache(this@UnifiedFCMService)
+                WidgetDataRepository.invalidateLocationCache(this@UnifiedFCMService)
                 
-                // Also trigger immediate widget update via old system
+                // Also trigger immediate widget update via old system for ALL widgets
                 LocketWidgetProvider.updateWidgets(this@UnifiedFCMService)
                 MissingWidgetProvider.updateWidgets(this@UnifiedFCMService)
+                com.example.coupleapp.widget.SleepWidgetProvider.updateWidgets(this@UnifiedFCMService)
+                com.example.coupleapp.widget.LocationWidgetProvider.updateWidgets(this@UnifiedFCMService)
             } catch (e: Exception) {
                 Log.e(TAG, "Error invalidating legacy cache", e)
             }

@@ -259,41 +259,81 @@ object DataPreloader {
     
     /**
      * Calculate streak from history
+     * IMPORTANT: Streak is RESET to 0 if most recent activity is older than yesterday
      */
     private fun calculateStreak(history: List<DailyMissingHistory>): Pair<Int, Int> {
         if (history.isEmpty()) return Pair(0, 0)
         
+        val today = LocalDate.now()
+        val yesterday = today.minusDays(1)
+        
         var currentStreak = 0
         var longestStreak = 0
         var tempStreak = 0
-        var lastDate: LocalDate? = null
+        var lastValidDate: LocalDate? = null
         
         val sortedHistory = history.sortedByDescending { it.date }
         
+        // Check if streak is still active (most recent activity is today or yesterday)
+        val mostRecentDate = sortedHistory.firstOrNull()?.date
+        val streakStillActive = mostRecentDate != null && 
+            (mostRecentDate == today || mostRecentDate == yesterday)
+        
+        if (!streakStillActive && mostRecentDate != null) {
+            // Streak broken - calculate longest only
+            for (day in sortedHistory) {
+                val bothSent = day.summaries.all { it.missCount > 0 }
+                if (bothSent) {
+                    if (lastValidDate == null) {
+                        tempStreak = 1
+                    } else {
+                        val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastValidDate)
+                        if (daysDiff == 1L) {
+                            tempStreak++
+                        } else {
+                            longestStreak = maxOf(longestStreak, tempStreak)
+                            tempStreak = 1
+                        }
+                    }
+                    lastValidDate = day.date
+                } else {
+                    longestStreak = maxOf(longestStreak, tempStreak)
+                    tempStreak = 0
+                    lastValidDate = null
+                }
+            }
+            longestStreak = maxOf(longestStreak, tempStreak)
+            return Pair(0, longestStreak) // Current streak is 0
+        }
+        
+        // Streak is active - calculate normally
         for (day in sortedHistory) {
             val bothSent = day.summaries.all { it.missCount > 0 }
             
             if (bothSent) {
-                if (lastDate == null) {
-                    tempStreak = 1
+                if (lastValidDate == null) {
+                    if (day.date == today || day.date == yesterday) {
+                        tempStreak = 1
+                        lastValidDate = day.date
+                    }
                 } else {
-                    val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastDate)
+                    val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastValidDate)
                     if (daysDiff == 1L) {
                         tempStreak++
+                        lastValidDate = day.date
                     } else {
+                        if (currentStreak == 0) currentStreak = tempStreak
                         longestStreak = maxOf(longestStreak, tempStreak)
                         tempStreak = 1
+                        lastValidDate = day.date
                     }
                 }
-                lastDate = day.date
             } else {
                 if (tempStreak > 0) {
-                    if (currentStreak == 0) {
-                        currentStreak = tempStreak
-                    }
+                    if (currentStreak == 0) currentStreak = tempStreak
                     longestStreak = maxOf(longestStreak, tempStreak)
                     tempStreak = 0
-                    lastDate = null
+                    lastValidDate = null
                 }
             }
         }

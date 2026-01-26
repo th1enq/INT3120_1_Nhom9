@@ -828,6 +828,12 @@ class MissingViewModelFirebase : ViewModel() {
     /**
      * Calculate current streak - both users must send hearts on consecutive days
      * Returns a pair of (currentStreak, longestStreak)
+     * 
+     * IMPORTANT: Streak is RESET to 0 if:
+     * - Today (or yesterday if it's early morning) neither user sent a heart
+     * - There's a gap of more than 1 day between sending days
+     * 
+     * Streak continues only if BOTH users send hearts on consecutive days.
      */
     private fun calculateStreakWithLongest(
         history: List<DailyMissingHistory>,
@@ -836,44 +842,89 @@ class MissingViewModelFirebase : ViewModel() {
     ): Pair<Int, Int> {
         if (history.isEmpty()) return Pair(0, 0)
         
+        val today = LocalDate.now()
+        val yesterday = today.minusDays(1)
+        
         var currentStreak = 0
         var longestStreak = 0
         var tempStreak = 0
-        var lastDate: LocalDate? = null
+        var lastValidDate: LocalDate? = null
         
         // Sort history by date descending (most recent first)
         val sortedHistory = history.sortedByDescending { it.date }
         
+        // ★ CRITICAL: Check if the most recent activity is today or yesterday
+        // If the newest record is older than yesterday, streak is broken (reset to 0)
+        val mostRecentDate = sortedHistory.firstOrNull()?.date
+        val streakStillActive = mostRecentDate != null && 
+            (mostRecentDate == today || mostRecentDate == yesterday)
+        
+        if (!streakStillActive && mostRecentDate != null) {
+            // Streak is broken - most recent activity was more than 1 day ago
+            // Still calculate longest streak from history
+            for (day in sortedHistory) {
+                val bothSent = day.summaries.all { it.missCount > 0 }
+                if (bothSent) {
+                    if (lastValidDate == null) {
+                        tempStreak = 1
+                    } else {
+                        val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastValidDate)
+                        if (daysDiff == 1L) {
+                            tempStreak++
+                        } else {
+                            longestStreak = maxOf(longestStreak, tempStreak)
+                            tempStreak = 1
+                        }
+                    }
+                    lastValidDate = day.date
+                } else {
+                    longestStreak = maxOf(longestStreak, tempStreak)
+                    tempStreak = 0
+                    lastValidDate = null
+                }
+            }
+            longestStreak = maxOf(longestStreak, tempStreak)
+            Log.d(TAG, "[STREAK] Streak BROKEN - last activity: $mostRecentDate, Current: 0, Longest: $longestStreak")
+            return Pair(0, longestStreak)
+        }
+        
+        // Streak is potentially active - calculate from consecutive days
         for (day in sortedHistory) {
             val bothSent = day.summaries.all { it.missCount > 0 }
             
             if (bothSent) {
-                if (lastDate == null) {
-                    // First day with both sending
-                    tempStreak = 1
+                if (lastValidDate == null) {
+                    // First day with both sending - must be today or yesterday to count
+                    if (day.date == today || day.date == yesterday) {
+                        tempStreak = 1
+                        lastValidDate = day.date
+                    }
                 } else {
                     // Check if consecutive day
-                    val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastDate)
+                    val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(day.date, lastValidDate)
                     if (daysDiff == 1L) {
                         tempStreak++
+                        lastValidDate = day.date
                     } else {
-                        // Gap in days, save longest if needed and reset
+                        // Gap in days, streak broken at this point
+                        // Save current streak as it's the active one
+                        if (currentStreak == 0) {
+                            currentStreak = tempStreak
+                        }
                         longestStreak = maxOf(longestStreak, tempStreak)
                         tempStreak = 1
+                        lastValidDate = day.date
                     }
                 }
-                lastDate = day.date
             } else {
-                // Day where not both sent - end current streak
+                // Day where not both sent - end current active streak
                 if (tempStreak > 0) {
-                    // Only break current streak if this is a more recent day
                     if (currentStreak == 0) {
-                        // This gap means the current streak is what we've counted so far
                         currentStreak = tempStreak
                     }
                     longestStreak = maxOf(longestStreak, tempStreak)
                     tempStreak = 0
-                    lastDate = null
+                    lastValidDate = null
                 }
             }
         }
@@ -1028,18 +1079,19 @@ class MissingViewModelFirebase : ViewModel() {
                     merge = true
                 )
 
-                // Clear pending count after successful send
-                pendingApiCount = 0
+                // IMPORTANT: Only subtract the hearts we just sent, preserve any new pending hearts
+                // This prevents race condition where user clicks while API is in progress
+                pendingApiCount = maxOf(0, pendingApiCount - heartsToSend)
                 
                 _uiState.update {
                     it.copy(
-                        pendingHearts = 0,
+                        pendingHearts = pendingApiCount,
                         lastSentTime = System.currentTimeMillis(),
                         sendSuccess = true
                     )
                 }
 
-                Log.d(TAG, "Batch sent successfully: $heartsToSend hearts, total: $finalCount")
+                Log.d(TAG, "Batch sent successfully: $heartsToSend hearts, total: $finalCount, remaining pending: $pendingApiCount")
                 
                 // Update cache with new count
                 viewModelScope.launch {
@@ -1068,10 +1120,65 @@ class MissingViewModelFirebase : ViewModel() {
 
                 delay(200)
                 _uiState.update { it.copy(sendSuccess = false) }
+                
+                // If there are still pending hearts (user clicked while we were sending),
+                // trigger another send after a short delay
+                if (pendingApiCount > 0) {
+                    Log.d(TAG, "🔄 Still have $pendingApiCount pending hearts, scheduling another send...")
+                    delay(API_DEBOUNCE_MS)
+                    // Recursively call the send logic - but need to avoid infinite loop
+                    // So we check again and schedule via a new call to sendMissing flow
+                    sendPendingHearts()
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending missing batch", e)
                 rollbackPendingHearts(heartsToSend)
+            }
+        }
+    }
+    
+    /**
+     * Helper function to send any remaining pending hearts
+     * Called after main batch send when user clicked during API call
+     */
+    private fun sendPendingHearts() {
+        if (pendingApiCount <= 0) return
+        
+        viewModelScope.launch {
+            val heartsToSend = pendingApiCount
+            if (heartsToSend <= 0) return@launch
+            
+            try {
+                val currentUserId = _uiState.value.currentUser.id
+                val partnerId = _uiState.value.partnerUser?.id ?: return@launch
+                val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
+                val todayString = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+                val recordId = "${coupleId}_${currentUserId}_$todayString"
+                
+                Log.d(TAG, "📤 Sending remaining $heartsToSend hearts...")
+                
+                val currentRecord = firestoreRepository.getDocument(
+                    "missing_records", recordId, FirebaseMissingRecord::class.java
+                ).getOrNull()
+                
+                val serverCount = currentRecord?.count ?: 0
+                val finalCount = serverCount + heartsToSend
+                
+                val record = FirebaseMissingRecord(
+                    id = recordId, coupleId = coupleId, userId = currentUserId,
+                    date = todayString, count = finalCount
+                )
+                
+                firestoreRepository.setDocument("missing_records", recordId, record, merge = true)
+                
+                pendingApiCount = maxOf(0, pendingApiCount - heartsToSend)
+                _uiState.update { it.copy(pendingHearts = pendingApiCount) }
+                
+                Log.d(TAG, "✓ Remaining hearts sent: $heartsToSend, new total: $finalCount")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending remaining hearts", e)
             }
         }
     }

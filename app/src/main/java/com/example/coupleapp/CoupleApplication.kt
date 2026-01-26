@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import coil.Coil
 import com.example.coupleapp.data.sync.PartnerSyncRepository
 import com.example.coupleapp.util.createImageLoaderWithBase64Support
+import com.example.coupleapp.util.SyncTriggerHelper
 import com.example.coupleapp.util.SyncTriggerListener
 import com.example.coupleapp.service.SignificantLocationManager
 import com.example.coupleapp.service.LocationTrackingService
@@ -104,6 +105,19 @@ class CoupleApplication : Application(), Configuration.Provider, LifecycleEventO
         // Start Firestore sync trigger listener (alternative to Cloud Functions)
         // This listens for sync requests from partner without needing FCM
         SyncTriggerListener.startListening(this)
+        
+        // Cleanup old sync triggers on app startup to prevent Firestore bloat
+        // This is especially important if BackgroundLocationWorker is not running
+        applicationScope.launch {
+            try {
+                val deleted = SyncTriggerHelper.cleanupOldTriggers()
+                if (deleted > 0) {
+                    Log.d("CoupleApplication", "🧹 Cleaned up $deleted old sync triggers on startup")
+                }
+            } catch (e: Exception) {
+                Log.w("CoupleApplication", "Failed to cleanup sync triggers on startup", e)
+            }
+        }
         
         Log.d("CoupleApplication", "Widget systems and sync trigger listener initialized")
     }

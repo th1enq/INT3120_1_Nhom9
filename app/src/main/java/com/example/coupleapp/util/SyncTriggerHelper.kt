@@ -266,4 +266,51 @@ object SyncTriggerHelper {
             0
         }
     }
+    
+    /**
+     * Aggressive cleanup: Delete ALL processed triggers immediately
+     * Call this to clean up accumulated triggers in Firestore
+     * 
+     * This is more aggressive than cleanupOldTriggers() which only deletes triggers > 24h
+     */
+    suspend fun cleanupAllProcessedTriggers(): Int = withContext(Dispatchers.IO) {
+        try {
+            val currentUser = auth.currentUser ?: return@withContext 0
+            
+            var deleted = 0
+            
+            // Delete all processed triggers sent by current user
+            val sentProcessed = firestore.collection(COLLECTION_SYNC_TRIGGERS)
+                .whereEqualTo("senderId", currentUser.uid)
+                .whereEqualTo("processed", true)
+                .get()
+                .await()
+            
+            for (doc in sentProcessed.documents) {
+                doc.reference.delete().await()
+                deleted++
+            }
+            
+            // Delete all processed triggers targeting current user
+            val receivedProcessed = firestore.collection(COLLECTION_SYNC_TRIGGERS)
+                .whereEqualTo("targetUserId", currentUser.uid)
+                .whereEqualTo("processed", true)
+                .get()
+                .await()
+            
+            for (doc in receivedProcessed.documents) {
+                doc.reference.delete().await()
+                deleted++
+            }
+            
+            if (deleted > 0) {
+                Log.d(TAG, "🧹 Aggressively cleaned up $deleted processed sync triggers")
+            }
+            
+            deleted
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in aggressive cleanup", e)
+            0
+        }
+    }
 }

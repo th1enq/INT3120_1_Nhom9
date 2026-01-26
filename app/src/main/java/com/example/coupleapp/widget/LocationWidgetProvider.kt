@@ -7,9 +7,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
 import android.view.View
@@ -46,6 +50,10 @@ class LocationWidgetProvider : AppWidgetProvider() {
         private const val ACTION_UPDATE_WIDGET = "com.example.coupleapp.UPDATE_LOCATION_WIDGET"
         private const val ACTION_SHARE_LOCATION = "com.example.coupleapp.SHARE_LOCATION_FROM_WIDGET"
         
+        // Debounce: only update widget every 30 seconds max to save battery
+        private const val WIDGET_UPDATE_DEBOUNCE_MS = 30_000L
+        private var lastWidgetUpdateTime = 0L
+        
         /**
          * Update all widgets using cached data (battery-efficient)
          */
@@ -67,12 +75,20 @@ class LocationWidgetProvider : AppWidgetProvider() {
         }
         
         /**
-         * Notify that location changed - invalidate cache and update
-         * Called by LocationTrackingService when significant location change detected
+         * Notify that location changed - update widget with debounce
+         * Called by LocationTrackingService when location changes
+         * Uses debounce to prevent excessive updates (max once per 30 seconds)
          */
         fun onLocationChanged(context: Context) {
-            Log.d(TAG, "Location changed, invalidating cache")
-            WidgetDataRepository.invalidateLocationCache(context)
+            val now = System.currentTimeMillis()
+            if (now - lastWidgetUpdateTime < WIDGET_UPDATE_DEBOUNCE_MS) {
+                Log.d(TAG, "Location changed but debouncing (${(now - lastWidgetUpdateTime)/1000}s since last update)")
+                return
+            }
+            
+            Log.d(TAG, "Location changed, updating widget")
+            lastWidgetUpdateTime = now
+            // Don't invalidate cache - just request update with existing cache
             updateWidgets(context)
         }
     }
@@ -123,27 +139,45 @@ class LocationWidgetProvider : AppWidgetProvider() {
                 val currentUser = auth.currentUser
                 
                 if (currentUser == null) {
+                    Log.d(TAG, "User not authenticated")
                     showNoDataState(views, "Đăng nhập để xem vị trí")
                 } else {
-                    // Use cached data for battery efficiency
+                    Log.d(TAG, "Loading location data for user: ${currentUser.uid}")
+                    
+                    // Use cached data for battery efficiency (same as Locket widget)
+                    // Cache expires after 10 minutes, then fetches fresh data
                     val cachedData = WidgetDataRepository.getLocationWidgetData(context)
                     
                     if (cachedData != null) {
-                        showLocationDataCached(views, cachedData)
+                        Log.d(TAG, "Using cached location data - distance: ${cachedData.distance}")
+                        showLocationDataCached(context, views, cachedData)
                     } else {
+                        Log.d(TAG, "No cached data, trying direct Firebase query")
                         // Fallback to direct Firebase query
                         val data = loadLocationData(currentUser.uid)
                         if (data != null) {
+                            Log.d(TAG, "Successfully loaded location data from Firebase")
                             showLocationData(views, data)
                         } else {
+                            Log.d(TAG, "No location data found")
                             showNoDataState(views, "Chia sẻ vị trí để bắt đầu")
                         }
                     }
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating widget", e)
-                showNoDataState(views, "Không thể tải vị trí")
+                Log.e(TAG, "Error updating location widget: ${e.message}", e)
+                
+                // Try to provide more specific error message
+                val errorMessage = when {
+                    e.message?.contains("permission", ignoreCase = true) == true -> "Cần quyền truy cập vị trí"
+                    e.message?.contains("network", ignoreCase = true) == true -> "Không có kết nối mạng" 
+                    e.message?.contains("auth", ignoreCase = true) == true -> "Lỗi xác thực - hãy đăng nhập lại"
+                    e.message?.contains("timeout", ignoreCase = true) == true -> "Kết nối chậm, thử lại sau"
+                    e.message?.contains("partner", ignoreCase = true) == true -> "Chưa có người yêu"
+                    else -> "Không thể tải vị trí"
+                }
+                showNoDataState(views, errorMessage)
             }
             
             // Set click intent for container
@@ -170,58 +204,80 @@ class LocationWidgetProvider : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.location_share_button, sharePendingIntent)
             
+            Log.d(TAG, "🔄 Calling updateAppWidget for widgetId=$appWidgetId")
             appWidgetManager.updateAppWidget(appWidgetId, views)
+            Log.d(TAG, "✅ Widget updated successfully")
         }
     }
     
-    private fun showLocationDataCached(views: RemoteViews, data: LocationWidgetCachedData) {
+    private fun showLocationDataCached(context: Context, views: RemoteViews, data: LocationWidgetCachedData) {
+        Log.d(TAG, "=== showLocationDataCached ===")
+        Log.d(TAG, "distance: ${data.distance}")
+        Log.d(TAG, "partnerLastUpdate: ${data.partnerLastUpdate}")
+        
         views.setViewVisibility(R.id.location_content_container, View.VISIBLE)
         views.setViewVisibility(R.id.location_empty_container, View.GONE)
         
-        // My location
-        views.setTextViewText(R.id.location_my_name, data.myName)
-        views.setTextViewText(R.id.location_my_location, data.myLocation)
-        
-        // Partner location
-        views.setTextViewText(R.id.location_partner_name, data.partnerName)
-        views.setTextViewText(R.id.location_partner_location, data.partnerLocation)
-        
-        // Distance
-        val distanceText = formatDistance(data.distance)
+        // Distance - main display
+        val distanceText = formatDistanceCompact(data.distance)
+        Log.d(TAG, "Setting distance to: '$distanceText'")
         views.setTextViewText(R.id.location_distance_text, distanceText)
         
-        // Status indicator
-        val statusText = if (data.isSharing) "📍 Đang chia sẻ" else "⭕ Tắt chia sẻ"
-        views.setTextViewText(R.id.location_status, statusText)
-        
-        // Partner last update time
-        val lastUpdateText = formatLastUpdate(data.partnerLastUpdate)
+        // Last update time
+        val lastUpdateText = formatLastUpdateCompact(data.partnerLastUpdate)
+        Log.d(TAG, "Setting lastUpdate to: '$lastUpdateText'")
         views.setTextViewText(R.id.location_last_update, lastUpdateText)
+        
+        // Emojis
+        views.setTextViewText(R.id.location_my_emoji, "😊")
+        views.setTextViewText(R.id.location_partner_emoji, "🥦")
     }
-    
-    private fun formatDistance(distance: Double?): String {
-        return if (distance != null) {
-            if (distance < 1.0) {
-                "${(distance * 1000).toInt()} m"
-            } else {
-                String.format("%.1f km", distance)
-            }
+
+    private fun shortenName(name: String): String {
+        return if (name.length > 6) {
+            name.take(5) + "."
         } else {
-            "-- km"
+            name
         }
     }
     
-    private fun formatLastUpdate(timestamp: Long): String {
+    private fun shortenLocationCompact(location: String): String {
+        // Extract district or short name for compact display
+        val cleaned = location
+            .replace("Quận ", "Q.")
+            .replace("Huyện ", "H.")
+            .replace("Thành phố ", "TP.")
+            .replace("Phường ", "P.")
+        return if (cleaned.length > 8) {
+            cleaned.take(7) + "."
+        } else {
+            cleaned
+        }
+    }
+    
+    private fun formatDistanceCompact(distance: Double?): String {
+        return if (distance != null) {
+            if (distance < 1.0) {
+                "💕 ${(distance * 1000).toInt()}m"
+            } else {
+                "💕 ${String.format("%.1f", distance)}km"
+            }
+        } else {
+            "💕 --"
+        }
+    }
+    
+    private fun formatLastUpdateCompact(timestamp: Long): String {
         if (timestamp == 0L) return ""
         
         val diff = System.currentTimeMillis() - timestamp
         val minutes = diff / (1000 * 60)
         
         return when {
-            minutes < 1 -> "Vừa xong"
-            minutes < 60 -> "$minutes phút trước"
-            minutes < 1440 -> "${minutes / 60} giờ trước"
-            else -> "${minutes / 1440} ngày trước"
+            minutes < 1 -> "vừa xong"
+            minutes < 60 -> "${minutes}p"
+            minutes < 1440 -> "${minutes / 60}h"
+            else -> "${minutes / 1440}d"
         }
     }
 
@@ -237,7 +293,16 @@ class LocationWidgetProvider : AppWidgetProvider() {
                 val coupleId = userDoc.getString("coupleId")
                 
                 if (partnerId.isNullOrEmpty()) {
-                    return@withContext null
+                    Log.d(TAG, "No partner linked for user: $userId")
+                    return@withContext LocationWidgetData(
+                        myName = userName,
+                        partnerName = "Chưa kết nối",
+                        myLocation = "Chưa chia sẻ",
+                        partnerLocation = "Chưa chia sẻ",
+                        distance = null,
+                        isSharing = false,
+                        partnerLastUpdate = null
+                    )
                 }
                 
                 // Get partner info
@@ -247,31 +312,29 @@ class LocationWidgetProvider : AppWidgetProvider() {
                 // Generate coupleId if not set
                 val effectiveCoupleId = coupleId ?: listOf(userId, partnerId).sorted().joinToString("_")
                 
-                // Get my location
-                val myLocationDoc = db.collection("couple_locations")
-                    .document(effectiveCoupleId)
-                    .collection("user_locations")
-                    .document(userId)
+                // Get my location - using "locations" collection with document ID format: {coupleId}_{userId}
+                val myLocationDocId = "${effectiveCoupleId}_${userId}"
+                val myLocationDoc = db.collection("locations")
+                    .document(myLocationDocId)
                     .get()
                     .await()
                 
                 // Get partner's location
-                val partnerLocationDoc = db.collection("couple_locations")
-                    .document(effectiveCoupleId)
-                    .collection("user_locations")
-                    .document(partnerId)
+                val partnerLocationDocId = "${effectiveCoupleId}_${partnerId}"
+                val partnerLocationDoc = db.collection("locations")
+                    .document(partnerLocationDocId)
                     .get()
                     .await()
                 
                 val myLat = myLocationDoc.getDouble("latitude")
                 val myLng = myLocationDoc.getDouble("longitude")
-                val myLocationName = myLocationDoc.getString("locationName") ?: "Không rõ"
-                val myLastUpdate = myLocationDoc.getTimestamp("updatedAt")
+                val myLocationName = myLocationDoc.getString("address") ?: "Không rõ"
+                val myLastUpdate = myLocationDoc.getTimestamp("timestamp")
                 
                 val partnerLat = partnerLocationDoc.getDouble("latitude")
                 val partnerLng = partnerLocationDoc.getDouble("longitude")
-                val partnerLocationName = partnerLocationDoc.getString("locationName") ?: "Không rõ"
-                val partnerLastUpdate = partnerLocationDoc.getTimestamp("updatedAt")
+                val partnerLocationName = partnerLocationDoc.getString("address") ?: "Không rõ"
+                val partnerLastUpdate = partnerLocationDoc.getTimestamp("timestamp")
                 
                 // Calculate distance if both have locations
                 val distance = if (myLat != null && myLng != null && partnerLat != null && partnerLng != null) {
@@ -293,7 +356,19 @@ class LocationWidgetProvider : AppWidgetProvider() {
                     partnerLastUpdate = partnerLastUpdate?.toDate()?.time
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading location data", e)
+                Log.e(TAG, "Error loading location data from Firebase", e)
+                // Log more detailed error info for debugging
+                when (e) {
+                    is com.google.firebase.firestore.FirebaseFirestoreException -> {
+                        Log.e(TAG, "Firestore error code: ${e.code}, message: ${e.message}")
+                    }
+                    is java.util.concurrent.ExecutionException -> {
+                        Log.e(TAG, "Execution error: ${e.cause?.message}")
+                    }
+                    else -> {
+                        Log.e(TAG, "Unknown error type: ${e.javaClass.simpleName}")
+                    }
+                }
                 null
             }
         }
@@ -317,42 +392,16 @@ class LocationWidgetProvider : AppWidgetProvider() {
         views.setViewVisibility(R.id.location_content_container, View.VISIBLE)
         views.setViewVisibility(R.id.location_empty_container, View.GONE)
         
-        // My location
-        views.setTextViewText(R.id.location_my_name, data.myName)
-        views.setTextViewText(R.id.location_my_location, data.myLocation)
+        // Distance - main display (simplified layout)
+        views.setTextViewText(R.id.location_distance_text, formatDistanceCompact(data.distance))
         
-        // Partner location
-        views.setTextViewText(R.id.location_partner_name, data.partnerName)
-        views.setTextViewText(R.id.location_partner_location, data.partnerLocation)
-        
-        // Distance
-        val distanceText = if (data.distance != null) {
-            if (data.distance < 1.0) {
-                "${(data.distance * 1000).toInt()} m"
-            } else {
-                String.format("%.1f km", data.distance)
-            }
-        } else {
-            "-- km"
-        }
-        views.setTextViewText(R.id.location_distance_text, distanceText)
-        
-        // Status indicator
-        val statusText = if (data.isSharing) "📍 Đang chia sẻ" else "⭕ Tắt chia sẻ"
-        views.setTextViewText(R.id.location_status, statusText)
-        
-        // Partner last update time
-        val lastUpdateText = data.partnerLastUpdate?.let { timestamp ->
-            val diff = System.currentTimeMillis() - timestamp
-            val minutes = diff / (1000 * 60)
-            when {
-                minutes < 1 -> "Vừa xong"
-                minutes < 60 -> "${minutes} phút trước"
-                minutes < 1440 -> "${minutes / 60} giờ trước"
-                else -> "${minutes / 1440} ngày trước"
-            }
-        } ?: ""
+        // Last update time
+        val lastUpdateText = data.partnerLastUpdate?.let { formatLastUpdateCompact(it) } ?: ""
         views.setTextViewText(R.id.location_last_update, lastUpdateText)
+        
+        // Emojis
+        views.setTextViewText(R.id.location_my_emoji, "😊")
+        views.setTextViewText(R.id.location_partner_emoji, "🥦")
     }
 
     private fun showNoDataState(views: RemoteViews, message: String) {
@@ -364,7 +413,8 @@ class LocationWidgetProvider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         Log.d(TAG, "First Location widget added")
-        WidgetUpdateWorker.schedulePeriodicUpdates(context)
+        WidgetUpdateWorker.schedulePeriodicUpdates(context) // General widgets: 20 min
+        WidgetUpdateWorker.scheduleLocationUpdates(context) // Location widget: 15 min
     }
 
     override fun onDisabled(context: Context) {

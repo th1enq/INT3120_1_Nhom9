@@ -1599,25 +1599,41 @@ private fun Plant.toCachedPlant(): CachedPlant {
 
 /**
  * Convert CachedGardenInventory to domain GardenInventory
+ * Includes ALL item types for complete inventory restore from cache
  */
 private fun CachedGardenInventory.toGardenInventory(): GardenInventory {
     val items = mapOf(
-        CareItemType.WATER to createDefaultItem(CareItemType.WATER).copy(quantity = this.waterAmount),
-        CareItemType.SUNLIGHT to createDefaultItem(CareItemType.SUNLIGHT).copy(quantity = this.sunlightAmount),
-        CareItemType.FERTILIZER_4H to createDefaultItem(CareItemType.FERTILIZER_4H).copy(quantity = this.fertilizerAmount)
+        CareItemType.SEED_NORMAL to createDefaultItem(CareItemType.SEED_NORMAL).copy(quantity = this.seeds),
+        CareItemType.SEED_RARE to createDefaultItem(CareItemType.SEED_RARE).copy(quantity = this.rareSeeds),
+        CareItemType.SEED_SUPER_RARE to createDefaultItem(CareItemType.SEED_SUPER_RARE).copy(quantity = this.superRareSeeds),
+        CareItemType.WATER to createDefaultItem(CareItemType.WATER).copy(quantity = this.wateringCan),
+        CareItemType.SUNLIGHT to createDefaultItem(CareItemType.SUNLIGHT).copy(quantity = this.sunlightBottle),
+        CareItemType.FERTILIZER_4H to createDefaultItem(CareItemType.FERTILIZER_4H).copy(quantity = this.fertilizer4h),
+        CareItemType.FERTILIZER_8H to createDefaultItem(CareItemType.FERTILIZER_8H).copy(quantity = this.fertilizer8h),
+        CareItemType.FERTILIZER_24H to createDefaultItem(CareItemType.FERTILIZER_24H).copy(quantity = this.fertilizer12h),
+        CareItemType.PESTICIDE to createDefaultItem(CareItemType.PESTICIDE).copy(quantity = this.pesticide),
+        CareItemType.SCISSORS to createDefaultItem(CareItemType.SCISSORS).copy(quantity = this.scissors)
     )
-    return GardenInventory(items = items)
+    return GardenInventory(items = items, lastUpdated = this.lastUpdated)
 }
 
 /**
  * Convert FirebaseGardenInventory to CachedGardenInventory
+ * Preserves ALL item types for complete inventory caching
  */
 private fun FirebaseGardenInventory.toCachedGardenInventory(): CachedGardenInventory {
     return CachedGardenInventory(
-        waterAmount = this.wateringCan,
-        sunlightAmount = this.sunlightBottle,
-        fertilizerAmount = this.fertilizer4h + this.fertilizer8h + this.fertilizer12h,
-        seeds = listOf()
+        seeds = this.seeds,
+        rareSeeds = this.rareSeeds,
+        superRareSeeds = this.superRareSeeds,
+        wateringCan = this.wateringCan,
+        sunlightBottle = this.sunlightBottle,
+        fertilizer4h = this.fertilizer4h,
+        fertilizer8h = this.fertilizer8h,
+        fertilizer12h = this.fertilizer12h,
+        pesticide = this.pesticide,
+        scissors = this.scissors,
+        lastUpdated = this.updatedAt?.time ?: System.currentTimeMillis()
     )
 }
 

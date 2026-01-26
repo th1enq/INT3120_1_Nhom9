@@ -16,6 +16,7 @@ import com.example.coupleapp.data.model.SleepQuality
 import com.example.coupleapp.widget.data.SleepWidgetCachedData
 import com.example.coupleapp.widget.data.WidgetDataRepository
 import com.example.coupleapp.widget.worker.WidgetUpdateWorker
+import com.google.firebase.auth.FirebaseAuth
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -103,29 +104,44 @@ class SleepWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_sleep_tracker)
             
             try {
-                // Use cached data for battery efficiency
-                val sleepData = WidgetDataRepository.getSleepWidgetData(context)
+                // Check authentication first
+                val auth = FirebaseAuth.getInstance()
+                val currentUser = auth.currentUser
                 
-                if (sleepData != null) {
-                    // Check if we should show bedtime reminder
-                    val shouldShowReminder = checkBedtimeReminder(
-                        sleepData.bedtimeHour,
-                        sleepData.bedtimeMinute
-                    )
-                    
-                    if (shouldShowReminder) {
-                        showBedtimeReminder(views, sleepData.bedtimeHour, sleepData.bedtimeMinute)
-                    } else {
-                        showSleepComparisonCached(context, views, sleepData)
-                    }
-                } else {
-                    // No cached data available - show empty state
+                if (currentUser == null) {
+                    Log.d(TAG, "User not authenticated")
                     showEmptyState(views, "Đăng nhập để xem giấc ngủ")
+                } else {
+                    // Use cached data for battery efficiency
+                    val sleepData = WidgetDataRepository.getSleepWidgetData(context)
+                    
+                    if (sleepData != null) {
+                        Log.d(TAG, "Sleep widget data loaded successfully")
+                        // Check if we should show bedtime reminder
+                        val shouldShowReminder = checkBedtimeReminder(
+                            sleepData.bedtimeHour,
+                            sleepData.bedtimeMinute
+                        )
+                        
+                        if (shouldShowReminder) {
+                            showBedtimeReminder(views, sleepData.bedtimeHour, sleepData.bedtimeMinute)
+                        } else {
+                            showSleepComparisonCached(context, views, sleepData)
+                        }
+                    } else {
+                        Log.d(TAG, "No sleep data available")
+                        showEmptyState(views, "Chưa có dữ liệu giấc ngủ")
+                    }
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating widget", e)
-                showEmptyState(views, "Không thể tải dữ liệu")
+                Log.e(TAG, "Error updating sleep widget: ${e.message}", e)
+                val errorMessage = when {
+                    e.message?.contains("auth", ignoreCase = true) == true -> "Lỗi xác thực"
+                    e.message?.contains("network", ignoreCase = true) == true -> "Không có mạng"
+                    else -> "Không thể tải dữ liệu"
+                }
+                showEmptyState(views, errorMessage)
             }
             
             // Set click intent to open app
@@ -155,10 +171,10 @@ class SleepWidgetProvider : AppWidgetProvider() {
     }
     
     private fun showEmptyState(views: RemoteViews, message: String) {
-        views.setViewVisibility(R.id.widget_container, View.VISIBLE)
+        views.setViewVisibility(R.id.widget_container, View.GONE)
         views.setViewVisibility(R.id.bedtime_reminder_container, View.GONE)
-        views.setTextViewText(R.id.left_status_text, message)
-        views.setTextColor(R.id.left_status_text, Color.parseColor("#888888"))
+        views.setViewVisibility(R.id.sleep_empty_container, View.VISIBLE)
+        views.setTextViewText(R.id.sleep_empty_message, message)
     }
     
     private fun showSleepComparisonCached(
@@ -168,14 +184,21 @@ class SleepWidgetProvider : AppWidgetProvider() {
     ) {
         views.setViewVisibility(R.id.widget_container, View.VISIBLE)
         views.setViewVisibility(R.id.bedtime_reminder_container, View.GONE)
+        views.setViewVisibility(R.id.sleep_empty_container, View.GONE)
         
-        // Update my sleep info (left side)
+        // Update goal and bedtime information - compact format for 2x2 widget
+        views.setTextViewText(R.id.sleep_goal_text, "🎯 8h")
+        views.setTextViewText(R.id.bedtime_goal_text, "🌙 ${String.format("%02d:%02d", data.bedtimeHour, data.bedtimeMinute)}")
+        // sleep_date_header is now hidden in compact mode
+        
+        // Update my sleep info (left side) - compact format
         updateUserSleepInfoCached(
             context,
             views,
             data.mySleepDuration,
             data.mySleepQuality,
             data.myAchievement,
+            data.myAvatarUrl,
             isLeft = true
         )
         
@@ -193,6 +216,7 @@ class SleepWidgetProvider : AppWidgetProvider() {
                 data.partnerSleepDuration,
                 data.partnerSleepQuality,
                 data.partnerAchievement,
+                data.partnerAvatarUrl,
                 isLeft = false
             )
         }
@@ -204,14 +228,34 @@ class SleepWidgetProvider : AppWidgetProvider() {
         duration: Int,
         quality: String,
         achievement: Float,
+        avatarUrl: String?,
         isLeft: Boolean
     ) {
+        val emojiViewId = if (isLeft) R.id.left_emoji_icon else R.id.right_emoji_icon
         val emojiText = if (isLeft) "😊" else "🥦"
-        views.setTextViewText(
-            if (isLeft) R.id.left_emoji_icon else R.id.right_emoji_icon,
-            emojiText
-        )
         
+        // Show emoji (avatar removed - too complex for widget)
+        views.setTextViewText(emojiViewId, emojiText)
+        
+        // Check if we have data for today (duration = 0 means no data)
+        if (duration == 0) {
+            // No sleep data for today
+            views.setTextViewText(
+                if (isLeft) R.id.left_duration_text else R.id.right_duration_text,
+                "Chưa ngủ"
+            )
+            views.setTextViewText(
+                if (isLeft) R.id.left_status_text else R.id.right_status_text,
+                ""
+            )
+            views.setImageViewResource(
+                if (isLeft) R.id.left_status_circle else R.id.right_status_circle,
+                R.drawable.bad
+            )
+            return
+        }
+        
+        // Set sleep quality icon
         val statusImageRes = when (quality) {
             "EXCELLENT" -> R.drawable.excellent
             "GOOD" -> R.drawable.good
@@ -233,9 +277,10 @@ class SleepWidgetProvider : AppWidgetProvider() {
             progressBitmap
         )
         
+        // Compact status text - just one word
         val statusText = when (quality) {
-            "EXCELLENT" -> "Xuất sắc"
-            "GOOD" -> "Tốt"
+            "EXCELLENT" -> "Tốt"
+            "GOOD" -> "Ổn"
             else -> "Kém"
         }
         val statusColor = when (quality) {
@@ -252,23 +297,20 @@ class SleepWidgetProvider : AppWidgetProvider() {
             statusColor
         )
         
+        // Legacy date fields are hidden in compact mode
         views.setViewVisibility(
             if (isLeft) R.id.left_date_text else R.id.right_date_text,
-            View.VISIBLE
+            View.GONE
         )
         views.setViewVisibility(
             if (isLeft) R.id.left_duration_text else R.id.right_duration_text,
             View.VISIBLE
         )
         
-        views.setTextViewText(
-            if (isLeft) R.id.left_date_text else R.id.right_date_text,
-            "Hôm nay"
-        )
-        
+        // Compact duration format: 7h30 instead of "7h 30min"
         val hours = duration / 60
         val minutes = duration % 60
-        val durationText = "${hours}h ${minutes}min"
+        val durationText = if (minutes > 0) "${hours}h${minutes}" else "${hours}h"
         views.setTextViewText(
             if (isLeft) R.id.left_duration_text else R.id.right_duration_text,
             durationText
@@ -286,6 +328,7 @@ class SleepWidgetProvider : AppWidgetProvider() {
     private fun showBedtimeReminder(views: RemoteViews, bedtimeHour: Int, bedtimeMinute: Int) {
         views.setViewVisibility(R.id.widget_container, View.GONE)
         views.setViewVisibility(R.id.bedtime_reminder_container, View.VISIBLE)
+        views.setViewVisibility(R.id.sleep_empty_container, View.GONE)
         
         val bedTime = LocalTime.of(bedtimeHour, bedtimeMinute)
         val bedTimeFormatted = bedTime.format(DateTimeFormatter.ofPattern("HH:mm"))

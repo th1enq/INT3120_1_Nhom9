@@ -26,6 +26,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.SharedPlace
@@ -119,6 +121,13 @@ fun DistanceScreen(
         if (!uiState.isLoading) {
             visible = true
         }
+    }
+    
+    // ★ AUTO-REFRESH: Force refresh from SERVER when screen resumes
+    // This fixes stale cache issue where real-time listener returns cached data
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        android.util.Log.d("DistanceScreen", "ON_RESUME: Force refreshing partner data from SERVER")
+        viewModel.refreshLocations()
     }
     
     // Handle navigation with target place animation

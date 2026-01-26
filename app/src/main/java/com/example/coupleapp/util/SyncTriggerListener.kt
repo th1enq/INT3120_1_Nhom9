@@ -145,8 +145,10 @@ object SyncTriggerListener {
                                         Log.d(TAG, "✅ Triggered sync for: $dataType")
                                     }
                                     
-                                    // Mark trigger as processed
-                                    doc.reference.update("processed", true).await()
+                                    // Delete trigger immediately after processing (instead of just marking processed)
+                                    // This prevents Firestore bloat from accumulated triggers
+                                    doc.reference.delete().await()
+                                    Log.d(TAG, "🧹 Deleted processed trigger: ${doc.id}")
                                     
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error processing sync trigger", e)

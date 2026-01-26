@@ -465,13 +465,17 @@ class CalendarViewModelFirebase : ViewModel() {
 
     /**
      * Update love days counter - only count full days from 00:00
+     * Note: On the first day together (startDate == today), totalDays = 1 (not 0)
+     * This is consistent with ProfileViewModel.calculateDaysTogether
      */
     private fun updateLoveDaysCounter(startDate: LocalDateTime) {
         val today = LocalDate.now()
         val startDateOnly = startDate.toLocalDate()
         
         // Calculate days between start date and today (not including time)
-        val totalDays = java.time.temporal.ChronoUnit.DAYS.between(startDateOnly, today)
+        // Add 1 because the first day counts as "Day 1", not "Day 0"
+        // This is consistent with ProfileViewModel.calculateDaysTogether
+        val totalDays = java.time.temporal.ChronoUnit.DAYS.between(startDateOnly, today) + 1
         val years = (totalDays / 365).toInt()
         val months = ((totalDays % 365) / 30).toInt()
         val days = ((totalDays % 365) % 30).toInt()

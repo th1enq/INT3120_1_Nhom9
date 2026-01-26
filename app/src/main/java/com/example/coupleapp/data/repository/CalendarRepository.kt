@@ -25,12 +25,15 @@ class CalendarRepository {
     
     /**
      * Calculate love days counter
+     * Note: On the first day together (startDate == today), totalDays = 1 (not 0)
+     * This is consistent with ProfileViewModel.calculateDaysTogether
      */
     fun calculateLoveDays(startDate: LocalDateTime): LoveDaysCounter {
         val now = LocalDateTime.now()
         val totalSeconds = ChronoUnit.SECONDS.between(startDate, now)
         
-        val totalDays = ChronoUnit.DAYS.between(startDate, now)
+        // Add 1 because the first day counts as "Day 1", not "Day 0"
+        val totalDays = ChronoUnit.DAYS.between(startDate, now) + 1
         val years = totalDays / 365
         val remainingDaysAfterYears = totalDays % 365
         val months = remainingDaysAfterYears / 30

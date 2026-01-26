@@ -94,6 +94,10 @@ class BackgroundLocationWorker(
         // Maximum gap to consider same visit session (2 hours)
         private const val MAX_SESSION_GAP_MINUTES = 120
         
+        // Minimum time gap before creating a new entry at same location (5 minutes)
+        // Prevents duplicate entries from race condition between sources
+        private const val MIN_ENTRY_GAP_MS = 5 * 60 * 1000L
+        
         /**
          * Schedule background location updates.
          * Đây là cơ chế chính khi app bị kill để tracking location history.
@@ -397,15 +401,18 @@ class BackgroundLocationWorker(
         try {
             val now = System.currentTimeMillis()
             
-            // Fetch recent history entries
-            // IMPORTANT: Must orderBy arrivalTime DESC to get most recent entries first
+            // ★ FIX: Use Source.SERVER to bypass cache and get fresh data
+            // This prevents race condition where cached data shows no active entry
+            // while another source (SignificantLocationManager) just created one
             val recentHistory = db.collection("location_history")
                 .whereEqualTo("userId", userId)
                 .whereEqualTo("coupleId", coupleId)
                 .orderBy("arrivalTime", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(20)
-                .get()
+                .get(com.google.firebase.firestore.Source.SERVER) // Force server fetch!
                 .await()
+            
+            Log.d(TAG, "Fetched ${recentHistory.documents.size} history entries from SERVER")
             
             // Step 1: Find ACTIVE entry (no departureTime) within 200m
             // Since results are ordered by arrivalTime DESC, first match is the LATEST
@@ -478,7 +485,64 @@ class BackgroundLocationWorker(
                 return
             }
             
-            // No active entry at current location - close old active entry and create new
+            // No active entry at current location
+            // ★ FIX: Check if there's a RECENT entry at this location (even if closed)
+            // to prevent duplicate entries from race condition with SignificantLocationManager
+            val recentNearbyEntry = recentHistory.documents.find { doc ->
+                val arrivalTime = doc.getDate("arrivalTime") ?: return@find false
+                val historyLat = doc.getDouble("latitude") ?: return@find false
+                val historyLng = doc.getDouble("longitude") ?: return@find false
+                val historyCoord = LocationCoordinate(historyLat, historyLng)
+                
+                val distance = calculateDistance(coordinate, historyCoord)
+                val timeSinceArrival = now - arrivalTime.time
+                
+                // If there's an entry within 200m created in last 5 minutes, skip creating new
+                distance <= SAME_LOCATION_THRESHOLD_METERS && timeSinceArrival < MIN_ENTRY_GAP_MS
+            }
+            
+            if (recentNearbyEntry != null) {
+                // Entry already exists at this location, just update it instead of creating duplicate
+                val existingDepartureTime = recentNearbyEntry.getDate("departureTime")
+                val existingArrivalTime = recentNearbyEntry.getDate("arrivalTime")
+                val locationName = detectPlaceName(address)
+                
+                if (existingDepartureTime != null) {
+                    // ★ FIX: Entry was CLOSED - reset arrivalTime to now to avoid huge duration
+                    // Don't reopen old entries, just create fresh session
+                    Log.d(TAG, "📍 Entry was closed, resetting arrivalTime to now")
+                    recentNearbyEntry.reference.update(
+                        mapOf(
+                            "arrivalTime" to Date(now), // Reset to now!
+                            "durationMinutes" to 0, // Start fresh
+                            "departureTime" to null, // Reopen
+                            "latitude" to coordinate.latitude,
+                            "longitude" to coordinate.longitude,
+                            "address" to address,
+                            "locationName" to locationName
+                        )
+                    ).await()
+                } else {
+                    // Entry is still ACTIVE - just update duration
+                    val durationMinutes = if (existingArrivalTime != null && existingArrivalTime.time <= now) {
+                        ((now - existingArrivalTime.time) / 60_000).toInt().coerceAtLeast(0)
+                    } else 0
+                    
+                    recentNearbyEntry.reference.update(
+                        mapOf(
+                            "durationMinutes" to durationMinutes,
+                            "latitude" to coordinate.latitude,
+                            "longitude" to coordinate.longitude,
+                            "address" to address,
+                            "locationName" to locationName
+                        )
+                    ).await()
+                    Log.d(TAG, "📍 Updated active entry: ${durationMinutes}min")
+                }
+                return
+            }
+            
+            // Close old active entry at DIFFERENT location and create new
             // This prevents having multiple active entries at the same time
             for (doc in recentHistory.documents) {
                 val departureTime = doc.getDate("departureTime")

@@ -123,7 +123,7 @@ class GardenCacheRepository(
             val json = gson.toJson(inventory)
             prefs.edit().putString(key, json).apply()
             CacheManager.recordSync(context, CacheManager.DataType.GARDEN_INVENTORY, userId)
-            Log.d(TAG, "📦 Cached inventory: water=${inventory.waterAmount}, sun=${inventory.sunlightAmount}, fertilizer=${inventory.fertilizerAmount}")
+            Log.d(TAG, "📦 Cached inventory: seeds=${inventory.seeds}, water=${inventory.wateringCan}, sun=${inventory.sunlightBottle}, fert4h=${inventory.fertilizer4h}, fert8h=${inventory.fertilizer8h}, fert12h=${inventory.fertilizer12h}, pesticide=${inventory.pesticide}, scissors=${inventory.scissors}")
         } catch (e: Exception) {
             Log.e(TAG, "Error caching inventory", e)
         }
@@ -284,12 +284,20 @@ data class CachedPlant(
 
 /**
  * Cached garden inventory
+ * Contains all item types that can be purchased in the Store
  */
 data class CachedGardenInventory(
-    val waterAmount: Int,
-    val sunlightAmount: Int,
-    val fertilizerAmount: Int,
-    val seeds: List<String>
+    val seeds: Int = 0,
+    val rareSeeds: Int = 0,
+    val superRareSeeds: Int = 0,
+    val wateringCan: Int = 0,
+    val sunlightBottle: Int = 0,
+    val fertilizer4h: Int = 0,
+    val fertilizer8h: Int = 0,
+    val fertilizer12h: Int = 0,
+    val pesticide: Int = 0,
+    val scissors: Int = 0,
+    val lastUpdated: Long = System.currentTimeMillis()
 )
 
 /**

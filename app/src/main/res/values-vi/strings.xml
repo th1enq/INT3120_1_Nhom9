@@ -169,6 +169,7 @@
     <string name="widget_location_description">Xem khoảng cách và vị trí của người yêu</string>
     <string name="avatar_left">Ảnh đại diện bên trái</string>
     <string name="avatar_right">Ảnh đại diện bên phải</string>
+    <string name="profile_picture">Ảnh đại diện</string>
     <string name="sleep_status">Trạng thái giấc ngủ</string>
     <string name="bedtime_reminder">Nhắc nhở giờ ngủ</string>
     

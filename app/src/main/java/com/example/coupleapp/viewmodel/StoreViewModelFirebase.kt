@@ -7,6 +7,7 @@ import com.example.coupleapp.R
 import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.data.repository.GardenCacheRepository
 import com.example.coupleapp.data.repository.StoreCacheRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,8 @@ import java.time.format.DateTimeFormatter
 class StoreViewModelFirebase(
     private val authRepository: FirebaseAuthRepository = FirebaseAuthRepository(),
     private val firestoreRepository: FirebaseFirestoreRepository = FirebaseFirestoreRepository(),
-    private val storeCache: StoreCacheRepository = StoreCacheRepository.getInstance()
+    private val storeCache: StoreCacheRepository = StoreCacheRepository.getInstance(),
+    private val gardenCache: GardenCacheRepository = GardenCacheRepository.getInstance()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StoreUiState())
@@ -486,11 +488,18 @@ class StoreViewModelFirebase(
                         
                         // Invalidate cache after purchase
                         storeCache.invalidateCache(currentUserId)
+                        gardenCache.invalidateCache(currentUserId)
+                        Log.d(TAG, "[STORE→GARDEN] 🗑️ Garden cache invalidated after coin purchase")
+                        
+                        // CRITICAL FIX: Update store cache with new wallet data
+                        val updatedWallet = wallet.copy(coins = newCoins)
+                        storeCache.cacheWallet(currentUserId, updatedWallet)
+                        Log.d(TAG, "[STORE] 💰 Updated wallet cache after coin purchase: $newCoins coins")
                         
                         // Update local state
                         _uiState.update { 
                             it.copy(
-                                userWallet = wallet.copy(coins = newCoins),
+                                userWallet = updatedWallet,
                                 purchaseResult = PurchaseResult.Success(item, newCoins),
                                 errorMessage = null,
                                 isPurchasing = false
@@ -526,10 +535,20 @@ class StoreViewModelFirebase(
                         
                         // Invalidate cache after free gift claim
                         storeCache.invalidateCache(currentUserId)
+                        gardenCache.invalidateCache(currentUserId)
+                        Log.d(TAG, "[STORE→GARDEN] 🗑️ Garden cache invalidated after free gift")
+                        
+                        // CRITICAL FIX: Update store cache with updated last claim time
+                        val updatedWallet = wallet.copy(
+                            lastFreeClaimTime = System.currentTimeMillis()
+                        )
+                        storeCache.cacheWallet(currentUserId, updatedWallet)
+                        Log.d(TAG, "[STORE] 🎁 Updated wallet cache after free gift claim")
                         
                         // Update local state
                         _uiState.update { 
                             it.copy(
+                                userWallet = updatedWallet,
                                 canClaimFreeGift = false,
                                 freeGiftCooldownDays = 3,
                                 purchaseResult = PurchaseResult.Success(item, wallet.coins),
@@ -547,6 +566,12 @@ class StoreViewModelFirebase(
                         
                         // Invalidate cache after ad reward
                         storeCache.invalidateCache(currentUserId)
+                        gardenCache.invalidateCache(currentUserId)
+                        Log.d(TAG, "[STORE→GARDEN] 🗑️ Garden cache invalidated after ad reward")
+                        
+                        // CRITICAL FIX: Update store cache (no wallet change for ad watch, but ensure cache consistency)
+                        storeCache.cacheWallet(currentUserId, wallet)
+                        Log.d(TAG, "[STORE] 📺 Refreshed wallet cache after ad watch")
                         
                         _uiState.update { 
                             it.copy(
@@ -591,10 +616,20 @@ class StoreViewModelFirebase(
                     Log.d(TAG, "[STORE→GARDEN] Current inventory: seeds=${inventoryDoc?.seeds}, fert4h=${inventoryDoc?.fertilizer4h}, fert8h=${inventoryDoc?.fertilizer8h}, fert12h=${inventoryDoc?.fertilizer12h}, water=${inventoryDoc?.wateringCan}, sun=${inventoryDoc?.sunlightBottle}")
                     
                     when (item.id) {
-                        "seed_normal", "seed_rare", "seed_super_rare" -> {
+                        "seed_normal" -> {
                             val currentSeeds = inventoryDoc?.seeds ?: 0
                             updates["seeds"] = currentSeeds + quantity
-                            Log.d(TAG, "[STORE→GARDEN] Seed update: $currentSeeds → ${currentSeeds + quantity}")
+                            Log.d(TAG, "[STORE→GARDEN] Normal seed update: $currentSeeds → ${currentSeeds + quantity}")
+                        }
+                        "seed_rare" -> {
+                            val currentRareSeeds = inventoryDoc?.rareSeeds ?: 0
+                            updates["rareSeeds"] = currentRareSeeds + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Rare seed update: $currentRareSeeds → ${currentRareSeeds + quantity}")
+                        }
+                        "seed_super_rare" -> {
+                            val currentSuperRareSeeds = inventoryDoc?.superRareSeeds ?: 0
+                            updates["superRareSeeds"] = currentSuperRareSeeds + quantity
+                            Log.d(TAG, "[STORE→GARDEN] Super rare seed update: $currentSuperRareSeeds → ${currentSuperRareSeeds + quantity}")
                         }
                         "fertilizer_4h" -> {
                             val current = inventoryDoc?.fertilizer4h ?: 0
@@ -851,10 +886,19 @@ class StoreViewModelFirebase(
                 // Record purchase
                 recordPurchase(currentUserId, item, "coin", quantity)
                 
+                // IMPORTANT: Invalidate Garden cache so Garden screen loads fresh data
+                gardenCache.invalidateCache(currentUserId)
+                Log.d(TAG, "[STORE→GARDEN] 🗑️ Garden cache invalidated after purchase")
+                
+                // CRITICAL FIX: Update store cache with new wallet data
+                val updatedWallet = wallet.copy(coins = newCoins)
+                storeCache.cacheWallet(currentUserId, updatedWallet)
+                Log.d(TAG, "[STORE] 💰 Updated wallet cache with new balance: $newCoins coins")
+                
                 // Update local state
                 _uiState.update { 
                     it.copy(
-                        userWallet = wallet.copy(coins = newCoins),
+                        userWallet = updatedWallet,
                         purchaseResult = PurchaseResult.Success(item, newCoins, quantity),
                         errorMessage = null
                     ) 

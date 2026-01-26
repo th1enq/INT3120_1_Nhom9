@@ -46,6 +46,10 @@ class MissingWidgetProvider : AppWidgetProvider() {
         private const val ACTION_UPDATE_WIDGET = "com.example.coupleapp.UPDATE_MISSING_WIDGET"
         private const val ACTION_SEND_MISSING = "com.example.coupleapp.SEND_MISSING_FROM_WIDGET"
         
+        // Debouncing for rapid clicks - prevent multiple simultaneous sends
+        private const val DEBOUNCE_DELAY_MS = 1000L // 1 second minimum between sends
+        private var lastSendTime = 0L
+        
         /**
          * Update all widgets using cached data (battery-efficient)
          */
@@ -102,6 +106,15 @@ class MissingWidgetProvider : AppWidgetProvider() {
             ACTION_SEND_MISSING -> {
                 // Quick send missing from widget with haptic feedback
                 Log.d(TAG, "ACTION_SEND_MISSING received, processing...")
+                
+                // DEBOUNCING: Prevent rapid clicks that cause race conditions
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastSendTime < DEBOUNCE_DELAY_MS) {
+                    Log.d(TAG, "Send request ignored - too soon after last send (debouncing)")
+                    return
+                }
+                lastSendTime = currentTime
+                
                 CoroutineScope(Dispatchers.IO).launch {
                     val success = sendMissingFromWidgetOptimized(context)
                     Log.d(TAG, "sendMissingFromWidgetOptimized result: $success")
@@ -163,14 +176,18 @@ class MissingWidgetProvider : AppWidgetProvider() {
                 val currentUser = auth.currentUser
                 
                 if (currentUser == null) {
+                    Log.d(TAG, "User not authenticated")
                     showData(views, 0, 0, 0, 0, false)
                 } else {
+                    Log.d(TAG, "Loading missing data for authenticated user")
                     // Use cached data for battery efficiency
                     val cachedData = WidgetDataRepository.getMissingWidgetData(context)
                     
                     if (cachedData != null) {
+                        Log.d(TAG, "Missing widget data loaded from cache successfully")
                         showDataCached(views, cachedData)
                     } else {
+                        Log.d(TAG, "No cached data, loading from Firebase")
                         // Fallback to direct Firebase query
                         val data = loadMissingData(currentUser.uid)
                         showData(
@@ -185,7 +202,16 @@ class MissingWidgetProvider : AppWidgetProvider() {
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating widget", e)
+                Log.e(TAG, "Error updating missing widget: ${e.message}", e)
+                // Show more specific error handling
+                when {
+                    e.message?.contains("auth", ignoreCase = true) == true -> {
+                        Log.e(TAG, "Authentication error in missing widget")
+                    }
+                    e.message?.contains("network", ignoreCase = true) == true -> {
+                        Log.e(TAG, "Network error in missing widget")
+                    }
+                }
                 showData(views, 0, 0, 0, 0, false)
             }
             
@@ -357,11 +383,12 @@ class MissingWidgetProvider : AppWidgetProvider() {
         hasSentToday: Boolean
     ) {
         // Streak display with fire emoji
-        val streakText = if (currentStreak > 0) "🔥 $currentStreak ngày" else "Chưa có streak"
+        // Note: Layout already has "ngày" text, so we only show the number
+        val streakText = if (currentStreak > 0) "🔥 $currentStreak" else "Chưa có"
         views.setTextViewText(R.id.missing_streak_text, streakText)
         
-        // Longest streak
-        views.setTextViewText(R.id.missing_longest_streak, "Kỷ lục: $longestStreak ngày")
+        // Longest streak - use string resource format
+        views.setTextViewText(R.id.missing_longest_streak, "Kỷ lục: $longestStreak")
         
         // Today's count
         views.setTextViewText(R.id.missing_my_count, "Bạn: $myTodayCount ❤️")

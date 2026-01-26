@@ -272,11 +272,15 @@ class LocationRepository(
                 }
                 
                 if (snapshot != null && snapshot.exists()) {
+                    // ★ Check if data is from cache or server
+                    val source = if (snapshot.metadata.isFromCache) "LOCAL_CACHE" else "SERVER"
+                    android.util.Log.d("LocationRepository", "Partner location snapshot [source=$source]")
+                    
                     try {
                         val firebaseLocation = snapshot.toObject(FirebaseLocationData::class.java)
                         if (firebaseLocation != null) {
                             val userLocation = firebaseLocation.toUserLocation()
-                            android.util.Log.d("LocationRepository", "Partner location received: ${userLocation.coordinate}")
+                            android.util.Log.d("LocationRepository", "Partner location received: ${userLocation.coordinate} [source=$source]")
                             _partnerCurrentLocation.value = userLocation
                             trySend(userLocation)
                         } else {
@@ -439,6 +443,125 @@ class LocationRepository(
     }
     
     /**
+     * Force refresh partner location from SERVER (bypass cache).
+     * Call this when app resumes or when user suspects stale data.
+     * 
+     * This is needed because Firestore's real-time listener may return cached data
+     * if the WebSocket connection is stale but SDK hasn't detected it yet.
+     */
+    suspend fun forceRefreshPartnerLocation(partnerId: String, coupleId: String): UserLocation? {
+        if (partnerId.isEmpty() || coupleId.isEmpty()) return null
+        
+        return try {
+            val documentId = "${coupleId}_${partnerId}"
+            android.util.Log.d("LocationRepository", "Force refreshing partner location from SERVER: $documentId")
+            
+            // Use Source.SERVER to bypass cache
+            val snapshot = db.collection(LOCATIONS_COLLECTION)
+                .document(documentId)
+                .get(com.google.firebase.firestore.Source.SERVER)
+                .await()
+            
+            if (snapshot.exists()) {
+                val firebaseLocation = snapshot.toObject(FirebaseLocationData::class.java)
+                val userLocation = firebaseLocation?.toUserLocation()
+                if (userLocation != null) {
+                    _partnerCurrentLocation.value = userLocation
+                    android.util.Log.d("LocationRepository", "✅ Force refresh SUCCESS: ${userLocation.coordinate}")
+                }
+                userLocation
+            } else {
+                android.util.Log.d("LocationRepository", "Partner location document doesn't exist on server")
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LocationRepository", "Error force refreshing partner location", e)
+            null
+        }
+    }
+    
+    /**
+     * Force refresh MY location history from SERVER (bypass cache).
+     * Call this when user manually refreshes or when data seems stale.
+     */
+    suspend fun forceRefreshMyHistory(userId: String, coupleId: String): List<LocationHistory> {
+        if (userId.isEmpty() || coupleId.isEmpty()) return emptyList()
+        
+        return try {
+            android.util.Log.d("LocationRepository", "Force refreshing MY history from SERVER")
+            
+            val threeDaysAgo = java.time.LocalDate.now().minusDays(3)
+            
+            // Use Source.SERVER to bypass cache
+            val snapshot = db.collection(LOCATION_HISTORY_COLLECTION)
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("coupleId", coupleId)
+                .get(com.google.firebase.firestore.Source.SERVER)
+                .await()
+            
+            android.util.Log.d("LocationRepository", "Force refresh got ${snapshot.documents.size} documents from SERVER for MY history")
+            
+            val rawHistory = snapshot.documents.mapNotNull { doc ->
+                try {
+                    val history = doc.toObject(FirebaseLocationHistory::class.java)?.toLocationHistory()
+                    if (history != null && history.arrivalTime.toLocalDate() >= threeDaysAgo) {
+                        history
+                    } else null
+                } catch (e: Exception) { null }
+            }.sortedByDescending { it.arrivalTime }
+            
+            val cleanedHistory = processLocationHistory(rawHistory)
+            _myLocationHistory.value = cleanedHistory
+            
+            android.util.Log.d("LocationRepository", "✅ Force refresh MY history SUCCESS: ${cleanedHistory.size} entries")
+            cleanedHistory
+        } catch (e: Exception) {
+            android.util.Log.e("LocationRepository", "Error force refreshing MY history", e)
+            emptyList()
+        }
+    }
+    
+    /**
+     * Force refresh partner location history from SERVER (bypass cache).
+     */
+    suspend fun forceRefreshPartnerHistory(partnerId: String, coupleId: String): List<LocationHistory> {
+        if (partnerId.isEmpty() || coupleId.isEmpty()) return emptyList()
+        
+        return try {
+            android.util.Log.d("LocationRepository", "Force refreshing partner history from SERVER")
+            
+            val threeDaysAgo = java.time.LocalDate.now().minusDays(3)
+            
+            // Use Source.SERVER to bypass cache
+            val snapshot = db.collection(LOCATION_HISTORY_COLLECTION)
+                .whereEqualTo("userId", partnerId)
+                .whereEqualTo("coupleId", coupleId)
+                .get(com.google.firebase.firestore.Source.SERVER)
+                .await()
+            
+            android.util.Log.d("LocationRepository", "Force refresh got ${snapshot.documents.size} documents from SERVER")
+            
+            val rawHistory = snapshot.documents.mapNotNull { doc ->
+                try {
+                    val history = doc.toObject(FirebaseLocationHistory::class.java)?.toLocationHistory()
+                    if (history != null && history.arrivalTime.toLocalDate() >= threeDaysAgo) {
+                        history
+                    } else null
+                } catch (e: Exception) { null }
+            }.sortedByDescending { it.arrivalTime }
+            
+            val cleanedHistory = processLocationHistory(rawHistory)
+            _partnerLocationHistory.value = cleanedHistory
+            
+            android.util.Log.d("LocationRepository", "✅ Force refresh partner history SUCCESS: ${cleanedHistory.size} entries")
+            cleanedHistory
+        } catch (e: Exception) {
+            android.util.Log.e("LocationRepository", "Error force refreshing partner history", e)
+            emptyList()
+        }
+    }
+    
+    /**
      * Load location history for a user - only last 3 days
      * Includes logic to:
      * 1. Filter to only last 3 days (older entries are cleaned up automatically)
@@ -554,7 +677,10 @@ class LocationRepository(
                 }
                 
                 if (snapshot != null) {
-                    android.util.Log.d("LocationRepository", "Location history snapshot received: ${snapshot.documents.size} documents for ${if (isCurrentUser) "current user" else "partner"}")
+                    // ★ IMPORTANT: Check if data is from cache or server
+                    val source = if (snapshot.metadata.isFromCache) "LOCAL_CACHE" else "SERVER"
+                    val hasPending = snapshot.metadata.hasPendingWrites()
+                    android.util.Log.d("LocationRepository", "Location history snapshot received: ${snapshot.documents.size} documents for ${if (isCurrentUser) "current user" else "partner"} [source=$source, pendingWrites=$hasPending]")
                     
                     val rawHistory = snapshot.documents.mapNotNull { doc ->
                         try {

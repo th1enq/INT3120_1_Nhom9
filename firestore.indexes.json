@@ -57,6 +57,14 @@
         { "fieldPath": "targetUserId", "order": "ASCENDING" },
         { "fieldPath": "processed", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "sync_triggers",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        { "fieldPath": "senderId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
