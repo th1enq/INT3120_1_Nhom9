@@ -828,9 +828,18 @@ class CalendarViewModelFirebase : ViewModel() {
                     Log.d(TAG, "[CALENDAR] Created couple document: $coupleId")
                 }
 
+                // Get the couple document to determine correct field name
+                val coupleDoc = firestoreRepository.getDocument(
+                    "couples",
+                    coupleId,
+                    FirebaseCouple::class.java
+                ).getOrNull()
+                
                 // Update nickname in couples document
-                val fieldName = if (userId == currentUserId) "user1Nickname" else "user2Nickname"
-                Log.d(TAG, "[CALENDAR] Updating field '$fieldName' in couples/$coupleId with value: $newNickname")
+                // IMPORTANT: Compare with user1Id from couple document, not with currentUserId
+                // because user1Id/user2Id are sorted alphabetically, not based on who is logged in
+                val fieldName = if (userId == coupleDoc?.user1Id) "user1Nickname" else "user2Nickname"
+                Log.d(TAG, "[CALENDAR] Updating field '$fieldName' in couples/$coupleId with value: $newNickname (userId=$userId, user1Id=${coupleDoc?.user1Id}, user2Id=${coupleDoc?.user2Id})")
                 
                 firestoreRepository.updateDocument(
                     "couples",

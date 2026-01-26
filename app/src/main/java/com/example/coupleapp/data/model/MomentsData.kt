@@ -15,7 +15,8 @@ enum class MomentCardType {
     EVENT,
     ANNIVERSARY,
     GARDEN,
-    MESSAGE
+    MESSAGE,
+    CALENDAR_MEMORY // New type for past calendar events (memories)
 }
 
 /**
@@ -247,4 +248,30 @@ data class MessageMoment(
     val isRead: Boolean
 ) : MomentItem() {
     override val type = MomentCardType.MESSAGE
+}
+
+/**
+ * Calendar Memory moment card data - shows past events as memories
+ */
+data class CalendarMemoryMoment(
+    override val id: String,
+    override val timestamp: LocalDateTime,
+    val title: String,
+    val description: String?,
+    val eventDate: LocalDate,
+    val eventType: MomentEventType,
+    val daysAgo: Long
+) : MomentItem() {
+    override val type = MomentCardType.CALENDAR_MEMORY
+    
+    fun getDaysAgoFormatted(): String {
+        return when {
+            daysAgo == 0L -> "Today"
+            daysAgo == 1L -> "Yesterday"
+            daysAgo < 7 -> "$daysAgo days ago"
+            daysAgo < 30 -> "${daysAgo / 7} weeks ago"
+            daysAgo < 365 -> "${daysAgo / 30} months ago"
+            else -> "${daysAgo / 365} years ago"
+        }
+    }
 }

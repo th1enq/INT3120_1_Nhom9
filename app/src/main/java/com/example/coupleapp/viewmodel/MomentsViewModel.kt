@@ -159,6 +159,7 @@ class MomentsViewModel : ViewModel() {
             loadUpcomingEvents(coupleId)?.let { allMoments.addAll(it) }
             loadGardenMoments(coupleId, currentUser, partner)?.let { allMoments.addAll(it) }
             loadMessageMoments(currentUser, partner)?.let { allMoments.addAll(it) }
+            loadCalendarMemories(coupleId)?.let { allMoments.addAll(it) }
             
             // Group by date
             val groupedMoments = groupMomentsByDate(allMoments)
@@ -233,7 +234,7 @@ class MomentsViewModel : ViewModel() {
                 // Collect all moments
                 val allMoments = mutableListOf<MomentItem>()
                 
-                // 1. Load Sleep moments (last 7 days)
+                // 1. Load Sleep moments (last 7 days) - including partner's sleep data
                 loadSleepMoments(currentUser, partner)?.let { allMoments.addAll(it) }
                 
                 // 2. Load Missing moments (last 30 days)
@@ -253,6 +254,9 @@ class MomentsViewModel : ViewModel() {
                 
                 // 7. Load Message notifications
                 loadMessageMoments(currentUser, partner)?.let { allMoments.addAll(it) }
+                
+                // 8. Load Calendar Memories (past events as memories)
+                loadCalendarMemories(coupleId)?.let { allMoments.addAll(it) }
                 
                 // Group by date
                 val groupedMoments = groupMomentsByDate(allMoments)
@@ -362,7 +366,7 @@ class MomentsViewModel : ViewModel() {
             
             val missingSnapshot = db.collection("missing_records")
                 .whereEqualTo("coupleId", coupleId)
-                .orderBy("date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .orderBy("updatedAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(30)
                 .get()
                 .await()
@@ -383,7 +387,17 @@ class MomentsViewModel : ViewModel() {
                     val senderName = if (userId == currentUser.id) currentUser.displayName else partner?.displayName ?: "Partner"
                     val receiverName = if (userId == currentUser.id) partner?.displayName ?: "You" else currentUser.displayName
                     
-                    val timestamp = date.atTime(12, 0) // Use noon as timestamp
+                    // Use updatedAt timestamp for accurate display time, fallback to createdAt
+                    val updatedAt = doc.getTimestamp("updatedAt") ?: doc.getTimestamp("createdAt")
+                    val timestamp = if (updatedAt != null) {
+                        LocalDateTime.ofInstant(
+                            updatedAt.toDate().toInstant(),
+                            java.time.ZoneId.systemDefault()
+                        )
+                    } else {
+                        // Fallback to date at current time if no timestamp
+                        date.atTime(LocalDateTime.now().hour, LocalDateTime.now().minute)
+                    }
                     
                     MissingMoment(
                         id = doc.id,
@@ -767,6 +781,70 @@ class MomentsViewModel : ViewModel() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading message moments", e)
+            null
+        }
+    }
+    
+    /**
+     * Load calendar memories - past events that happened (memories/anniversaries)
+     * Shows events from the past that are worth remembering
+     */
+    private suspend fun loadCalendarMemories(coupleId: String): List<CalendarMemoryMoment>? {
+        return try {
+            val db = Firebase.firestore
+            val today = LocalDate.now()
+            val oneYearAgo = today.minusYears(1)
+            
+            // Get all calendar events
+            val eventsSnapshot = db.collection("calendar_events")
+                .whereEqualTo("coupleId", coupleId)
+                .get()
+                .await()
+            
+            eventsSnapshot.documents.mapNotNull { doc ->
+                try {
+                    val title = doc.getString("title") ?: return@mapNotNull null
+                    val description = doc.getString("description")
+                    val dateStr = doc.getString("date") ?: return@mapNotNull null
+                    val typeStr = doc.getString("eventType") ?: "other"
+                    
+                    // Parse date
+                    val eventDate = LocalDate.parse(dateStr)
+                    
+                    // Only include past events (memories)
+                    if (!eventDate.isBefore(today)) return@mapNotNull null
+                    
+                    // Only show events from last year (to avoid too many old memories)
+                    if (eventDate.isBefore(oneYearAgo)) return@mapNotNull null
+                    
+                    val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(eventDate, today)
+                    
+                    val eventType = when (typeStr.lowercase()) {
+                        "birthday" -> MomentEventType.BIRTHDAY
+                        "anniversary" -> MomentEventType.ANNIVERSARY
+                        "special_day", "special" -> MomentEventType.SPECIAL_DAY
+                        else -> MomentEventType.REMINDER
+                    }
+                    
+                    // Use event date at noon as timestamp for grouping
+                    val timestamp = eventDate.atTime(12, 0)
+                    
+                    CalendarMemoryMoment(
+                        id = "memory_${doc.id}",
+                        timestamp = timestamp,
+                        title = title,
+                        description = description,
+                        eventDate = eventDate,
+                        eventType = eventType,
+                        daysAgo = daysAgo
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error parsing calendar memory", e)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading calendar memories", e)
             null
         }
     }

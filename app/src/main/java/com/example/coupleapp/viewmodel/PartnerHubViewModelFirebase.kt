@@ -8,6 +8,7 @@ import com.example.coupleapp.data.model.*
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
 import com.example.coupleapp.data.repository.ProfileCacheRepository
+import com.example.coupleapp.util.FirebaseConstants
 import com.google.firebase.database.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -24,7 +25,7 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
     private val firestoreRepository = FirebaseFirestoreRepository()
     private val profileCache = ProfileCacheRepository.getInstance()
     private val realtimeDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(
-        "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        FirebaseConstants.REALTIME_DATABASE_URL
     )
     
     // Message listener for unread count only (notifications handled by MessageNotificationManager)
@@ -670,6 +671,16 @@ class PartnerHubViewModelFirebase(application: Application) : AndroidViewModel(a
                 )
 
                 Log.d(TAG, "Link request accepted successfully - coupleId: $coupleId")
+                
+                // Invalidate profile cache to show fresh data in profile screen
+                viewModelScope.launch {
+                    try {
+                        profileCache.invalidateCache()
+                        Log.d(TAG, "✅ Profile cache invalidated after link request accepted")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to invalidate cache", e)
+                    }
+                }
                 
                 // Reload data to show linked state
                 loadData()

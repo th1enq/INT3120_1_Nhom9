@@ -98,6 +98,9 @@ fun PartnerHubScreen(
                     myLinkCode = uiState.myLinkCode,
                     pendingRequestCount = pendingRequests.size,
                     onNavigateToLinkPartner = onNavigateToLinkPartner,
+                    onNavigateToHome = onNavigateToHome,
+                    onNavigateToMoments = onNavigateToMoments,
+                    onNavigateToProfile = onNavigateToProfile,
                     onShowNotifications = { showNotificationDialog = true }
                 )
             }
@@ -483,13 +486,18 @@ private fun NotConnectedScreenFirebase(
     myLinkCode: String,
     pendingRequestCount: Int = 0,
     onNavigateToLinkPartner: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToMoments: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
     onShowNotifications: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 80.dp) // Space for bottom navigation
         ) {
             // Header with notification bell
             NotConnectedHeader(
@@ -507,6 +515,23 @@ private fun NotConnectedScreenFirebase(
                 },
                 onShareLink = {
                     // TODO: Share link functionality
+                }
+            )
+        }
+        
+        // Bottom Navigation
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            CoupleBottomNavigation(
+                selectedItem = BottomNavItem.FRIENDS,
+                onItemSelected = { item ->
+                    when (item) {
+                        BottomNavItem.HOME -> onNavigateToHome()
+                        BottomNavItem.FRIENDS -> { /* Already here */ }
+                        BottomNavItem.ACTIVITIES -> onNavigateToMoments()
+                        BottomNavItem.PROFILE -> onNavigateToProfile()
+                    }
                 }
             )
         }

@@ -216,7 +216,10 @@ data class CachedMoment(
     // Message moment fields
     val messagePreview: String? = null,
     val messageCount: Int? = null,
-    val isRead: Boolean? = null
+    val isRead: Boolean? = null,
+    
+    // Calendar memory moment fields
+    val daysAgo: Long? = null
 )
 
 // ============ Extension Functions ============
@@ -302,6 +305,16 @@ fun MomentItem.toCachedMoment(): CachedMoment {
             messageCount = messageCount,
             isRead = isRead
         )
+        is CalendarMemoryMoment -> CachedMoment(
+            type = "calendar_memory",
+            id = id,
+            timestamp = timestamp.toString(),
+            eventTitle = title,
+            eventDescription = description,
+            eventDate = eventDate.toString(),
+            eventType = eventType.name,
+            daysAgo = daysAgo
+        )
     }
 }
 
@@ -381,6 +394,15 @@ fun CachedMoment.toMomentItem(): MomentItem? {
                 messagePreview = messagePreview ?: "",
                 messageCount = messageCount ?: 0,
                 isRead = isRead ?: false
+            )
+            "calendar_memory" -> CalendarMemoryMoment(
+                id = id,
+                timestamp = timestamp,
+                title = eventTitle ?: "",
+                description = eventDescription,
+                eventDate = LocalDate.parse(eventDate),
+                eventType = try { MomentEventType.valueOf(eventType ?: "REMINDER") } catch (e: Exception) { MomentEventType.REMINDER },
+                daysAgo = daysAgo ?: 0L
             )
             else -> null
         }

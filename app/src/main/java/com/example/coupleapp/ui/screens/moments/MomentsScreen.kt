@@ -233,6 +233,7 @@ private fun MomentsTimeline(
                                     is AnniversaryMoment -> AnniversaryMomentCard(moment = moment)
                                     is GardenMoment -> GardenMomentCard(moment = moment)
                                     is MessageMoment -> MessageMomentCard(moment = moment)
+                                    is CalendarMemoryMoment -> CalendarMemoryMomentCard(moment = moment)
                                 }
                             }
                         }

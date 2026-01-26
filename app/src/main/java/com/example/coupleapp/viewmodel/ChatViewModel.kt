@@ -2,6 +2,10 @@ package com.example.coupleapp.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,14 +16,18 @@ import com.example.coupleapp.data.model.FirebaseUser
 import com.example.coupleapp.data.model.MessageType
 import com.example.coupleapp.data.repository.FirebaseAuthRepository
 import com.example.coupleapp.data.repository.FirebaseFirestoreRepository
+import com.example.coupleapp.util.FirebaseConstants
 import com.example.coupleapp.utils.NotificationHelper
 import com.google.firebase.database.*
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -33,16 +41,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val authRepository = FirebaseAuthRepository()
     private val firestoreRepository = FirebaseFirestoreRepository()
     private val realtimeDatabase: FirebaseDatabase = FirebaseDatabase.getInstance(
-        "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
+        FirebaseConstants.REALTIME_DATABASE_URL
     )
     private val notificationHelper = NotificationHelper(application.applicationContext)
+    private val appContext = application.applicationContext
     private var messagesListener: ValueEventListener? = null
     private var messagesRef: DatabaseReference? = null
     private var isInChatScreen = false
 
     companion object {
         private const val TAG = "ChatViewModel"
-        private const val SEND_TIMEOUT_MS = 10000L // 10 seconds
     }
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
@@ -62,6 +70,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    
+    private val _isUploadingImage = MutableStateFlow(false)
+    val isUploadingImage: StateFlow<Boolean> = _isUploadingImage.asStateFlow()
 
     val currentUserId: String
         get() = authRepository.currentUser?.uid ?: ""
@@ -352,10 +363,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             Log.d(TAG, "[CHAT] setValue() called, waiting for callback...")
             
             // Wait for timeout
-            delay(SEND_TIMEOUT_MS)
+            delay(FirebaseConstants.SEND_TIMEOUT_MS)
             
             if (!callbackReceived) {
-                Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Firebase Realtime Database không phản hồi sau ${SEND_TIMEOUT_MS}ms")
+                Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Firebase Realtime Database không phản hồi sau ${FirebaseConstants.SEND_TIMEOUT_MS}ms")
                 Log.e(TAG, "[CHAT] ⚠️ Kiểm tra:")
                 Log.e(TAG, "[CHAT] 1. Realtime Database đã được tạo trong Firebase Console chưa?")
                 Log.e(TAG, "[CHAT] 2. Rules cho phép authenticated user ghi chưa?")
@@ -437,14 +448,173 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             
             Log.d(TAG, "[CHAT] setValue() called for emoji, waiting for callback...")
             
-            delay(SEND_TIMEOUT_MS)
+            delay(FirebaseConstants.SEND_TIMEOUT_MS)
             
             if (!callbackReceived) {
-                Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Emoji sending timeout after ${SEND_TIMEOUT_MS}ms")
+                Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Emoji sending timeout after ${FirebaseConstants.SEND_TIMEOUT_MS}ms")
                 _error.value = "Kết nối Firebase timeout. Kiểm tra cấu hình Realtime Database."
                 _isSending.value = false
             }
         }
+    }
+    
+    /**
+     * Send image message via Realtime Database
+     * Image is compressed to Base64 to reduce database storage
+     * Max size: 500KB after compression
+     */
+    fun sendImage(imageUri: Uri) {
+        if (_isUploadingImage.value) return
+        
+        val currentUserId = authRepository.currentUser?.uid
+        val partnerId = _partner.value?.id
+        
+        if (currentUserId == null || partnerId == null) {
+            Log.e(TAG, "[CHAT] ❌ Cannot send image: missing user or partner")
+            _error.value = "Không thể gửi ảnh: chưa kết nối partner"
+            return
+        }
+        
+        _isUploadingImage.value = true
+        Log.d(TAG, "[CHAT] 📤 Sending image from $currentUserId to $partnerId")
+        
+        viewModelScope.launch {
+            try {
+                // Compress image to Base64
+                val compressedImageBase64 = withContext(Dispatchers.IO) {
+                    compressImageToBase64(imageUri)
+                }
+                
+                if (compressedImageBase64 == null) {
+                    _error.value = "Không thể xử lý ảnh. Vui lòng thử ảnh khác."
+                    _isUploadingImage.value = false
+                    return@launch
+                }
+                
+                // Check size - must be under 500KB to save DB storage
+                val sizeKB = compressedImageBase64.length / 1024
+                Log.d(TAG, "[CHAT] Compressed image size: ${sizeKB}KB")
+                
+                if (sizeKB > 500) {
+                    _error.value = "Ảnh quá lớn (${sizeKB}KB). Vui lòng chọn ảnh nhỏ hơn."
+                    _isUploadingImage.value = false
+                    return@launch
+                }
+                
+                val coupleId = listOf(currentUserId, partnerId).sorted().joinToString("_")
+                val messagesRef = realtimeDatabase.getReference("${FirebaseConstants.CHATS_PATH}/$coupleId/${FirebaseConstants.MESSAGES_PATH}")
+                val newMessageRef = messagesRef.push()
+                
+                val messageData = mapOf(
+                    "senderId" to currentUserId,
+                    "message" to compressedImageBase64,
+                    "messageType" to FirebaseConstants.MESSAGE_TYPE_IMAGE,
+                    "timestamp" to System.currentTimeMillis(),
+                    "isRead" to false
+                )
+                
+                var callbackReceived = false
+                
+                newMessageRef.setValue(messageData)
+                    .addOnSuccessListener {
+                        callbackReceived = true
+                        Log.d(TAG, "[CHAT] ✅ Image sent successfully")
+                        _isUploadingImage.value = false
+                    }
+                    .addOnFailureListener { error ->
+                        callbackReceived = true
+                        Log.e(TAG, "[CHAT] ❌ Failed to send image: ${error.message}", error)
+                        _error.value = "Không thể gửi ảnh: ${error.message}"
+                        _isUploadingImage.value = false
+                    }
+                
+                delay(FirebaseConstants.SEND_TIMEOUT_MS)
+                
+                if (!callbackReceived) {
+                    Log.e(TAG, "[CHAT] ⏱️ TIMEOUT: Image sending timeout")
+                    _error.value = "Kết nối Firebase timeout"
+                    _isUploadingImage.value = false
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "[CHAT] ❌ Error processing image", e)
+                _error.value = "Lỗi xử lý ảnh: ${e.message}"
+                _isUploadingImage.value = false
+            }
+        }
+    }
+    
+    /**
+     * Compress and convert image to Base64 string
+     * This optimizes storage by reducing image size before storing in database
+     */
+    private fun compressImageToBase64(imageUri: Uri): String? {
+        return try {
+            val inputStream = appContext.contentResolver.openInputStream(imageUri)
+            val originalBitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream?.close()
+            
+            if (originalBitmap == null) {
+                Log.e(TAG, "[CHAT] Failed to decode bitmap from URI")
+                return null
+            }
+            
+            // Calculate scaled dimensions to fit within max size
+            val maxWidth = FirebaseConstants.MAX_IMAGE_WIDTH
+            val maxHeight = FirebaseConstants.MAX_IMAGE_HEIGHT
+            
+            val width = originalBitmap.width
+            val height = originalBitmap.height
+            
+            val scaleFactor = minOf(
+                maxWidth.toFloat() / width,
+                maxHeight.toFloat() / height,
+                1f // Don't upscale small images
+            )
+            
+            val scaledWidth = (width * scaleFactor).toInt()
+            val scaledHeight = (height * scaleFactor).toInt()
+            
+            val scaledBitmap = if (scaleFactor < 1f) {
+                Bitmap.createScaledBitmap(originalBitmap, scaledWidth, scaledHeight, true)
+            } else {
+                originalBitmap
+            }
+            
+            // Compress to JPEG with quality adjustment
+            val outputStream = ByteArrayOutputStream()
+            var quality = FirebaseConstants.IMAGE_QUALITY
+            
+            // Try to get under max size by reducing quality
+            do {
+                outputStream.reset()
+                scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                quality -= 10
+            } while (outputStream.size() > FirebaseConstants.MAX_IMAGE_SIZE_BYTES && quality > 20)
+            
+            val imageBytes = outputStream.toByteArray()
+            
+            // Clean up
+            if (scaledBitmap != originalBitmap) {
+                scaledBitmap.recycle()
+            }
+            originalBitmap.recycle()
+            
+            Log.d(TAG, "[CHAT] Image compressed: ${imageBytes.size / 1024}KB, quality: ${quality + 10}%")
+            
+            "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "[CHAT] Error compressing image", e)
+            null
+        }
+    }
+    
+    /**
+     * Clear error message
+     */
+    fun clearError() {
+        _error.value = null
     }
 
     /**

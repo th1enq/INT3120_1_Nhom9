@@ -1,9 +1,13 @@
 package com.example.coupleapp.ui.screens.partner
 
 import android.app.Activity
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,11 +35,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.coupleapp.R
 import com.example.coupleapp.data.model.ChatMessage
 import com.example.coupleapp.data.model.MessageType
 import com.example.coupleapp.ui.theme.*
 import com.example.coupleapp.util.BiometricHelper
+import com.example.coupleapp.util.createImageLoaderWithBase64Support
 import com.example.coupleapp.viewmodel.ChatViewModel
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
@@ -139,6 +147,23 @@ fun ChatScreen(
     val partner by viewModel.partner.collectAsState()
     val messageText by viewModel.messageText.collectAsState()
     val isSending by viewModel.isSending.collectAsState()
+    val isUploadingImage by viewModel.isUploadingImage.collectAsState()
+    val error by viewModel.error.collectAsState()
+    
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.sendImage(it) }
+    }
+    
+    // Show error snackbar
+    LaunchedEffect(error) {
+        if (error != null) {
+            delay(3000)
+            viewModel.clearError()
+        }
+    }
     
     val listState = rememberLazyListState()
     val currentUserId = viewModel.currentUserId
@@ -207,8 +232,23 @@ fun ChatScreen(
                 onMessageChanged = viewModel::onMessageChanged,
                 onSendClick = viewModel::sendMessage,
                 onEmojiClick = viewModel::sendEmoji,
-                isSending = isSending
+                onImageClick = { imagePickerLauncher.launch("image/*") },
+                isSending = isSending,
+                isUploadingImage = isUploadingImage
             )
+        }
+        
+        // Error snackbar
+        error?.let { errorMessage ->
+            Snackbar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
+                containerColor = Color(0xFFFF6B6B),
+                contentColor = Color.White
+            ) {
+                Text(text = errorMessage)
+            }
         }
     }
 }
@@ -335,6 +375,9 @@ private fun ChatMessageItem(
     isFromMe: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val imageLoader = remember { createImageLoaderWithBase64Support(context) }
+    
     val alignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleColor = if (isFromMe) {
         Brush.linearGradient(
@@ -377,6 +420,23 @@ private fun ChatMessageItem(
                                 fontSize = 32.sp
                             )
                         }
+                        MessageType.IMAGE -> {
+                            // Display image message
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(message.content)
+                                    .crossfade(true)
+                                    .build(),
+                                imageLoader = imageLoader,
+                                contentDescription = "Image message",
+                                modifier = Modifier
+                                    .widthIn(min = 150.dp, max = 250.dp)
+                                    .heightIn(min = 100.dp, max = 300.dp)
+                                    .clip(bubbleShape)
+                                    .padding(4.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                         else -> {
                             Text(
                                 text = message.content,
@@ -406,7 +466,9 @@ private fun ChatInputArea(
     onMessageChanged: (String) -> Unit,
     onSendClick: () -> Unit,
     onEmojiClick: (String) -> Unit,
-    isSending: Boolean
+    onImageClick: () -> Unit,
+    isSending: Boolean,
+    isUploadingImage: Boolean
 ) {
     var showEmojiPicker by remember { mutableStateOf(false) }
     
@@ -438,6 +500,26 @@ private fun ChatInputArea(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // Image button
+                IconButton(
+                    onClick = onImageClick,
+                    enabled = !isUploadingImage && !isSending
+                ) {
+                    if (isUploadingImage) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = AccentPink,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Image,
+                            contentDescription = "Send image",
+                            tint = TextSecondary
+                        )
+                    }
+                }
+                
                 // Emoji button
                 IconButton(
                     onClick = { showEmojiPicker = !showEmojiPicker }
@@ -476,7 +558,7 @@ private fun ChatInputArea(
                 }
                 
                 // Send button
-                val canSend = messageText.isNotBlank() && !isSending
+                val canSend = messageText.isNotBlank() && !isSending && !isUploadingImage
                 
                 FilledIconButton(
                     onClick = onSendClick,

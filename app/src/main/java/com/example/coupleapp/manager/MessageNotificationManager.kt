@@ -28,7 +28,7 @@ object MessageNotificationManager {
     
     private val realtimeDatabase: FirebaseDatabase by lazy {
         FirebaseDatabase.getInstance(
-            "https://coupleapp-69f4c-default-rtdb.asia-southeast1.firebasedatabase.app/"
+            com.example.coupleapp.util.FirebaseConstants.REALTIME_DATABASE_URL
         )
     }
     
